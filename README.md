@@ -301,7 +301,7 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 <div align="center">
   
   **Follow Development**: 
-  [![X](https://img.shields.io/x/follow/zkchain_z41420?style=social)](https://x.com/zkchain_z41420)
+  [![X](https://x.com/zkchain_z41420)]
   [![GitHub](https://img.shields.io/github/stars/ZKChainForge/zk-origin?style=social)](https://github.com/ZKChainForge/zk-origin)
 
 </div>
