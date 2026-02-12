@@ -1,0 +1,24 @@
+{
+  "name": "zk-origin-demo",
+  "version": "1.0.0",
+  "description": "ZK-ORIGIN Demo Application",
+  "main": "dist/cli.js",
+  "scripts": {
+    "build": "tsc",
+    "demo": "ts-node src/demo.ts",
+    "cli": "ts-node src/cli.ts"
+  },
+  "dependencies": {
+    "chalk": "^4.1.2",
+    "commander": "^11.0.0",
+    "ora": "^5.4.1",
+    "snarkjs": "^0.7.0",
+    "circomlibjs": "^0.1.7",
+    "ethers": "^6.7.0"
+  },
+  "devDependencies": {
+    "@types/node": "^20.4.0",
+    "typescript": "^5.1.6",
+    "ts-node": "^10.9.1"
+  }
+}

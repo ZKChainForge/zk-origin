@@ -1,0 +1,32 @@
+{
+  "name": "Valid DeFi Lifecycle",
+  "description": "A typical valid sequence of state transitions",
+  "transitions": [
+    {
+      "step": 1,
+      "from": "Genesis",
+      "to": "Admin",
+      "description": "Protocol deployment and initial configuration"
+    },
+    {
+      "step": 2,
+      "from": "Admin",
+      "to": "User",
+      "description": "Protocol opens for user deposits"
+    },
+    {
+      "step": 3,
+      "from": "User",
+      "to": "User",
+      "description": "Normal user transaction (swap)"
+    },
+    {
+      "step": 4,
+      "from": "User",
+      "to": "User",
+      "description": "Another user transaction (withdrawal)"
+    }
+  ],
+  "expected_result": "success",
+  "expected_final_depth": 4
+}

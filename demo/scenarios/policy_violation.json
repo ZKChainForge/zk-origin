@@ -1,0 +1,26 @@
+{
+  "name": "Privilege Escalation Attack",
+  "description": "Malicious user attempting to become admin",
+  "transitions": [
+    {
+      "step": 1,
+      "from": "Genesis",
+      "to": "User",
+      "description": "Normal user onboarding"
+    },
+    {
+      "step": 2,
+      "from": "User",
+      "to": "User",
+      "description": "Normal user activity"
+    },
+    {
+      "step": 3,
+      "from": "User",
+      "to": "Admin",
+      "description": "ATTACK: User tries to escalate to Admin"
+    }
+  ],
+  "expected_result": "failure",
+  "failure_reason": "Policy violation: User cannot transition to Admin"
+}

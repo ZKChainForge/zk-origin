@@ -1,0 +1,25 @@
+
+{
+  "name": "zk-origin-circuits",
+  "version": "1.0.0",
+  "description": "ZK-ORIGIN Circom Circuits",
+  "main": "index.js",
+  "scripts": {
+    "compile": "./scripts/compile.sh",
+    "setup": "./scripts/setup.sh",
+    "test": "mocha test/**/*.test.js --timeout 120000",
+    "prove": "node scripts/prove.js",
+    "verify": "node scripts/verify.js",
+    "clean": "rm -rf build/*"
+  },
+  "dependencies": {
+    "circomlib": "^2.0.5",
+    "snarkjs": "^0.7.0",
+    "ffjavascript": "^0.2.57",
+    "circomlibjs": "^0.1.7"
+  },
+  "devDependencies": {
+    "mocha": "^10.2.0",
+    "chai": "^4.3.7"
+  }
+}

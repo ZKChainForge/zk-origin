@@ -1,0 +1,27 @@
+{
+  "dependencies": {
+    "circomlib": "^2.0.5",
+    "commander": "^14.0.3",
+    "ffjavascript": "^0.3.1",
+    "snarkjs": "^0.7.6"
+  },
+  "devDependencies": {
+    "@nomicfoundation/hardhat-ignition": "^0.15.16",
+    "@nomicfoundation/hardhat-toolbox": "^3.0.0",
+    "@nomicfoundation/hardhat-toolbox-viem": "^4.1.2",
+    "@nomicfoundation/hardhat-verify": "^1.1.1",
+    "@types/big-integer": "^0.0.30",
+    "@types/circomlibjs": "^0.1.6",
+    "@types/node": "^22.19.11",
+    "@types/snarkjs": "^0.7.9",
+    "big-integer": "^1.6.52",
+    "chalk": "^4.1.2",
+    "circomlibjs": "^0.1.7",
+    "forge-std": "github:foundry-rs/forge-std#v1.9.4",
+    "hardhat": "^2.28.5",
+    "ora": "^5.4.1",
+    "ts-node": "^10.9.2",
+    "typescript": "~5.8.0",
+    "viem": "^2.45.3"
+  }
+}

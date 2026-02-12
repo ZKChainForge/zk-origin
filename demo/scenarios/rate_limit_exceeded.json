@@ -1,0 +1,26 @@
+{
+  "name": "Rate Limit Test",
+  "description": "Testing rate limit enforcement (future feature)",
+  "transitions": [
+    {
+      "step": 1,
+      "from": "Genesis",
+      "to": "Admin",
+      "description": "Admin action 1"
+    },
+    {
+      "step": 2,
+      "from": "Admin",
+      "to": "Admin",
+      "description": "Admin action 2"
+    },
+    {
+      "step": 3,
+      "from": "Admin",
+      "to": "Admin",
+      "description": "Admin action 3"
+    }
+  ],
+  "note": "Rate limiting will be implemented in the full version with counter circuits",
+  "expected_result": "success_for_now"
+}
