@@ -1,6 +1,6 @@
 warning: no edition set: defaulting to the 2015 edition while the latest is 2024
-   0.138018273s  INFO prepare_target{force=false package_id=zk-origin-prover v0.1.0 (/home/array/Music/zk-origin/prover) target="zk_origin_prover"}: cargo::core::compiler::fingerprint: fingerprint error for zk-origin-prover v0.1.0 (/home/array/Music/zk-origin/prover)/Check { test: false }/TargetInner { name_inferred: true, ..: lib_target("zk_origin_prover", ["lib"], "/home/array/Music/zk-origin/prover/src/lib.rs", Edition2015) }
-   0.138098035s  INFO prepare_target{force=false package_id=zk-origin-prover v0.1.0 (/home/array/Music/zk-origin/prover) target="zk_origin_prover"}: cargo::core::compiler::fingerprint:     err: failed to read `/home/array/Music/zk-origin/prover/target/debug/.fingerprint/zk-origin-prover-5de4930e73953578/lib-zk_origin_prover`
+   0.070028633s  INFO prepare_target{force=false package_id=zk-origin-prover v0.1.0 (/home/array/Music/zk-origin/prover) target="zk_origin_prover"}: cargo::core::compiler::fingerprint: fingerprint error for zk-origin-prover v0.1.0 (/home/array/Music/zk-origin/prover)/Check { test: false }/TargetInner { name_inferred: true, ..: lib_target("zk_origin_prover", ["lib"], "/home/array/Music/zk-origin/prover/src/lib.rs", Edition2015) }
+   0.070051955s  INFO prepare_target{force=false package_id=zk-origin-prover v0.1.0 (/home/array/Music/zk-origin/prover) target="zk_origin_prover"}: cargo::core::compiler::fingerprint:     err: failed to read `/home/array/Music/zk-origin/prover/target/debug/.fingerprint/zk-origin-prover-5de4930e73953578/lib-zk_origin_prover`
 
 Caused by:
     No such file or directory (os error 2)
@@ -42,8 +42,8 @@ Stack backtrace:
   24: <unknown>
   25: __libc_start_main
   26: <unknown>
-   0.165640324s  INFO prepare_target{force=false package_id=nova-snark v0.31.0 target="nova_snark"}: cargo::core::compiler::fingerprint: fingerprint error for nova-snark v0.31.0/Check { test: false }/TargetInner { name_inferred: true, ..: lib_target("nova_snark", ["lib"], "/home/array/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/nova-snark-0.31.0/src/lib.rs", Edition2021) }
-   0.165665397s  INFO prepare_target{force=false package_id=nova-snark v0.31.0 target="nova_snark"}: cargo::core::compiler::fingerprint:     err: failed to read `/home/array/Music/zk-origin/prover/target/debug/.fingerprint/nova-snark-7f93c2fcd665dbe0/lib-nova_snark`
+   0.093405123s  INFO prepare_target{force=false package_id=nova-snark v0.31.0 target="nova_snark"}: cargo::core::compiler::fingerprint: fingerprint error for nova-snark v0.31.0/Check { test: false }/TargetInner { name_inferred: true, ..: lib_target("nova_snark", ["lib"], "/home/array/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/nova-snark-0.31.0/src/lib.rs", Edition2021) }
+   0.093456836s  INFO prepare_target{force=false package_id=nova-snark v0.31.0 target="nova_snark"}: cargo::core::compiler::fingerprint:     err: failed to read `/home/array/Music/zk-origin/prover/target/debug/.fingerprint/nova-snark-7f93c2fcd665dbe0/lib-nova_snark`
 
 Caused by:
     No such file or directory (os error 2)
@@ -86,8 +86,8 @@ Stack backtrace:
   25: <unknown>
   26: __libc_start_main
   27: <unknown>
-   0.167800591s  INFO prepare_target{force=false package_id=pasta-msm v0.1.5 target="pasta_msm"}: cargo::core::compiler::fingerprint: fingerprint error for pasta-msm v0.1.5/Check { test: false }/TargetInner { ..: lib_target("pasta_msm", ["lib"], "/home/array/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/pasta-msm-0.1.5/src/lib.rs", Edition2021) }
-   0.167814811s  INFO prepare_target{force=false package_id=pasta-msm v0.1.5 target="pasta_msm"}: cargo::core::compiler::fingerprint:     err: failed to read `/home/array/Music/zk-origin/prover/target/debug/.fingerprint/pasta-msm-68eecdc5bdf9831e/lib-pasta_msm`
+   0.096186890s  INFO prepare_target{force=false package_id=pasta-msm v0.1.5 target="pasta_msm"}: cargo::core::compiler::fingerprint: fingerprint error for pasta-msm v0.1.5/Check { test: false }/TargetInner { ..: lib_target("pasta_msm", ["lib"], "/home/array/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/pasta-msm-0.1.5/src/lib.rs", Edition2021) }
+   0.096206076s  INFO prepare_target{force=false package_id=pasta-msm v0.1.5 target="pasta_msm"}: cargo::core::compiler::fingerprint:     err: failed to read `/home/array/Music/zk-origin/prover/target/debug/.fingerprint/pasta-msm-68eecdc5bdf9831e/lib-pasta_msm`
 
 Caused by:
     No such file or directory (os error 2)
@@ -131,8 +131,8 @@ Stack backtrace:
   26: <unknown>
   27: __libc_start_main
   28: <unknown>
-   0.168310293s  INFO prepare_target{force=false package_id=pasta-msm v0.1.5 target="build-script-build"}: cargo::core::compiler::fingerprint: fingerprint error for pasta-msm v0.1.5/RunCustomBuild/TargetInner { ..: custom_build_target("build-script-build", "/home/array/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/pasta-msm-0.1.5/build.rs", Edition2021) }
-   0.168323712s  INFO prepare_target{force=false package_id=pasta-msm v0.1.5 target="build-script-build"}: cargo::core::compiler::fingerprint:     err: failed to read `/home/array/Music/zk-origin/prover/target/debug/.fingerprint/pasta-msm-b94d41ed4080cf04/run-build-script-build-script-build`
+   0.096740048s  INFO prepare_target{force=false package_id=pasta-msm v0.1.5 target="build-script-build"}: cargo::core::compiler::fingerprint: fingerprint error for pasta-msm v0.1.5/RunCustomBuild/TargetInner { ..: custom_build_target("build-script-build", "/home/array/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/pasta-msm-0.1.5/build.rs", Edition2021) }
+   0.096753426s  INFO prepare_target{force=false package_id=pasta-msm v0.1.5 target="build-script-build"}: cargo::core::compiler::fingerprint:     err: failed to read `/home/array/Music/zk-origin/prover/target/debug/.fingerprint/pasta-msm-b94d41ed4080cf04/run-build-script-build-script-build`
 
 Caused by:
     No such file or directory (os error 2)
@@ -178,8 +178,8 @@ Stack backtrace:
   28: <unknown>
   29: __libc_start_main
   30: <unknown>
-   0.171710888s  INFO prepare_target{force=false package_id=zk-origin-prover v0.1.0 (/home/array/Music/zk-origin/prover) target="zk_origin_prover"}: cargo::core::compiler::fingerprint: fingerprint error for zk-origin-prover v0.1.0 (/home/array/Music/zk-origin/prover)/Check { test: true }/TargetInner { name_inferred: true, ..: lib_target("zk_origin_prover", ["lib"], "/home/array/Music/zk-origin/prover/src/lib.rs", Edition2015) }
-   0.171762121s  INFO prepare_target{force=false package_id=zk-origin-prover v0.1.0 (/home/array/Music/zk-origin/prover) target="zk_origin_prover"}: cargo::core::compiler::fingerprint:     err: failed to read `/home/array/Music/zk-origin/prover/target/debug/.fingerprint/zk-origin-prover-ba398ad33210cee5/test-lib-zk_origin_prover`
+   0.099694186s  INFO prepare_target{force=false package_id=zk-origin-prover v0.1.0 (/home/array/Music/zk-origin/prover) target="zk_origin_prover"}: cargo::core::compiler::fingerprint: fingerprint error for zk-origin-prover v0.1.0 (/home/array/Music/zk-origin/prover)/Check { test: true }/TargetInner { name_inferred: true, ..: lib_target("zk_origin_prover", ["lib"], "/home/array/Music/zk-origin/prover/src/lib.rs", Edition2015) }
+   0.099710841s  INFO prepare_target{force=false package_id=zk-origin-prover v0.1.0 (/home/array/Music/zk-origin/prover) target="zk_origin_prover"}: cargo::core::compiler::fingerprint:     err: failed to read `/home/array/Music/zk-origin/prover/target/debug/.fingerprint/zk-origin-prover-ba398ad33210cee5/test-lib-zk_origin_prover`
 
 Caused by:
     No such file or directory (os error 2)
@@ -221,8 +221,8 @@ Stack backtrace:
   24: <unknown>
   25: __libc_start_main
   26: <unknown>
-   0.174184375s  INFO prepare_target{force=false package_id=zk-origin-prover v0.1.0 (/home/array/Music/zk-origin/prover) target="proving_time"}: cargo::core::compiler::fingerprint: fingerprint error for zk-origin-prover v0.1.0 (/home/array/Music/zk-origin/prover)/Check { test: true }/TargetInner { kind: "bench", name: "proving_time", tested: false, harness: false, ..: with_path("/home/array/Music/zk-origin/prover/benches/proving_time.rs", Edition2015) }
-   0.174200118s  INFO prepare_target{force=false package_id=zk-origin-prover v0.1.0 (/home/array/Music/zk-origin/prover) target="proving_time"}: cargo::core::compiler::fingerprint:     err: failed to read `/home/array/Music/zk-origin/prover/target/debug/.fingerprint/zk-origin-prover-e08433becf0fdbc7/test-bench-proving_time`
+   0.102054281s  INFO prepare_target{force=false package_id=zk-origin-prover v0.1.0 (/home/array/Music/zk-origin/prover) target="proving_time"}: cargo::core::compiler::fingerprint: fingerprint error for zk-origin-prover v0.1.0 (/home/array/Music/zk-origin/prover)/Check { test: true }/TargetInner { kind: "bench", name: "proving_time", tested: false, harness: false, ..: with_path("/home/array/Music/zk-origin/prover/benches/proving_time.rs", Edition2015) }
+   0.102069526s  INFO prepare_target{force=false package_id=zk-origin-prover v0.1.0 (/home/array/Music/zk-origin/prover) target="proving_time"}: cargo::core::compiler::fingerprint:     err: failed to read `/home/array/Music/zk-origin/prover/target/debug/.fingerprint/zk-origin-prover-e08433becf0fdbc7/test-bench-proving_time`
 
 Caused by:
     No such file or directory (os error 2)
@@ -264,8 +264,8 @@ Stack backtrace:
   24: <unknown>
   25: __libc_start_main
   26: <unknown>
-   0.175139251s  INFO prepare_target{force=false package_id=zk-origin-prover v0.1.0 (/home/array/Music/zk-origin/prover) target="full_demo"}: cargo::core::compiler::fingerprint: fingerprint error for zk-origin-prover v0.1.0 (/home/array/Music/zk-origin/prover)/Check { test: false }/TargetInner { kind: "example", name: "full_demo", tested: false, benched: false, ..: with_path("/home/array/Music/zk-origin/prover/examples/full_demo.rs", Edition2015) }
-   0.175151141s  INFO prepare_target{force=false package_id=zk-origin-prover v0.1.0 (/home/array/Music/zk-origin/prover) target="full_demo"}: cargo::core::compiler::fingerprint:     err: failed to read `/home/array/Music/zk-origin/prover/target/debug/.fingerprint/zk-origin-prover-bfb64a3170870899/example-full_demo`
+   0.102995492s  INFO prepare_target{force=false package_id=zk-origin-prover v0.1.0 (/home/array/Music/zk-origin/prover) target="full_demo"}: cargo::core::compiler::fingerprint: fingerprint error for zk-origin-prover v0.1.0 (/home/array/Music/zk-origin/prover)/Check { test: false }/TargetInner { kind: "example", name: "full_demo", tested: false, benched: false, ..: with_path("/home/array/Music/zk-origin/prover/examples/full_demo.rs", Edition2015) }
+   0.103009428s  INFO prepare_target{force=false package_id=zk-origin-prover v0.1.0 (/home/array/Music/zk-origin/prover) target="full_demo"}: cargo::core::compiler::fingerprint:     err: failed to read `/home/array/Music/zk-origin/prover/target/debug/.fingerprint/zk-origin-prover-bfb64a3170870899/example-full_demo`
 
 Caused by:
     No such file or directory (os error 2)
@@ -307,8 +307,8 @@ Stack backtrace:
   24: <unknown>
   25: __libc_start_main
   26: <unknown>
-   0.175984096s  INFO prepare_target{force=false package_id=zk-origin-prover v0.1.0 (/home/array/Music/zk-origin/prover) target="simple_lineage"}: cargo::core::compiler::fingerprint: fingerprint error for zk-origin-prover v0.1.0 (/home/array/Music/zk-origin/prover)/Check { test: false }/TargetInner { kind: "example", name: "simple_lineage", tested: false, benched: false, ..: with_path("/home/array/Music/zk-origin/prover/examples/simple_lineage.rs", Edition2015) }
-   0.175995803s  INFO prepare_target{force=false package_id=zk-origin-prover v0.1.0 (/home/array/Music/zk-origin/prover) target="simple_lineage"}: cargo::core::compiler::fingerprint:     err: failed to read `/home/array/Music/zk-origin/prover/target/debug/.fingerprint/zk-origin-prover-559301a5b7d7909d/example-simple_lineage`
+   0.103885204s  INFO prepare_target{force=false package_id=zk-origin-prover v0.1.0 (/home/array/Music/zk-origin/prover) target="simple_lineage"}: cargo::core::compiler::fingerprint: fingerprint error for zk-origin-prover v0.1.0 (/home/array/Music/zk-origin/prover)/Check { test: false }/TargetInner { kind: "example", name: "simple_lineage", tested: false, benched: false, ..: with_path("/home/array/Music/zk-origin/prover/examples/simple_lineage.rs", Edition2015) }
+   0.103897836s  INFO prepare_target{force=false package_id=zk-origin-prover v0.1.0 (/home/array/Music/zk-origin/prover) target="simple_lineage"}: cargo::core::compiler::fingerprint:     err: failed to read `/home/array/Music/zk-origin/prover/target/debug/.fingerprint/zk-origin-prover-559301a5b7d7909d/example-simple_lineage`
 
 Caused by:
     No such file or directory (os error 2)

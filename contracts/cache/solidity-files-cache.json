@@ -143,6 +143,41 @@
       "artifacts": [
         "PolicyRegistry"
       ]
+    },
+    "/home/array/Music/zk-origin/contracts/contracts/MockGroth16Verifier.sol": {
+      "lastModificationDate": 1771136655848,
+      "contentHash": "02f86b7b40bd069bb9e2414f3c80487b",
+      "sourceName": "contracts/MockGroth16Verifier.sol",
+      "solcConfig": {
+        "version": "0.8.19",
+        "settings": {
+          "optimizer": {
+            "enabled": true,
+            "runs": 200
+          },
+          "outputSelection": {
+            "*": {
+              "*": [
+                "abi",
+                "evm.bytecode",
+                "evm.deployedBytecode",
+                "evm.methodIdentifiers",
+                "metadata"
+              ],
+              "": [
+                "ast"
+              ]
+            }
+          }
+        }
+      },
+      "imports": [],
+      "versionPragmas": [
+        "^0.8.19"
+      ],
+      "artifacts": [
+        "MockGroth16Verifier"
+      ]
     }
   }
 }
