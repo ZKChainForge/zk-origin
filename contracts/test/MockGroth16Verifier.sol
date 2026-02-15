@@ -1,10 +1,7 @@
+
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.19;
 
-/**
- * @title MockGroth16Verifier
- * @notice Mock verifier for testing purposes
- */
 contract MockGroth16Verifier {
     bool public shouldVerify = true;
     
