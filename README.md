@@ -1,3 +1,4 @@
+
 # ZK-ORIGIN: Zero-Knowledge State Provenance Protocol
 
 <div align="center">
@@ -21,14 +22,15 @@
 
 Current ZK systems prove **state validity** but not **state legitimacy**.
 
- ZK Rollups prove: "This state transition is mathematically valid"
+```
+ ZK Rollups prove:    "This state transition is mathematically valid"
  ZK Rollups DON'T prove: "This state came from an authorized source"
-
+```
 
 ### Real Attack Scenarios
 
 | Attack Type          | Historical Loss | ZK-ORIGIN Prevention          |
-|----------------------|-----------------|-------------------------------|
+|----------------------------------------|-------------------------------|
 | Bridge Exploits      | $2B+            |  Proves cross-chain origin    |
 | Admin Key Compromise | $1B+            |  Tracks privileged operations |
 | Governance Attacks   | $500M+          |  Binds proposals to changes   |
@@ -40,19 +42,18 @@ Current ZK systems prove **state validity** but not **state legitimacy**.
 
 ZK-ORIGIN adds **origin class tracking** with **policy enforcement** in zero-knowledge:
 
-┌─────────────┐ ┌──────────────┐ ┌────────────────┐
-│ | Stat│────▶│ Origin │────▶  │ Policy |         │
-│ Transition  │ │Classification│ │ Enforcement    |
-└─────────────┘ └──────────────┘ └────────────────┘
-│ │
-▼ ▼
-┌──────────────┐ ┌────────────────┐
-│ Lineage      │────▶│ ZK Proof   │
-│ Commitment   │ │ Generation     │
-└──────────────┘ └────────────────┘
-
-text
-
+```
+┌─────────────┐     ┌──────────────┐     ┌────────────────┐
+│   State     │────▶│   Origin     │────▶│    Policy      │
+│ Transition  │     │Classification│     │  Enforcement   │
+└─────────────┘     └──────────────┘     └────────────────┘
+                           │                     │
+                           ▼                     ▼
+                    ┌──────────────┐     ┌────────────────┐
+                    │   Lineage    │────▶│    ZK Proof    │
+                    │  Commitment  │     │   Generation   │
+                    └──────────────┘     └────────────────┘
+```
 
 ### Origin Classes
 
@@ -65,18 +66,14 @@ text
 
 ### Policy Matrix
 
-
-------------------------------------------------
-       To →  |      User    | Admin   | Bridge  |
--------------|----------------------------------
-From ↓       |    
-Genesis      |        YES       YES        NO
-User         |        YES       NO         NO
-Admin        |        YES       YES        YES
-Bridge       |        YES       NO         NO
-
-
-
+```
+           To →    User    Admin    Bridge
+From ↓           
+Genesis           YES       YES       NO
+User              YES       NO        NO
+Admin             YES       YES       YES
+Bridge            YES       NO        NO
+```
 
 **Key Security Property:** Users cannot escalate to Admin privileges. Bridges cannot inject Admin states.
 
@@ -86,72 +83,76 @@ Bridge       |        YES       NO         NO
 
 ```bash
 ./scripts/run-demo.sh
+```
 
+### Output
 
-Output:
-
-ZK-ORIGIN Demo
+```
+ ZK-ORIGIN Demo
 Demonstrating zero-knowledge state provenance verification
 
- Scenario: DeFi Protocol Lifecycle
+Scenario: DeFi Protocol Lifecycle
 
-✔ Protocol Deployment - Proof generated in 454ms
+ Protocol Deployment - Proof generated in 454ms
      New lineage: 0x1d42394b15f5620c...
      Depth: 1
 
-✔ Open for Users - Proof generated in 223ms
+ Open for Users - Proof generated in 223ms
      New lineage: 0x185ca4589009db45...
      Depth: 2
 
-✔ User Activity - Proof generated in 221ms
+ User Activity - Proof generated in 221ms
      New lineage: 0x1f4d884324d19cc3...
      Depth: 3
 
-✔ More Activity - Proof generated in 217ms
+ More Activity - Proof generated in 217ms
      New lineage: 0x0f2ca5a180b58500...
      Depth: 4
 
-✔ All proofs verified successfully
+ All proofs verified successfully
 
- Attack Simulation:
-✖ Attack blocked by policy!
+Attack Simulation:
+ Attack blocked by policy!
   User → Admin privilege escalation rejected
 
  ZK-ORIGIN successfully protects against unauthorized state origins!
+```
 
- Benchmarks:
+---
 
-Metric	                 |     Value
--------------------------|-----------
-CircuitConstraints	     |     ~1,500
-ProofGeneration	         |     217-454ms
-ProofVerification	     |     <10ms (off-chain)
-On-chainVerification   	 |     ~200k gas
-ProofSize	             |     ~256 bytes
+##  Benchmarks
 
+| Metric                    | Value             |
+|---------------------------|-------------------|
+| **Circuit Constraints**   | ~1,500            |
+| **Proof Generation**      | 217-454ms         |
+| **Proof Verification**    | <10ms (off-chain) |
+| **On-chain Verification** | ~200k gas         |
+| **Proof Size**            | ~256 bytes        |
 
-Performance  Breakdown
+### Performance Breakdown
 
-Component	                |  Constraints |	% of Total
-----------------------------|--------------|--------------
-PolicyCheck	                |  ~400	      |    27%
-PoseidonHash(transition)	|  ~300	      |    20%
-PoseidonHash (lineage)	    |  ~300	      |    20%
-OriginValidation	        |  ~200	      |    13%
-Other	                    |  ~300	      |    20%
+| Component                 | Constraints | % of Total |
+|---------------------------|-------------|------------|
+| Policy Check              | ~400        | 27%        |
+| Poseidon Hash (transition)| ~300        | 20%        |
+| Poseidon Hash (lineage)   | ~300        | 20%        |
+| Origin Validation         | ~200        | 13%        |
+| Other                     | ~300        | 20%        |
 
+---
 
- Installation
-Prerequisites
+##  Installation
 
-    Node.js 18+
-    npm or yarn
-    Circom 2.1+ (npm install -g circom)
+### Prerequisites
 
-Setup
+- Node.js 18+
+- npm or yarn
+- Circom 2.1+ (`npm install -g circom`)
 
-Bash
+### Setup
 
+```bash
 # Clone the repository
 git clone https://github.com/ZKChainForge/zk-origin.git
 cd zk-origin
@@ -173,11 +174,13 @@ npx hardhat compile
 # Run demo
 cd ..
 ./scripts/run-demo.sh
+```
 
+---
 
-Project Structure
+##  Project Structure
 
-
+```
 zk-origin/
 ├── circuits/                    # Circom ZK circuits
 │   ├── src/
@@ -207,87 +210,89 @@ zk-origin/
 │       └── demo.ts
 │
 └── scripts/                     # Automation scripts
+```
 
+---
 
+##  How It Works
 
- How It Works:
-1. Origin Classification
+### 1. Origin Classification
 
 Every state transition is tagged with an origin class:
 
-TypeScript
-
+```typescript
 enum Origin {
     Genesis = 0,  // Initial deployment
     User = 1,     // Normal user transaction
     Admin = 2,    // Privileged operation
     Bridge = 3    // Cross-chain import
 }
+```
 
-2. Lineage Commitment
+### 2. Lineage Commitment
 
 States carry cryptographic commitments to their entire history:
 
-text
-
+```
 C₀ = Hash(genesis_state, 0, 0)
 Cₙ = Hash(Cₙ₋₁, transition_hash, depth)
+```
 
-Property: Constant size regardless of history length.
-3. Policy Enforcement
+**Property:** Constant size regardless of history length.
+
+### 3. Policy Enforcement
 
 The ZK circuit enforces transition rules:
 
-circom
-
+```circom
 // Users cannot escalate to Admin
 signal userToAdmin;
 userToAdmin <== isUser.out * toAdmin.out;
 userToAdmin === 0;  // Must be zero (not allowed)
+```
 
-4. Zero-Knowledge Proof
+### 4. Zero-Knowledge Proof
 
 The prover generates a proof showing:
+-  Origin transition follows policy
+-  Lineage commitment correctly updated
+-  No revelation of actual origin classes
 
-     Origin transition follows policy
-     Lineage commitment correctly updated
-     No revelation of actual origin classes
+---
 
- Security Analysis
+##  Security Analysis
 
-What ZK-ORIGIN Proves
+### What ZK-ORIGIN Proves
 
+| Property                                 | Proven in ZK |
+|------------------------------------------|--------------|
+| Origin transition is policy-compliant    | YES          |
+| Lineage commitment is correctly computed | YES          |
+| State has valid ancestry from genesis    | YES          |
+| No privilege escalation occurred         | YES          |
 
-Property	                             | Proven in ZK
------------------------------------------|-------------
-Origin transition is policy-compliant	 |     YES
-Lineage commitment is correctly computed |     YES
-State has valid ancestry from genesis	 |     YES
-No privilege escalation occurred	     |     YES
+### What ZK-ORIGIN Hides
 
+| Information                  | Hidden       |
+|------------------------------|--------------|
+| Specific origin classes used | YES          |
+| Intermediate states          | YES          |
+| Transition timestamps        | YES          |
+| Lineage depth (optional)     | Configurable |
 
-What ZK-ORIGIN Hides:
+### Trust Assumptions
 
+1. **Circuit correctness** - Auditable, open source
+2. **Trusted setup** - Uses Groth16 ceremony (can use existing ceremonies)
+3. **Hash security** - Poseidon hash function security
 
-Information	                  |  Hidden
-------------------------------|---------------
-Specific origin classes used  |	 YES
-Intermediate states	          |  YES
-Transition timestamps	      |  YES
-Lineage depth (optional)	  |  Configurable
+---
 
+##  Deployment
 
-Trust Assumptions
+### Testnet (Sepolia)
 
-    Circuit correctness - Auditable, open source
-    Trusted setup - Uses Groth16 ceremony (can use existing ceremonies)
-    Hash security - Poseidon hash function security
-
-Deployment
-Testnet (Sepolia)
-
-Bash
-
+```bash
 cd contracts
 
 # Set up environment
@@ -297,46 +302,46 @@ cp .env.example .env
 # Deploy
 npx hardhat run scripts/deploy.js --network sepolia
 
-Deployed Contracts
-Contract	Address	Network
-LineageVerifier	0x...	Sepolia
-Groth16Verifier	0x...	Sepolia
-PolicyRegistry	0x...	Sepolia
-Testing
-Circuit Tests
 
-Bash
+##  Testing
 
+### Circuit Tests
+
+```bash
 cd circuits
 npm test
+```
 
-Contract Tests
+### Contract Tests
 
-Bash
-
+```bash
 cd contracts
 npx hardhat test
+```
 
-Full Integration Test
+### Full Integration Test
 
-Bash
-
+```bash
 ./scripts/test-all.sh
+```
 
- Future Work
+---
 
-    Recursive Proofs (Nova) - O(1) verification for any chain length
-    Merkle Policy Tree - Configurable policies on-chain
-    Rate Limiting - Epoch-based operation limits
-    Multi-chain Support - Cross-chain lineage verification
-    Frontend Dashboard - Visual lineage explorer
+##  Future Work
 
- Contributing
+- [ ] **Recursive Proofs (Nova)** - O(1) verification for any chain length
+- [ ] **Merkle Policy Tree** - Configurable policies on-chain
+- [ ] **Rate Limiting** - Epoch-based operation limits
+- [ ] **Multi-chain Support** - Cross-chain lineage verification
+- [ ] **Frontend Dashboard** - Visual lineage explorer
 
-Contributions are welcome! Please read our Contributing Guidelines first.
+---
 
-Bash
+##  Contributing
 
+Contributions are welcome! Please read our [Contributing Guidelines](CONTRIBUTING.md) first.
+
+```bash
 # Fork the repo
 # Create your feature branch
 git checkout -b feature/amazing-feature
@@ -348,33 +353,39 @@ git commit -m 'Add amazing feature'
 git push origin feature/amazing-feature
 
 # Open a Pull Request
+```
 
- License
+---
 
-This project is licensed under the MIT License - see the LICENSE file for details.
-Acknowledgments
+##  License
 
-    iden3/circom - Circuit compiler
-    iden3/snarkjs - Proof generation
-    Poseidon Hash - ZK-friendly hash function
-    Hardhat - Ethereum development environment
+This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
 
- Contact
+---
 
-    GitHub: @github.com/ZKChainForge
-    Twitter: @zkchain_z41420
-    LinkedIn: Your Name
+##  Acknowledgments
+
+- [iden3/circom](https://github.com/iden3/circom) - Circuit compiler
+- [iden3/snarkjs](https://github.com/iden3/snarkjs) - Proof generation
+- [Poseidon Hash](https://eprint.iacr.org/2019/458) - ZK-friendly hash function
+- [Hardhat](https://hardhat.org/) - Ethereum development environment
+
+---
+
+##  Contact
+
+- **GitHub:** [@YOUR_USERNAME](https://github.com/ZKChainForge)
+- **Twitter:** [@YOUR_HANDLE](https://x.com/zkchain_z41420)
+- **LinkedIn:** [Your Name](https://linkedin.com/in/vikram-a-a6a252395)
+
+---
 
 <div align="center">
 
-Built with ❤️ for the ZK community
+**Built with ❤️ for the ZK community**
 
 ⭐ Star this repo if you find it useful!
-</div> ```
-
-<div align="center">
-  
-  **Follow Development**: 
-  [![GitHub](https://img.shields.io/github/stars/ZKChainForge/zk-origin?style=social)](https://github.com/ZKChainForge/zk-origin)
 
 </div>
+```
+
