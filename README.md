@@ -28,14 +28,14 @@ Current ZK systems prove **state validity** but not **state legitimacy**.
 ```
 
 ### Real Attack Scenarios
-
+|----------------------|-----------------|-------------------------------|
 | Attack Type          | Historical Loss | ZK-ORIGIN Prevention          |
 |----------------------------------------|-------------------------------|
 | Bridge Exploits      | $2B+            |  Proves cross-chain origin    |
 | Admin Key Compromise | $1B+            |  Tracks privileged operations |
 | Governance Attacks   | $500M+          |  Binds proposals to changes   |
 | Upgrade Backdoors    | Unknown         |  Verifies upgrade lineage     |
-
+|----------------------|-----------------|-------------------------------|
 ---
 
 ##  The Solution
@@ -374,9 +374,9 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 
 ##  Contact
 
-- **GitHub:** [@YOUR_USERNAME](https://github.com/ZKChainForge)
-- **Twitter:** [@YOUR_HANDLE](https://x.com/zkchain_z41420)
-- **LinkedIn:** [Your Name](https://linkedin.com/in/vikram-a-a6a252395)
+- **GitHub:** [@ZKChain](https://github.com/ZKChainForge)
+- **X:** [@ZKchain](https://x.com/zkchain_z41420)
+- **LinkedIn:** [Vikram](https://linkedin.com/in/vikram-a-a6a252395)
 
 ---
 
