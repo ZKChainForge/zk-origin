@@ -1,10 +1,10 @@
-import { SHA2 } from './_sha2.js';
-import { wrapConstructor } from './utils.js';
+import { HashMD } from './_md.js';
+import { rotl, wrapConstructor } from './utils.js';
 
 // https://homes.esat.kuleuven.be/~bosselae/ripemd160.html
 // https://homes.esat.kuleuven.be/~bosselae/ripemd160/pdf/AB-9601/AB-9601.pdf
 const Rho = /* @__PURE__ */ new Uint8Array([7, 4, 13, 1, 10, 6, 15, 3, 12, 0, 9, 5, 2, 14, 11, 8]);
-const Id = /* @__PURE__ */ Uint8Array.from({ length: 16 }, (_, i) => i);
+const Id = /* @__PURE__ */ new Uint8Array(new Array(16).fill(0).map((_, i) => i));
 const Pi = /* @__PURE__ */ Id.map((i) => (9 * i + 5) % 16);
 let idxL = [Id];
 let idxR = [Pi];
@@ -25,8 +25,6 @@ const Kl = /* @__PURE__ */ new Uint32Array([
 const Kr = /* @__PURE__ */ new Uint32Array([
   0x50a28be6, 0x5c4dd124, 0x6d703ef3, 0x7a6d76e9, 0x00000000,
 ]);
-// The rotate left (circular left shift) operation for uint32
-const rotl = (word: number, shift: number) => (word << shift) | (word >>> (32 - shift));
 // It's called f() in spec.
 function f(group: number, x: number, y: number, z: number): number {
   if (group === 0) return x ^ y ^ z;
@@ -36,8 +34,8 @@ function f(group: number, x: number, y: number, z: number): number {
   else return x ^ (y | ~z);
 }
 // Temporary buffer, not used to store anything between runs
-const BUF = /* @__PURE__ */ new Uint32Array(16);
-export class RIPEMD160 extends SHA2<RIPEMD160> {
+const R_BUF = /* @__PURE__ */ new Uint32Array(16);
+export class RIPEMD160 extends HashMD<RIPEMD160> {
   private h0 = 0x67452301 | 0;
   private h1 = 0xefcdab89 | 0;
   private h2 = 0x98badcfe | 0;
@@ -59,7 +57,7 @@ export class RIPEMD160 extends SHA2<RIPEMD160> {
     this.h4 = h4 | 0;
   }
   protected process(view: DataView, offset: number): void {
-    for (let i = 0; i < 16; i++, offset += 4) BUF[i] = view.getUint32(offset, true);
+    for (let i = 0; i < 16; i++, offset += 4) R_BUF[i] = view.getUint32(offset, true);
     // prettier-ignore
     let al = this.h0 | 0, ar = al,
         bl = this.h1 | 0, br = bl,
@@ -75,12 +73,12 @@ export class RIPEMD160 extends SHA2<RIPEMD160> {
       const rl = idxL[group], rr = idxR[group]; // prettier-ignore
       const sl = shiftsL[group], sr = shiftsR[group]; // prettier-ignore
       for (let i = 0; i < 16; i++) {
-        const tl = (rotl(al + f(group, bl, cl, dl) + BUF[rl[i]] + hbl, sl[i]) + el) | 0;
+        const tl = (rotl(al + f(group, bl, cl, dl) + R_BUF[rl[i]] + hbl, sl[i]) + el) | 0;
         al = el, el = dl, dl = rotl(cl, 10) | 0, cl = bl, bl = tl; // prettier-ignore
       }
       // 2 loops are 10% faster
       for (let i = 0; i < 16; i++) {
-        const tr = (rotl(ar + f(rGroup, br, cr, dr) + BUF[rr[i]] + hbr, sr[i]) + er) | 0;
+        const tr = (rotl(ar + f(rGroup, br, cr, dr) + R_BUF[rr[i]] + hbr, sr[i]) + er) | 0;
         ar = er, er = dr, dr = rotl(cr, 10) | 0, cr = br, br = tr; // prettier-ignore
       }
     }
@@ -94,7 +92,7 @@ export class RIPEMD160 extends SHA2<RIPEMD160> {
     );
   }
   protected roundClean() {
-    BUF.fill(0);
+    R_BUF.fill(0);
   }
   destroy() {
     this.destroyed = true;
