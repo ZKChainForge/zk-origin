@@ -28,14 +28,29 @@ Current ZK systems prove **state validity** but not **state legitimacy**.
 ```
 
 ### Real Attack Scenarios
-|----------------------|-----------------|-------------------------------|
-| Attack Type          | Historical Loss | ZK-ORIGIN Prevention          |
-|----------------------------------------|-------------------------------|
-| Bridge Exploits      | $2B+            |  Proves cross-chain origin    |
-| Admin Key Compromise | $1B+            |  Tracks privileged operations |
-| Governance Attacks   | $500M+          |  Binds proposals to changes   |
-| Upgrade Backdoors    | Unknown         |  Verifies upgrade lineage     |
-|----------------------|-----------------|-------------------------------|
+ZK-ORIGIN Security Theory
+
+ZK-ORIGIN operates on the principle that every critical blockchain action must have a provable and traceable origin. Instead of reacting to exploits, it enforces cryptographic accountability at the protocol level.
+
+1. Bridge Exploit Prevention Theory
+
+Bridge exploits have caused over $2B+ in losses.
+ZK-ORIGIN prevents these attacks by requiring proof of cross-chain origin, ensuring that assets and messages are cryptographically verified before execution.
+
+2. Privileged Access Control Theory
+
+Admin key compromises account for $1B+ in losses.
+ZK-ORIGIN introduces verifiable tracking of privileged operations, ensuring that sensitive actions are provably authorized and auditable.
+
+3. Governance Integrity Theory
+
+Governance attacks have led to $500M+ in losses.
+ZK-ORIGIN binds governance proposals directly to the resulting code changes, preventing malicious proposal substitution or hidden execution logic.
+
+4. Upgrade Lineage Verification Theory
+
+Upgrade backdoors present unknown but critical systemic risk.
+ZK-ORIGIN verifies the entire upgrade lineage, ensuring that every contract update is cryptographically linked to its approved governance process.
 ---
 
 ##  The Solution
