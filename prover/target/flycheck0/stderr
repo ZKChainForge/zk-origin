@@ -1,4 +1,0 @@
-error: failed to parse manifest at `/home/array/Music/zk-origin/prover/Cargo.toml`
-
-Caused by:
-  can't find `folding` bench at `benches/folding.rs` or `benches/folding/main.rs`. Please specify bench.path if you want to use a non-default path.
