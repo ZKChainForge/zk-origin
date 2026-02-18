@@ -1,7 +1,7 @@
-mod step;
-mod poseidon;
-mod merkle;
+//! Circuit definitions for ZK-ORIGIN
+
+pub mod step;
+pub mod gadgets;
+pub mod constraints;
 
 pub use step::LineageStepCircuit;
-pub use poseidon::PoseidonGadget;
-pub use merkle::MerkleGadget;
