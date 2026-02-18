@@ -1,168 +1,155 @@
-//! Recursive lineage prover using Nova folding scheme
+//! Recursive proving with Nova (placeholder implementation)
+//!
+//! This module would contain the actual Nova integration.
+//! For now, it provides the interface that would be used.
 
-use crate::types::{LineageCommitment, Origin, Policy, Transition};
-use thiserror::Error;
+use crate::types::{StepWitness, LineageProof};
+use crate::{Result, ZkOriginError};
 
-/// Errors that can occur during proving
-#[derive(Error, Debug)]
-pub enum ProverError {
-    #[error("Policy violation: {from} -> {to}")]
-    PolicyViolation { from: Origin, to: Origin },
+/// Recursive SNARK state (placeholder)
+/// 
+/// In production, this would wrap Nova's RecursiveSNARK
+pub struct RecursiveState {
+    /// Number of steps accumulated
+    num_steps: u64,
     
-    #[error("Invalid previous state")]
-    InvalidPreviousState,
+    /// Current state (z values)
+    current_z: [Vec<u8>; 2],
     
-    #[error("Proof generation failed: {0}")]
-    ProofGeneration(String),
+    /// Accumulated proof data
+    proof_data: Vec<u8>,
 }
 
-/// Recursive lineage prover
-pub struct LineageProver {
-    /// Current lineage commitment
-    current_lineage: LineageCommitment,
-    /// Current origin class
-    current_origin: Origin,
-    /// Policy
-    policy: Policy,
-    /// Accumulated transitions
-    transitions: Vec<Transition>,
-}
-
-impl LineageProver {
-    /// Create a new prover with genesis state
-    pub fn new(genesis_state: [u8; 32]) -> Result<Self, ProverError> {
-        Ok(Self {
-            current_lineage: LineageCommitment::genesis(genesis_state),
-            current_origin: Origin::Genesis,
-            policy: Policy::default_policy(),
-            transitions: Vec::new(),
-        })
-    }
-    
-    /// Add a transition
-    pub fn add_transition(&mut self, transition: Transition) -> Result<(), ProverError> {
-        // Check policy
-        if !self.policy.is_allowed(
-            self.current_origin,
-            transition.origin,
-            self.current_lineage.depth,
-        ) {
-            return Err(ProverError::PolicyViolation {
-                from: self.current_origin,
-                to: transition.origin,
-            });
+impl RecursiveState {
+    /// Create initial state
+    pub fn new(initial_lineage: [u8; 32], initial_counters: [u8; 32]) -> Self {
+        Self {
+            num_steps: 0,
+            current_z: [initial_lineage.to_vec(), initial_counters.to_vec()],
+            proof_data: Vec::new(),
         }
+    }
+
+    /// Add a step to the recursive proof
+    pub fn prove_step(&mut self, witness: &StepWitness) -> Result<()> {
+        // In production, this would:
+        // 1. Create a LineageStepCircuit with the witness
+        // 2. Call RecursiveSNARK::prove_step
+        // 3. Update the running instance
         
-        // Update lineage (placeholder - would compute actual Poseidon hash)
-        self.current_lineage = LineageCommitment::new(
-            transition.new_state, // Placeholder
-            self.current_lineage.depth + 1,
-        );
-        self.current_origin = transition.origin;
-        self.transitions.push(transition);
+        // Placeholder: just update state
+        let new_lineage = witness.compute_new_lineage_commitment();
+        let new_counters = witness.compute_new_counter_commitment();
+        
+        self.current_z = [new_lineage.to_vec(), new_counters.to_vec()];
+        self.proof_data.extend_from_slice(&witness.compute_transition_hash());
+        self.num_steps += 1;
         
         Ok(())
     }
-    
-    /// Get current lineage
-    pub fn current_lineage(&self) -> &LineageCommitment {
-        &self.current_lineage
+
+    /// Get current lineage commitment
+    pub fn current_lineage(&self) -> &[u8] {
+        &self.current_z[0]
     }
-    
-    /// Get number of transitions
-    pub fn num_transitions(&self) -> usize {
-        self.transitions.len()
+
+    /// Get current counter commitment
+    pub fn current_counters(&self) -> &[u8] {
+        &self.current_z[1]
     }
+
+    /// Get number of steps
+    pub fn num_steps(&self) -> u64 {
+        self.num_steps
+    }
+}
+
+/// Public parameters for the recursive SNARK (placeholder)
+pub struct PublicParameters {
+    /// Circuit hash (for identification)
+    pub circuit_hash: [u8; 32],
     
-    /// Finalize and generate proof (placeholder)
-    pub fn finalize(&self) -> Result<LineageProof, ProverError> {
-        // In production, this would use Nova to generate a recursive proof
-        Ok(LineageProof {
-            lineage_commitment: self.current_lineage.clone(),
-            proof_data: vec![0u8; 256], // Placeholder
+    /// Policy root
+    pub policy_root: [u8; 32],
+}
+
+impl PublicParameters {
+    /// Generate public parameters for a policy
+    pub fn setup(policy_root: [u8; 32]) -> Result<Self> {
+        // In production, this would call Nova's PublicParams::setup
+        // which is expensive (10-60 seconds)
+        
+        use sha2::{Sha256, Digest};
+        
+        let mut hasher = Sha256::new();
+        hasher.update(b"zk-origin-circuit-v1");
+        hasher.update(&policy_root);
+        
+        let circuit_hash: [u8; 32] = hasher.finalize().into();
+        
+        Ok(Self {
+            circuit_hash,
+            policy_root,
         })
     }
-}
 
-/// A lineage proof
-#[derive(Clone, Debug)]
-pub struct LineageProof {
-    /// Final lineage commitment
-    pub lineage_commitment: LineageCommitment,
-    /// Proof data (would be Nova proof in production)
-    pub proof_data: Vec<u8>,
-}
+    /// Load from bytes
+    pub fn from_bytes(bytes: &[u8]) -> Result<Self> {
+        if bytes.len() < 64 {
+            return Err(ZkOriginError::SerializationError(
+                "Invalid public parameters".into()
+            ));
+        }
+        
+        let mut circuit_hash = [0u8; 32];
+        let mut policy_root = [0u8; 32];
+        
+        circuit_hash.copy_from_slice(&bytes[0..32]);
+        policy_root.copy_from_slice(&bytes[32..64]);
+        
+        Ok(Self {
+            circuit_hash,
+            policy_root,
+        })
+    }
 
-impl LineageProof {
-    /// Verify the proof (placeholder)
-    pub fn verify(&self) -> bool {
-        // In production, verify the Nova proof
-        true
+    /// Serialize to bytes
+    pub fn to_bytes(&self) -> Vec<u8> {
+        let mut bytes = Vec::with_capacity(64);
+        bytes.extend_from_slice(&self.circuit_hash);
+        bytes.extend_from_slice(&self.policy_root);
+        bytes
     }
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
-    
+    use crate::types::{Transition, OriginClass};
+
     #[test]
-    fn test_valid_transitions() {
-        let mut prover = LineageProver::new([0u8; 32]).unwrap();
+    fn test_recursive_state() {
+        let mut state = RecursiveState::new([0u8; 32], [0u8; 32]);
         
-        // Genesis -> User
-        prover.add_transition(Transition::new(
-            [0u8; 32],
-            [1u8; 32],
-            Origin::User,
-            1000,
-        )).unwrap();
-        
-        // User -> User
-        prover.add_transition(Transition::new(
-            [1u8; 32],
-            [2u8; 32],
-            Origin::User,
-            2000,
-        )).unwrap();
-        
-        assert_eq!(prover.num_transitions(), 2);
-        assert_eq!(prover.current_lineage().depth, 2);
+        assert_eq!(state.num_steps(), 0);
     }
-    
+
     #[test]
-    fn test_policy_violation() {
-        let mut prover = LineageProver::new([0u8; 32]).unwrap();
+    fn test_public_parameters() {
+        let policy_root = [42u8; 32];
+        let params = PublicParameters::setup(policy_root).unwrap();
         
-        // Genesis -> User
-        prover.add_transition(Transition::new(
-            [0u8; 32],
-            [1u8; 32],
-            Origin::User,
-            1000,
-        )).unwrap();
-        
-        // User -> Admin (should fail)
-        let result = prover.add_transition(Transition::new(
-            [1u8; 32],
-            [2u8; 32],
-            Origin::Admin,
-            2000,        ));
-        
-        assert!(matches!(result, Err(ProverError::PolicyViolation { .. })));
+        assert_eq!(params.policy_root, policy_root);
+        assert_ne!(params.circuit_hash, [0u8; 32]);
     }
-    
+
     #[test]
-    fn test_finalize() {
-        let mut prover = LineageProver::new([0u8; 32]).unwrap();
+    fn test_params_serialization() {
+        let params = PublicParameters::setup([1u8; 32]).unwrap();
+        let bytes = params.to_bytes();
+        let recovered = PublicParameters::from_bytes(&bytes).unwrap();
         
-        prover.add_transition(Transition::new(
-            [0u8; 32],
-            [1u8; 32],
-            Origin::User,
-            1000,
-        )).unwrap();
-        
-        let proof = prover.finalize().unwrap();
-        assert!(proof.verify());
+        assert_eq!(params.circuit_hash, recovered.circuit_hash);
+        assert_eq!(params.policy_root, recovered.policy_root);
     }
 }
