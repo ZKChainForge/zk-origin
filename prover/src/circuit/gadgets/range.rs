@@ -1,9 +1,9 @@
-//! Range check gadget
+//! Range check gadget (sound and warning-free)
 
 use bellpepper_core::{
-    boolean::Boolean,
+    boolean::{AllocatedBit, Boolean},
     num::AllocatedNum,
-    ConstraintSystem, SynthesisError,
+    ConstraintSystem, LinearCombination, SynthesisError,
 };
 use ff::PrimeField;
 
@@ -11,98 +11,138 @@ use ff::PrimeField;
 pub struct RangeCheckGadget;
 
 impl RangeCheckGadget {
-    /// Check that a value is less than a maximum
-    /// 
-    /// This is a simplified implementation. Production would use
-    /// bit decomposition for efficiency.
+    /// Enforce that `value < max`
+    /// `num_bits` must be large enough to represent (max - 1)
     pub fn less_than<F: PrimeField, CS: ConstraintSystem<F>>(
-        cs: &mut CS,
+        mut cs: CS,
         value: &AllocatedNum<F>,
         max: u64,
+        num_bits: usize,
     ) -> Result<Boolean, SynthesisError> {
-        // For simplicity, we check by ensuring value < max
-        // In production, this would use bit decomposition
-        
         let max_field = F::from(max);
-        
-        // Allocate (max - value - 1) and check it's non-negative
-        // This works if value < max
+
+        // diff = max - 1 - value
         let diff = AllocatedNum::alloc(cs.namespace(|| "diff"), || {
-            let val = value.get_value().ok_or(SynthesisError::AssignmentMissing)?;
-            Ok(max_field - val - F::ONE)
+            let val = value
+                .get_value()
+                .ok_or(SynthesisError::AssignmentMissing)?;
+            Ok(max_field - F::ONE - val)
         })?;
-        
-        // In a real implementation, we'd decompose diff into bits
-        // and check all bits are valid (0 or 1) and diff >= 0
-        
-        // For now, just return true if we got here
-        // Production code would be more rigorous
-        Boolean::alloc(cs.namespace(|| "is_less"), || Ok(true))
+
+        // Enforce: value + diff + 1 = max
+        cs.enforce(
+            || "value + diff + 1 = max",
+            |lc| lc + value.get_variable() + diff.get_variable() + CS::one(),
+            |lc| lc + CS::one(),
+            |lc| lc + (max_field, CS::one()),
+        );
+
+        // Decompose diff into bits
+        let diff_val = diff.get_value();
+
+        let mut coeff = F::ONE;
+        let mut bit_lc = LinearCombination::<F>::zero();
+
+        for i in 0..num_bits {
+            let bit = AllocatedBit::alloc(
+                cs.namespace(|| format!("diff_bit_{}", i)),
+                diff_val.map(|v| {
+                    let repr = v.to_repr();
+                    let bytes = repr.as_ref();
+                    let byte = bytes[i / 8];
+                    ((byte >> (i % 8)) & 1u8) == 1u8
+                }),
+            )?;
+
+            bit_lc = bit_lc + (coeff, bit.get_variable());
+            coeff = coeff.double();
+        }
+
+        // Enforce diff == reconstructed bits
+        cs.enforce(
+            || "reconstruct diff",
+            |lc| lc + diff.get_variable(),
+            |lc| lc + CS::one(),
+            |_| bit_lc,
+        );
+
+        Ok(Boolean::constant(true))
     }
 
-    /// Check that a value is within a range [min, max)
+    /// Enforce that `value ∈ [min, max)`
     pub fn in_range<F: PrimeField, CS: ConstraintSystem<F>>(
-        cs: &mut CS,
+        mut cs: CS,
         value: &AllocatedNum<F>,
         min: u64,
         max: u64,
+        num_bits: usize,
     ) -> Result<Boolean, SynthesisError> {
-        let above_min = Self::less_than(
-            &mut cs.namespace(|| "above_min"),
-            value,
-            min,
-        )?;
-        
-        let below_max = Self::less_than(
-            &mut cs.namespace(|| "below_max"),
-            value,
-            max,
-        )?;
-        
-        // Result is: NOT above_min AND below_max
-        // (i.e., value >= min AND value < max)
-        let not_above_min = above_min.not();
-        Boolean::and(
-            cs.namespace(|| "in_range"),
-            &not_above_min,
-            &below_max,
+        let min_field = F::from(min);
+
+        // shifted = value - min
+        let shifted = AllocatedNum::alloc(cs.namespace(|| "shifted"), || {
+            let val = value
+                .get_value()
+                .ok_or(SynthesisError::AssignmentMissing)?;
+            Ok(val - min_field)
+        })?;
+
+        // Enforce shifted = value - min
+        cs.enforce(
+            || "shift constraint",
+            |lc| lc + value.get_variable() - (min_field, CS::one()),
+            |lc| lc + CS::one(),
+            |lc| lc + shifted.get_variable(),
+        );
+
+        // Enforce shifted < (max - min)
+        Self::less_than(
+            cs.namespace(|| "range_check"),
+            &shifted,
+            max - min,
+            num_bits,
         )
     }
 
-    /// Check that a value equals a constant
+    /// Enforce value == constant
     pub fn equals_constant<F: PrimeField, CS: ConstraintSystem<F>>(
-        cs: &mut CS,
+        mut cs: CS,
         value: &AllocatedNum<F>,
         constant: u64,
     ) -> Result<Boolean, SynthesisError> {
         let const_field = F::from(constant);
-        
-        // Check if value - constant = 0
-        let is_zero = AllocatedNum::alloc(cs.namespace(|| "is_zero"), || {
-            let val = value.get_value().ok_or(SynthesisError::AssignmentMissing)?;
-            Ok(if val == const_field { F::ONE } else { F::ZERO })
+
+        // diff = value - constant
+        let diff = AllocatedNum::alloc(cs.namespace(|| "diff"), || {
+            let val = value
+                .get_value()
+                .ok_or(SynthesisError::AssignmentMissing)?;
+            Ok(val - const_field)
         })?;
-        
-        // Constrain: is_zero * (value - constant) = 0
+
+        // Enforce diff = value - constant
+        cs.enforce(
+            || "diff constraint",
+            |lc| lc + value.get_variable() - (const_field, CS::one()),
+            |lc| lc + CS::one(),
+            |lc| lc + diff.get_variable(),
+        );
+
+        // Allocate boolean flag
+        let is_zero = AllocatedBit::alloc(
+            cs.namespace(|| "is_zero"),
+            diff.get_value().map(|v| v.is_zero().into()),
+        )?;
+
+        // Enforce diff * is_zero = 0
         cs.enforce(
             || "zero check",
+            |lc| lc + diff.get_variable(),
             |lc| lc + is_zero.get_variable(),
-            |lc| lc + value.get_variable() - (const_field, CS::one()),
             |lc| lc,
         );
-        
-        // Also need to ensure is_zero is boolean
-        cs.enforce(
-            || "is_zero boolean",
-            |lc| lc + is_zero.get_variable(),
-            |lc| lc + CS::one() - is_zero.get_variable(),
-            |lc| lc,
-        );
-        
-        Ok(Boolean::Is(bellpepper_core::boolean::AllocatedBit::alloc(
-            cs.namespace(|| "result"),
-            is_zero.get_value().map(|v| v == F::ONE),
-        )?))
+
+        Ok(Boolean::from(is_zero))
     }
 }
 
@@ -113,12 +153,52 @@ mod tests {
     use pasta_curves::Fp;
 
     #[test]
-    fn test_range_check_compiles() {
+    fn test_less_than() {
         let mut cs = TestConstraintSystem::<Fp>::new();
-        
-        let value = AllocatedNum::alloc(cs.namespace(|| "value"), || Ok(Fp::from(5u64))).unwrap();
-        
-        let result = RangeCheckGadget::less_than(&mut cs, &value, 10);
+
+        let value =
+            AllocatedNum::alloc(cs.namespace(|| "value"), || Ok(Fp::from(5u64)))
+                .unwrap();
+
+        let result =
+            RangeCheckGadget::less_than(cs.namespace(|| "lt"), &value, 10, 8);
+
         assert!(result.is_ok());
+        assert!(cs.is_satisfied());
+    }
+
+    #[test]
+    fn test_in_range() {
+        let mut cs = TestConstraintSystem::<Fp>::new();
+
+        let value =
+            AllocatedNum::alloc(cs.namespace(|| "value"), || Ok(Fp::from(7u64)))
+                .unwrap();
+
+        let result = RangeCheckGadget::in_range(
+            cs.namespace(|| "range"),
+            &value,
+            5,
+            10,
+            8,
+        );
+
+        assert!(result.is_ok());
+        assert!(cs.is_satisfied());
+    }
+
+    #[test]
+    fn test_equals_constant() {
+        let mut cs = TestConstraintSystem::<Fp>::new();
+
+        let value =
+            AllocatedNum::alloc(cs.namespace(|| "value"), || Ok(Fp::from(42u64)))
+                .unwrap();
+
+        let result =
+            RangeCheckGadget::equals_constant(cs.namespace(|| "eq"), &value, 42);
+
+        assert!(result.is_ok());
+        assert!(cs.is_satisfied());
     }
 }

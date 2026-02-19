@@ -535,29 +535,26 @@ mod tests {
         let z_prime = result.unwrap();
         assert_eq!(z_prime.len(), 2);
     }
-
     #[test]
-    fn test_step_circuit_constraints_satisfied() {
-        let mut cs = TestConstraintSystem::<Fp>::new();
-        
-        let circuit = create_test_circuit();
-        
-        let z0 = AllocatedNum::alloc(cs.namespace(|| "z0"), || Ok(Fp::from(0u64))).unwrap();
-        let z1 = AllocatedNum::alloc(cs.namespace(|| "z1"), || Ok(Fp::from(0u64))).unwrap();
-        
-        let z = vec![z0, z1];
-        
-        let _ = circuit.synthesize_step(&mut cs, &z).unwrap();
-        
-        if !cs.is_satisfied() {
-            println!("Unsatisfied constraints:");
-            for (name, _) in cs.which_is_unsatisfied().iter().take(5) {
-                println!("  {}", name);
-            }
-        }
-        
-        assert!(cs.is_satisfied());
+fn test_step_circuit_constraints_satisfied() {
+    let mut cs = TestConstraintSystem::<Fp>::new();
+    
+    let circuit = create_test_circuit();
+    
+    let z0 = AllocatedNum::alloc(cs.namespace(|| "z0"), || Ok(Fp::from(0u64))).unwrap();
+    let z1 = AllocatedNum::alloc(cs.namespace(|| "z1"), || Ok(Fp::from(0u64))).unwrap();
+    
+    let z = vec![z0, z1];
+    
+    let _ = circuit.synthesize_step(&mut cs, &z).unwrap();
+    
+    if let Some(name) = cs.which_is_unsatisfied() {
+        println!("Unsatisfied constraint: {}", name);
     }
+    
+    assert!(cs.is_satisfied());
+}
+
 
     #[test]
     fn test_step_circuit_constraint_count() {

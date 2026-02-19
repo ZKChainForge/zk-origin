@@ -1,6 +1,5 @@
 //! Public input handling for verification
 
-use crate::types::{LineageCommitment, CounterCommitment};
 use serde::{Deserialize, Serialize};
 
 /// Public inputs for verification

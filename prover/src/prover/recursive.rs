@@ -3,11 +3,10 @@
 //! This module would contain the actual Nova integration.
 //! For now, it provides the interface that would be used.
 
-use crate::types::{StepWitness, LineageProof};
+use crate::types::StepWitness;
 use crate::{Result, ZkOriginError};
 
 /// Recursive SNARK state (placeholder)
-/// 
 /// In production, this would wrap Nova's RecursiveSNARK
 pub struct RecursiveState {
     /// Number of steps accumulated
@@ -32,11 +31,6 @@ impl RecursiveState {
 
     /// Add a step to the recursive proof
     pub fn prove_step(&mut self, witness: &StepWitness) -> Result<()> {
-        // In production, this would:
-        // 1. Create a LineageStepCircuit with the witness
-        // 2. Call RecursiveSNARK::prove_step
-        // 3. Update the running instance
-        
         // Placeholder: just update state
         let new_lineage = witness.compute_new_lineage_commitment();
         let new_counters = witness.compute_new_counter_commitment();
@@ -76,9 +70,6 @@ pub struct PublicParameters {
 impl PublicParameters {
     /// Generate public parameters for a policy
     pub fn setup(policy_root: [u8; 32]) -> Result<Self> {
-        // In production, this would call Nova's PublicParams::setup
-        // which is expensive (10-60 seconds)
-        
         use sha2::{Sha256, Digest};
         
         let mut hasher = Sha256::new();
@@ -125,12 +116,10 @@ impl PublicParameters {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::types::{Transition, OriginClass};
 
     #[test]
     fn test_recursive_state() {
-        let mut state = RecursiveState::new([0u8; 32], [0u8; 32]);
-        
+        let state = RecursiveState::new([0u8; 32], [0u8; 32]);
         assert_eq!(state.num_steps(), 0);
     }
 

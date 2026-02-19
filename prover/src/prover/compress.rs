@@ -19,12 +19,11 @@ pub struct CompressedProof {
 impl CompressedProof {
     /// Compress a lineage proof
     pub fn compress(proof: &LineageProof) -> Result<Self> {
-        // In production, this would use Nova's CompressedSNARK
-        // For now, we just return the proof as-is
-        
-        let bytes = proof.to_bytes()?;
+        // Serialize proof to bytes
+        let bytes = proof.to_bytes()
+            .map_err(|e| ZkOriginError::SerializationError(e.to_string()))?;
         let original_size = bytes.len();
-        
+
         // Placeholder: no actual compression
         Ok(Self {
             bytes,
@@ -36,6 +35,7 @@ impl CompressedProof {
     /// Decompress back to a proof
     pub fn decompress(&self) -> Result<LineageProof> {
         LineageProof::from_bytes(&self.bytes)
+            .map_err(|e| ZkOriginError::SerializationError(e.to_string()))
     }
 
     /// Get compressed size
@@ -52,8 +52,9 @@ pub fn batch_compress(proofs: &[LineageProof]) -> Result<Vec<CompressedProof>> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::types::{LineageCommitment, CounterCommitment};
+    use crate::types::lineage::{LineageCommitment, CounterCommitment};
 
+    /// Helper: create a dummy LineageProof
     fn create_test_proof() -> LineageProof {
         LineageProof::new(
             vec![1, 2, 3, 4, 5],
@@ -68,10 +69,10 @@ mod tests {
     #[test]
     fn test_compress_decompress() {
         let proof = create_test_proof();
-        
+
         let compressed = CompressedProof::compress(&proof).unwrap();
         let decompressed = compressed.decompress().unwrap();
-        
+
         assert_eq!(proof.num_steps, decompressed.num_steps);
         assert_eq!(proof.final_lineage.value, decompressed.final_lineage.value);
     }
@@ -79,9 +80,7 @@ mod tests {
     #[test]
     fn test_batch_compress() {
         let proofs: Vec<_> = (0..3).map(|_| create_test_proof()).collect();
-        
         let compressed = batch_compress(&proofs).unwrap();
-        
         assert_eq!(compressed.len(), 3);
     }
 }

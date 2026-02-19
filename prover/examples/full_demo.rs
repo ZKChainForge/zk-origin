@@ -4,7 +4,8 @@ use zk_origin_prover::{LineageProver, Origin, Transition};
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
     println!(" ZK-ORIGIN Full Demo\n");
-    println!("=".repeat(50));
+    println!("{}", format!("\n{}", "=".repeat(50)));
+
     
     // Part 1: Valid flow
     println!("\n Part 1: Valid Protocol Lifecycle\n");
@@ -61,7 +62,8 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     }
     
     // Part 3: Valid admin flow
-    println!("\n" + &"=".repeat(50));
+    println!("\n" + &"=".to_string().repeat(50)
+);
     println!("\n Part 3: Proper Admin Flow\n");
     
     // Start fresh for admin demo
