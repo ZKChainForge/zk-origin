@@ -3,9 +3,14 @@
 use std::time::Instant;
 
 use crate::types::{
-    OriginPolicy, Transition, LineageProof, LineageCommitment,
-    CounterCommitment, ProofMetadata,
+    OriginPolicy,
+    Transition,
+    LineageProof,
+    LineageCommitment,
 };
+
+
+use crate::types::proof::ProofMetadata;
 use crate::prover::WitnessGenerator;
 use crate::{Result, ZkOriginError};
 

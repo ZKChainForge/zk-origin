@@ -1,56 +1,66 @@
-//! Simple lineage example
+//! Simple example demonstrating basic ZK-ORIGIN usage
 
-use zk_origin_prover::{LineageProver, Origin, Transition};
+use zk_origin::{
+    LineageProver, OriginPolicy, Transition, OriginClass,
+    Result,
+};
 
-fn main() -> Result<(), Box<dyn std::error::Error>> {
-    println!("ZK-ORIGIN Simple Lineage Example\n");
+fn main() -> Result<()> {
+    println!("=== ZK-ORIGIN Simple Lineage Example ===\n");
+
+    // Step 1: Create a policy
+    println!("Step 1: Creating origin policy...");
+    let policy = OriginPolicy::default();
+    println!("  Policy created with {} allowed transitions", policy.num_allowed());
+    println!("  Epoch duration: {} seconds", policy.epoch_duration);
+
+    // Step 2: Create the prover
+    println!("\nStep 2: Creating lineage prover...");
+    let mut prover = LineageProver::new(policy)?;
+    println!("  Prover created successfully");
+
+    // Step 3: Initialize with genesis state
+    println!("\nStep 3: Initializing with genesis state...");
+    let genesis_hash = [0u8; 32]; // In practice, hash of actual genesis state
+    prover.initialize(genesis_hash)?;
+    println!("  Genesis commitment: {:?}", prover.current_lineage().unwrap());
+
+    // Step 4: Add transitions
+    println!("\nStep 4: Adding transitions...");
     
-    // Create genesis state
-    let genesis_state = [0u8; 32];
-    let mut prover = LineageProver::new(genesis_state)?;
-    
-    println!("Created prover with genesis state");
-    println!("Initial lineage: {}\n", prover.current_lineage());
-    
-    // Add some transitions
     let transitions = vec![
-        ("Deploy", Origin::Admin),
-        ("User Deposit", Origin::User),
-        ("User Swap", Origin::User),
-        ("User Withdraw", Origin::User),
+        ("Genesis → User", Transition::new([0u8; 32], [1u8; 32], OriginClass::User, 1000)),
+        ("User → User", Transition::new([1u8; 32], [2u8; 32], OriginClass::User, 2000)),
+        ("User → User", Transition::new([2u8; 32], [3u8; 32], OriginClass::User, 3000)),
     ];
-    
-    let mut prev_state = genesis_state;
-    
-    for (i, (name, origin)) in transitions.iter().enumerate() {
-        let new_state = [(i + 1) as u8; 32];
-        
-        println!("Transition {}: {} ({} -> {})", 
-                 i + 1, 
-                 name, 
-                 if i == 0 { "Genesis" } else { &transitions[i-1].1.name() },
-                 origin.name());
-        
-        prover.add_transition(Transition::new(
-            prev_state,
-            new_state,
-            *origin,
-            (i + 1) as u64 * 1000,
-        ))?;
-        
-        println!("  Lineage: {}", prover.current_lineage());
-        
-        prev_state = new_state;
+
+    for (desc, transition) in transitions {
+        print!("  Adding {}: ", desc);
+        match prover.add_transition(transition) {
+            Ok(_) => println!("✓"),
+            Err(e) => println!("✗ Error: {}", e),
+        }
     }
-    
-    println!("\n All transitions successful!");
-    println!("Final depth: {}", prover.current_lineage().depth);
-    
-    // Generate proof
-    println!("\nGenerating proof...");
+
+    println!("  Current depth: {}", prover.current_depth());
+
+    // Step 5: Generate proof
+    println!("\nStep 5: Generating proof...");
     let proof = prover.finalize()?;
-    println!("Proof generated: {} bytes", proof.proof_data.len());
-    println!("Proof valid: {}", proof.verify());
     
+    println!("  Proof generated successfully!");
+    println!("  - Lineage depth: {}", proof.num_steps);
+    println!("  - Proof size: {} bytes", proof.proof_size());
+    println!("  - Final lineage: {}", proof.final_lineage);
+
+    // Step 6: Verify proof
+    println!("\nStep 6: Verifying proof...");
+    match proof.verify() {
+        Ok(true) => println!("  ✓ Proof is valid!"),
+        Ok(false) => println!("  ✗ Proof is invalid"),
+        Err(e) => println!("  ✗ Verification error: {}", e),
+    }
+
+    println!("\n=== Example Complete ===");
     Ok(())
 }

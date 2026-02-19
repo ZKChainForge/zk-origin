@@ -7,6 +7,12 @@ description = "Zero-Knowledge State Lineage Verification using Nova IVC"
 license = "MIT"
 repository = "https://github.com/ZKChainForge/zk-origin"
 
+[workspace]
+members = [
+    "src",
+    "full_demo",
+]
+
 [lib]
 name = "zk_origin"
 path = "src/lib.rs"
@@ -39,9 +45,17 @@ harness = false
 name = "folding"
 harness = false
 
+[features]
+
+default = []
+benchmark = []
+nova = []   
+
+
 [dependencies]
 # Nova proving system
 nova-snark = "0.31"
+
 
 # Curve implementations (Pasta curves for Nova)
 pasta_curves = "0.5"
@@ -84,9 +98,7 @@ criterion = { version = "0.5", features = ["html_reports"] }
 proptest = "1.0"
 tempfile = "3.0"
 
-[features]
-default = []
-benchmark = []
+
 
 [profile.release]
 opt-level = 3

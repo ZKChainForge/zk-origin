@@ -4,6 +4,7 @@ pub mod origin;
 pub mod lineage;
 pub mod transition;
 pub mod policy;
+pub mod witness;
 pub mod proof;
 pub mod error;
 

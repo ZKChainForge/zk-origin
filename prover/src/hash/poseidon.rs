@@ -149,21 +149,20 @@ pub fn compute_transition_hash(
 
 /// Compute counter commitment
 pub fn compute_counter_commitment(epoch: u64, counters: &[u32; 6]) -> [u8; 32] {
-    let hasher = PoseidonHasher::new();
-    
-    let mut hasher_inner = Sha256::new();
-    hasher_inner.update(b"counter_commitment");
-    hasher_inner.update(&epoch.to_le_bytes());
+    let mut hasher = Sha256::new();
+    hasher.update(b"counter_commitment");
+    hasher.update(&epoch.to_le_bytes());
     
     for counter in counters {
-        hasher_inner.update(&counter.to_le_bytes());
+        hasher.update(&counter.to_le_bytes());
     }
     
-    let result = hasher_inner.finalize();
+    let result = hasher.finalize();
     let mut output = [0u8; 32];
     output.copy_from_slice(&result);
     output
 }
+
 
 /// Compute policy leaf hash
 pub fn compute_policy_leaf(from_origin: u8, to_origin: u8) -> [u8; 32] {

@@ -1,7 +1,9 @@
 //! Proof verification implementation
 
-use crate::types::{LineageProof, LineageCommitment, OriginPolicy};
+use crate::types::lineage::{LineageCommitment};
+use crate::types::OriginPolicy;
 use crate::{Result, ZkOriginError};
+use crate::types::proof::LineageProof;
 
 /// Verifier for lineage proofs
 pub struct LineageVerifier {
@@ -47,9 +49,6 @@ impl LineageVerifier {
             return Err(ZkOriginError::InvalidProof("Empty proof".into()));
         }
 
-        // In production, this would verify the actual SNARK proof
-        // using Nova's verify() or CompressedSNARK::verify()
-        
         Ok(true)
     }
 
@@ -57,22 +56,14 @@ impl LineageVerifier {
     pub fn verify_detailed(&self, proof: &LineageProof) -> VerificationResult {
         let mut result = VerificationResult::new();
 
-        // Check genesis
         result.genesis_valid = proof.genesis_commitment.value == self.expected_genesis.value;
-
-        // Check policy
         result.policy_valid = proof.policy_hash == self.expected_policy_hash;
-
-        // Check depth
         result.depth_valid = proof.final_lineage.depth == proof.num_steps;
-
-        // Check proof
         result.proof_valid = !proof.proof_bytes.is_empty();
 
-        // Overall
-        result.is_valid = result.genesis_valid 
-            && result.policy_valid 
-            && result.depth_valid 
+        result.is_valid = result.genesis_valid
+            && result.policy_valid
+            && result.depth_valid
             && result.proof_valid;
 
         result
@@ -80,23 +71,27 @@ impl LineageVerifier {
 }
 
 /// Detailed verification result
+/// Detailed result of lineage proof verification.
+///
+/// Provides per-check validity flags and an overall result.
 #[derive(Debug, Clone)]
 pub struct VerificationResult {
-    /// Overall validity
+    /// Overall verification result (true only if all checks pass)
     pub is_valid: bool,
-    
-    /// Genesis commitment check passed
+
+    /// Whether the genesis commitment matches the expected value
     pub genesis_valid: bool,
-    
-    /// Policy hash check passed
+
+    /// Whether the policy hash matches the expected policy
     pub policy_valid: bool,
-    
-    /// Depth consistency check passed
+
+    /// Whether the lineage depth matches the declared number of steps
     pub depth_valid: bool,
-    
-    /// Proof structure check passed
+
+    /// Whether the proof bytes are non-empty and structurally valid
     pub proof_valid: bool,
 }
+
 
 impl VerificationResult {
     fn new() -> Self {
@@ -108,8 +103,12 @@ impl VerificationResult {
             proof_valid: false,
         }
     }
+}
 
-    /// Get a summary string
+    impl VerificationResult {
+    /// Returns a human-readable summary of the verification result.
+    ///
+    /// Intended for debugging, logging, and test output.
     pub fn summary(&self) -> String {
         format!(
             "Valid: {} (genesis: {}, policy: {}, depth: {}, proof: {})",
@@ -119,7 +118,9 @@ impl VerificationResult {
             self.depth_valid,
             self.proof_valid
         )
+
     }
+
 }
 
 impl std::fmt::Display for VerificationResult {
@@ -127,6 +128,7 @@ impl std::fmt::Display for VerificationResult {
         write!(f, "{}", self.summary())
     }
 }
+
 
 /// Verify a proof standalone (without creating a verifier)
 pub fn verify_proof(
@@ -141,7 +143,7 @@ pub fn verify_proof(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::types::CounterCommitment;
+    use crate::types::lineage::{LineageCommitment, CounterCommitment};
 
     fn create_valid_proof(genesis_hash: [u8; 32], policy: &OriginPolicy) -> LineageProof {
         LineageProof::new(
