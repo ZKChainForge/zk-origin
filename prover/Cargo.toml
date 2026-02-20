@@ -7,11 +7,7 @@ description = "Zero-Knowledge State Lineage Verification using Nova IVC"
 license = "MIT"
 repository = "https://github.com/ZKChainForge/zk-origin"
 
-[workspace]
-members = [
-    "src",
-    "full_demo",
-]
+
 
 [lib]
 name = "zk_origin"
@@ -20,6 +16,7 @@ path = "src/lib.rs"
 [[bin]]
 name = "zk-origin-cli"
 path = "src/bin/cli.rs"
+
 
 [[example]]
 name = "simple_lineage"

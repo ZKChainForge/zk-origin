@@ -38,12 +38,18 @@
 #![warn(missing_docs)]
 #![warn(rustdoc::missing_crate_level_docs)]
 
+/// Utility helpers shared across the ZK-ORIGIN library.
+///
+/// This module contains common helper functions and small abstractions
+/// used by the prover, verifier, and circuit layers.
+pub mod utils;
+
 pub mod types;
 pub mod hash;
 pub mod circuit;
 pub mod prover;
 pub mod verifier;
-pub mod utils;
+
 
 // Re-export main types for convenience
 pub use types::{
