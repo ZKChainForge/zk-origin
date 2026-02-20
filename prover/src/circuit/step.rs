@@ -195,7 +195,7 @@ impl<F: PrimeField> LineageStepCircuit<F> {
         let policy_indices: Vec<Boolean> = self.policy_indices
             .as_ref()
             .map(|indices| {
-                indices.iter().enumerate().map(|(i, &idx)| {
+                indices.iter().enumerate().map(|(_i, &idx)| {
                     Ok(Boolean::constant(idx))
                 }).collect::<Result<Vec<_>, SynthesisError>>()
             })

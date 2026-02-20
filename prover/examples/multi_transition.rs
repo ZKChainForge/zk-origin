@@ -7,7 +7,7 @@ use zk_origin::{
 use std::time::Instant;
 
 fn main() -> Result<()> {
-    println!("=== ZK-ORIGIN Multi-Transition Example ===\n");
+    println!("ZK-ORIGIN Multi-Transition \n");
 
     // Create prover with default policy
     let policy = OriginPolicy::default();
@@ -17,7 +17,7 @@ fn main() -> Result<()> {
     println!("Testing various transition scenarios:\n");
 
     // Scenario 1: Valid sequence
-    println!("--- Scenario 1: Valid transition sequence ---");
+    println!(" Scenario 1: Valid transition sequence ");
     let valid_sequence = vec![
         (OriginClass::User, "Genesis → User"),
         (OriginClass::User, "User → User"),
@@ -33,7 +33,7 @@ fn main() -> Result<()> {
         );
         
         match prover.add_transition(t) {
-            Ok(_) => println!("  ✓ {}", desc),
+            Ok(_) => println!("   {}", desc),
             Err(e) => println!("  ✗ {}: {}", desc, e),
         }
     }
@@ -43,7 +43,7 @@ fn main() -> Result<()> {
     println!("  Generated proof with {} steps\n", proof1.num_steps);
 
     // Scenario 2: Policy violation
-    println!("--- Scenario 2: Policy violation ---");
+    println!(" Scenario 2: Policy violation ");
     let mut prover2 = LineageProver::new(policy.clone())?;
     prover2.initialize([0u8; 32])?;
 
@@ -51,7 +51,7 @@ fn main() -> Result<()> {
     prover2.add_transition(Transition::new(
         [0u8; 32], [1u8; 32], OriginClass::User, 1000
     ))?;
-    println!("  ✓ Genesis → User");
+    println!("   Genesis → User");
 
     // User → Admin (INVALID - not allowed in default policy)
     let invalid_transition = Transition::new(
@@ -67,7 +67,7 @@ fn main() -> Result<()> {
     }
 
     // Scenario 3: Admin transitions (with rate limiting)
-    println!("\n--- Scenario 3: Admin transitions with rate limiting ---");
+    println!("\n Scenario 3: Admin transitions with rate limiting ");
     let mut prover3 = LineageProver::new(policy.clone())?;
     prover3.initialize([0u8; 32])?;
 
@@ -103,7 +103,7 @@ fn main() -> Result<()> {
     }
 
     // Scenario 4: Performance test
-    println!("\n--- Scenario 4: Performance test ---");
+    println!("\n Scenario 4: Performance test");
     let mut prover4 = LineageProver::new(policy)?;
     prover4.initialize([0u8; 32])?;
 
@@ -132,6 +132,5 @@ fn main() -> Result<()> {
     println!("  Proof size: {} bytes", proof4.proof_size());
     println!("  Depth: {}", proof4.num_steps);
 
-    println!("\n=== Example Complete ===");
     Ok(())
 }
