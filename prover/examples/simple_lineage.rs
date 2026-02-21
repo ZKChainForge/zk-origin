@@ -6,7 +6,7 @@ use zk_origin::{
 };
 
 fn main() -> Result<()> {
-    println!("=== ZK-ORIGIN Simple Lineage Example ===\n");
+    println!(" ZK-ORIGIN Simple Lineage \n");
 
     // Step 1: Create a policy
     println!("Step 1: Creating origin policy...");
@@ -37,8 +37,8 @@ fn main() -> Result<()> {
     for (desc, transition) in transitions {
         print!("  Adding {}: ", desc);
         match prover.add_transition(transition) {
-            Ok(_) => println!("✓"),
-            Err(e) => println!("✗ Error: {}", e),
+            Ok(_) => println!(""),
+            Err(e) => println!(" Error: {}", e),
         }
     }
 
@@ -56,11 +56,10 @@ fn main() -> Result<()> {
     // Step 6: Verify proof
     println!("\nStep 6: Verifying proof...");
     match proof.verify() {
-        Ok(true) => println!("  ✓ Proof is valid!"),
-        Ok(false) => println!("  ✗ Proof is invalid"),
-        Err(e) => println!("  ✗ Verification error: {}", e),
+        Ok(true) => println!("   Proof is valid!"),
+        Ok(false) => println!("   Proof is invalid"),
+        Err(e) => println!("   Verification error: {}", e),
     }
 
-    println!("\n=== Example Complete ===");
     Ok(())
 }
