@@ -5,6 +5,7 @@ node_modules/
 # Compilation output
 /dist
 /contracts/node_modules
+/contracts/deployments
 # pnpm deploy output
 /bundle
 

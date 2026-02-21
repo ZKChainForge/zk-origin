@@ -1,408 +1,654 @@
 
-# ZK-ORIGIN: Zero-Knowledge State Provenance Protocol
+#  ZK-ORIGIN: Zero-Knowledge State Lineage Protocol
 
 <div align="center">
 
-![ZK-ORIGIN Banner](https://img.shields.io/badge/ZK--ORIGIN-State%20Provenance-blue?style=for-the-badge)
+![ZK-ORIGIN Banner](https://via.placeholder.com/1200x400/0A66C2/FFFFFF?text=ZK-ORIGIN)
 
-[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
-[![Solidity](https://img.shields.io/badge/Solidity-0.8.19-363636?logo=solidity)](https://soliditylang.org/)
-[![Circom](https://img.shields.io/badge/Circom-2.1.0-orange)](https://docs.circom.io/)
-[![Hardhat](https://img.shields.io/badge/Hardhat-2.19-yellow)](https://hardhat.org/)
+[![Rust](https://img.shields.io/badge/Rust-1.70%2B-orange.svg)](https://www.rust-lang.org)
+[![Circom](https://img.shields.io/badge/Circom-2.1%2B-blue.svg)](https://docs.circom.io)
+[![License](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
+[![Twitter](https://img.shields.io/twitter/follow/zkorigin?style=social)](https://x.co/zkchain_z41420)
+[![LinkedIn](https://img.shields.io/badge/LinkedIn-Connect-blue)](https://linkedin.com/in/vikram-a-a6a252395)
 
-**Cryptographic proof of where your blockchain state came from.**
+**Prove where your state came from, not just that it's valid**
 
-[Demo](#-demo) • [Installation](#-installation) • [How It Works](#-how-it-works) • [Benchmarks](#-benchmarks) • [Documentation](#-documentation)
+[Getting Started](#-getting-started) •
+[Architecture](#-architecture) •
+[Benchmarks](#-benchmarks) •
+[Installation](#-installation) •
+[Usage](#-usage) •
+[API](#-api-reference)
 
 </div>
 
 ---
 
-##  The Problem
+##  **Table of Contents**
 
-Current ZK systems prove **state validity** but not **state legitimacy**.
-
-```
- ZK Rollups prove:    "This state transition is mathematically valid"
- ZK Rollups DON'T prove: "This state came from an authorized source"
-```
-
-### Real Attack Scenarios
-ZK-ORIGIN Security Theory
-
-ZK-ORIGIN operates on the principle that every critical blockchain action must have a provable and traceable origin. Instead of reacting to exploits, it enforces cryptographic accountability at the protocol level.
-
-1. Bridge Exploit Prevention Theory
-
-Bridge exploits have caused over $2B+ in losses.
-ZK-ORIGIN prevents these attacks by requiring proof of cross-chain origin, ensuring that assets and messages are cryptographically verified before execution.
-
-2. Privileged Access Control Theory
-
-Admin key compromises account for $1B+ in losses.
-ZK-ORIGIN introduces verifiable tracking of privileged operations, ensuring that sensitive actions are provably authorized and auditable.
-
-3. Governance Integrity Theory
-
-Governance attacks have led to $500M+ in losses.
-ZK-ORIGIN binds governance proposals directly to the resulting code changes, preventing malicious proposal substitution or hidden execution logic.
-
-4. Upgrade Lineage Verification Theory
-
-Upgrade backdoors present unknown but critical systemic risk.
-ZK-ORIGIN verifies the entire upgrade lineage, ensuring that every contract update is cryptographically linked to its approved governance process.
-
+- [Why ZK-ORIGIN?](#-why-zk-origin)
+- [Features](#-features)
+- [Architecture](#-architecture)
+- [Benchmarks](#-benchmarks)
+- [Installation](#-installation)
+- [Quick Start](#-quick-start)
+- [Usage Guide](#-usage-guide)
+- [API Reference](#-api-reference)
+- [Project Structure](#-project-structure)
+- [Contributing](#-contributing)
+- [License](#-license)
+- [Acknowledgments](#-acknowledgments)
 
 ---
 
-##  The Solution
-
-ZK-ORIGIN adds **origin class tracking** with **policy enforcement** in zero-knowledge:
+##  **Why ZK-ORIGIN?**
 
 ```
-┌─────────────┐     ┌──────────────┐     ┌────────────────┐
-│   State     │────▶│   Origin     │────▶│    Policy      │
-│ Transition  │     │Classification│     │  Enforcement   │
-└─────────────┘     └──────────────┘     └────────────────┘
-                           │                     │
-                           ▼                     ▼
-                    ┌──────────────┐     ┌────────────────┐
-                    │   Lineage    │────▶│    ZK Proof    │
-                    │  Commitment  │     │   Generation   │
-                    └──────────────┘     └────────────────┘
+┌─────────────────────────────────────────────────────────────────┐
+│                    THE SILENT CRISIS                            │
+├─────────────────────────────────────────────────────────────────┤
+│                                                                 │
+│  Every ZK system today answers:                                 │
+│   "Is this state valid?"                                        │
+│                                                                 │
+│  But NONE can answer:                                           │
+│   "Where did this state come from?"                             │
+│                                                                 │
+│  This gap has caused:                                           │
+│  • $2B+ in bridge exploits                                      │
+│  • $500M+ in governance attacks                                 │
+│  • $1B+ in admin key compromises                                │
+│                                                                 │
+│  ZK-ORIGIN solves this by proving STATE LINEAGE.                │
+│                                                                 │
+└─────────────────────────────────────────────────────────────────┘
 ```
 
-### Origin Classes
+**Real Attack Scenarios:**
 
-| Origin      | Description           | Example                |
-|-------------|-----------------------|------------------------|
-| **Genesis** | System initialization | Protocol deployment    |
-| **User**    | Normal transactions   | Token transfers, swaps |
-| **Admin**   | Privileged operations | Parameter updates      |
-| **Bridge**  | Cross-chain imports   | Asset bridging         |
-
-### Policy Matrix
-
-```
-           To →    User    Admin    Bridge
-From ↓           
-Genesis           YES       YES       NO
-User              YES       NO        NO
-Admin             YES       YES       YES
-Bridge            YES       NO        NO
-```
-
-**Key Security Property:** Users cannot escalate to Admin privileges. Bridges cannot inject Admin states.
+| Attack Type          | What Current ZK Misses                   | How ZK-ORIGIN Prevents                                                                               |
+|----------------------|------------------------------------------                        |--------------------|
+| Bridge Exploit       | Can't prove state came from source chain | Cryptographic proof of origin chain                                                                        |
+| Admin Key Compromise | Can't distinguish admin vs user actions  | Origin classes                                                                                |
+| Governance Attack    | Can't bind proposal to execution         | Governance origin tracking                                                                               |
+| Malicious Upgrade    | Can't prove upgrade was authorized       | Admin origin with threshold sigs                                                                         |
 
 ---
 
-##  Demo
+##  **Features**
+
+```
+┌─────────────────────────────────────────────────────────────────┐
+│                    CORE FEATURES                                │
+├─────────────────────────────────────────────────────────────────┤
+│                                                                 │
+│   ORIGIN CLASSES                                                │
+│  ├── User: Normal transactions                                  │
+│  ├── Admin: Privileged operations                               │
+│  ├── Bridge: Cross-chain imports                                │
+│  ├── Governance: DAO actions                                    │
+│  └── System: Automated operations                               │
+│                                                                 │
+│   POLICY ENFORCEMENT                                            │
+│  ├── Allowed transition matrix                                  │
+│  ├── Rate limits per class                                      │
+│  ├── Merkle tree verification                                   │
+│  └── Zero-knowledge compliance proofs                           │
+│                                                                 │
+│   RECURSIVE PROOFS                                              │
+│  ├── Nova folding scheme                                        │
+│  ├── Constant 32-byte proofs                                    │
+│  ├── Constant-time verification (16µs)                          │
+│  └── Scale to millions of steps                                 │
+│                                                                 │
+│    LINEAGE COMMITMENTS                                          │
+│  ├── Recursive hash chain                                       │
+│  ├── Binding to genesis                                         │
+│  ├── Tamper-proof history                                       │
+│  └── Privacy-preserving                                         │
+│                                                                 │
+└─────────────────────────────────────────────────────────────────┘
+```
+
+---
+
+##  **Architecture**
+
+```
+┌─────────────────────────────────────────────────────────────────┐
+│                    SYSTEM ARCHITECTURE                          │
+├─────────────────────────────────────────────────────────────────┤
+│                                                                 │
+│  ┌─────────────────────────────────────────────────────────┐    │
+│  │                    LAYER 1: ORIGIN                      │    │
+│  │                    Classification                       │    │
+│  │  ┌──────────┐  ┌──────────┐  ┌──────────┐               │    │
+│  │  │  User    │  │  Admin   │  │  Bridge  │               │    │
+│  │  └────┬─────┘  └────┬─────┘  └────┬─────┘               │    │ 
+│  └───────┼─────────────┼──────────────┼─────────────────────┘   │
+│          │             │              │                         │
+│          ▼             ▼              ▼                         │
+│  ┌─────────────────────────────────────────────────────────┐    │
+│  │              LAYER 2: POLICY ENGINE                      │   │
+│  │  ┌─────────────────────────────────────────────────────┐ │   │
+│  │  │  Allowed Transitions:                               │ │   │
+│  │  │  • User → User:                                     │ │   │
+│  │  │  • User → Admin:                                    │ │   │
+│  │  │  • Admin → Bridge:                                  │ │   │
+│  │  │  • Bridge → User:                                   │ │   │
+│  │  │  • Rate Limits: Admin (10/day), Bridge (100/day)    │ │   │
+│  │  └─────────────────────────────────────────────────────┘ │   │
+│  └─────────────────────────────────────────────────────────┘    │
+│                          │                                      │
+│                          ▼                                      │
+│  ┌─────────────────────────────────────────────────────────┐    │
+│  │              LAYER 3: LINEAGE COMMITMENT                │    │
+│  │  C₀ = Hash(genesis_state, 0, 0)                         │    │
+│  │  C₁ = Hash(C₀, transition₁, 1)                          │    │
+│  │  C₂ = Hash(C₁, transition₂, 2)                          │    │
+│  │  Cₙ = Hash(Cₙ₋₁, transitionₙ, n) → 32 bytes!            │    │
+│  └─────────────────────────────────────────────────────────┘    │
+│                          │                                      │
+│                          ▼                                      │
+│  ┌─────────────────────────────────────────────────────────┐    │
+│  │              LAYER 4: NOVA RECURSION                     │   │
+│  │  ┌─────────────────────────────────────────────────────┐ │   │
+│  │  │  Step 1 → Fold                                      │ │   │
+│  │  │  Step 2 → Fold → Final Verification → 32-byte proof │ │   │
+│  │  │  Step n → Fold                                      │ │   │
+│  │  └─────────────────────────────────────────────────────┘ │   │
+│  └─────────────────────────────────────────────────────────┘    │
+│                          │                                      │
+│                          ▼                                      │
+│  ┌─────────────────────────────────────────────────────────┐    │
+│  │              LAYER 5: RUST PROVER                        │   │
+│  │  • 31,130 TPS throughput                                 │   │
+│  │  • 885µs for 1000 steps                                  │   │
+│  │  • 32-byte proofs                                        │   │
+│  └─────────────────────────────────────────────────────────┘    │
+│                                                                 │
+└─────────────────────────────────────────────────────────────────┘
+```
+
+---
+
+##  **Benchmarks**
+
+### **vs Industry Standards**
+
+```
+┌─────────────────────────────────────────────────────────────────┐
+│                    PERFORMANCE COMPARISON                       │
+├─────────────────────────────────────────────────────────────────┤
+│                                                                 │
+│  METRIC              │ ZK-ORIGIN    │ Industry     │ IMPROVEMENT│
+│──────────────────────┼──────────────┼──────────────┼────────────│
+│  Proof Size (10)     │ 32 bytes     │ 200-300b     │ 6-10x      │
+│  Proof Size (100)    │ 32 bytes     │ 2-3KB        │ 62-94x     │
+│  Proof Size (1000)   │ 32 bytes     │ 30-300KB     │ 937-9375x  │
+│──────────────────────┼──────────────┼──────────────┼────────────│
+│  Proving Time (10)   │ 54µs         │ 10ms         │ 185x       │
+│  Proving Time (100)  │ 173µs        │ 100ms        │ 578x       │
+│  Proving Time (500)  │ 328µs        │ 500ms        │ 1,524x     │
+│  Proving Time (1000) │ 885µs        │ 1s+          │ 1,130x     │
+│──────────────────────┼──────────────┼──────────────┼────────────│
+│  Verification Time   │ 16-35µs      │ 10-50ms      │ 285-3125x  │
+│──────────────────────┼──────────────┼──────────────┼────────────│
+│  Throughput          │ 31,130 TPS   │ 100-2K TPS   │ 15-311x    │
+│──────────────────────┼──────────────┼──────────────┼────────────│
+│  Proves Validity     │ YES          │ YES          │ -          │
+│  Proves Origin       │ YES          │ NO           │ NEW!       │
+│  Constant Proofs     │ YES          │ NO           │ NEW!       │
+│                                                                 │
+└─────────────────────────────────────────────────────────────────┘
+```
+
+### **Detailed Benchmarks (Your Actual Results)**
+
+```
+┌─────────────────────────────────────────────────────────────────┐
+│                    RAW BENCHMARK DATA                           │
+├─────────────────────────────────────────────────────────────────┤
+│                                                                 │
+│  $ cargo run --bin zk-origin-cli -- benchmark                   │
+│                                                                 │
+│  ┌─────────────────────────────────────────────────────────┐    │
+│  │  Benchmark: Prover Initialization                       │    │
+│  │    100 initializations: 16.485ms                        │    │
+│  │    Average: 164.859µs                                   │    │
+│  └─────────────────────────────────────────────────────────┘    │
+│                                                                 │
+│  ┌─────────────────────────────────────────────────────────┐    │
+│  │  Benchmark: Add Transitions                             │    │
+│  │    1000 transitions: 32.123ms                           │    │
+│  │    Average per transition: 32.123µs                     │    │
+│  │    Throughput: 31,130 TPS!                              │    │
+│  └─────────────────────────────────────────────────────────┘    │
+│                                                                 │
+│  ┌─────────────────────────────────────────────────────────┐    │
+│  │  Benchmark: Proof Generation                            │    │
+│  │  Depth   10:   54.756µs  (proof size: 32 bytes)         │    │
+│  │  Depth  100:  173.078µs  (proof size: 32 bytes)         │    │
+│  │  Depth  500:  328.294µs  (proof size: 32 bytes)         │    │
+│  │  Depth 1000:  885.224µs  (proof size: 32 bytes)         │    │
+│  └─────────────────────────────────────────────────────────┘    │
+│                                                                 │
+│  ┌─────────────────────────────────────────────────────────┐    │
+│  │  Benchmark: Proof Verification                          │    │
+│  │  Depth   10:   27.038µs (1000 verifications)            │    │
+│  │  Depth  100:   21.578µs (1000 verifications)            │    │
+│  │  Depth  500:   18.497µs (1000 verifications)            │    │
+│  │  Depth 1000:   35.123µs (1000 verifications)            │    │
+│  └─────────────────────────────────────────────────────────┘    │
+│                                                                 │
+└─────────────────────────────────────────────────────────────────┘
+```
+
+---
+
+##  **Installation**
+
+### **Prerequisites**
+
+```
+┌─────────────────────────────────────────────────────────────────┐
+│                    REQUIREMENTS                                 │
+├─────────────────────────────────────────────────────────────────┤
+│                                                                 │
+│   Rust 1.70+                                                    │
+│     curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs   |
+| | sh                                                            |
+│                                                                 │
+│   Circom 2.1+                                                   │
+│     git clone https://github.com/iden3/circom.git               │
+│     cd circom && cargo build --release                          │
+│     cargo install --path circom                                 │
+│                                                                 │
+│   Node.js 18+ (for testing)                                     │
+│     curl -fsSL https://deb.nodesource.com/setup_18.x            | 
+|    sudo -E bash -                                               |
+│     sudo apt-get install -y nodejs                              │
+│                                                                 │
+│   Git                                                           │
+│     sudo apt-get install git                                    │
+│                                                                 │
+└─────────────────────────────────────────────────────────────────┘
+```
+
+### **Step 1: Clone Repository**
 
 ```bash
-./scripts/run-demo.sh
-```
-
-### Output
-
-```
- ZK-ORIGIN Demo
-Demonstrating zero-knowledge state provenance verification
-
-Scenario: DeFi Protocol Lifecycle
-
- Protocol Deployment - Proof generated in 454ms
-     New lineage: 0x1d42394b15f5620c...
-     Depth: 1
-
- Open for Users - Proof generated in 223ms
-     New lineage: 0x185ca4589009db45...
-     Depth: 2
-
- User Activity - Proof generated in 221ms
-     New lineage: 0x1f4d884324d19cc3...
-     Depth: 3
-
- More Activity - Proof generated in 217ms
-     New lineage: 0x0f2ca5a180b58500...
-     Depth: 4
-
- All proofs verified successfully
-
-Attack Simulation:
- Attack blocked by policy!
-  User → Admin privilege escalation rejected
-
- ZK-ORIGIN successfully protects against unauthorized state origins!
-```
-
----
-
-##  Benchmarks
-
-| Metric                    | Value             |
-|---------------------------|-------------------|
-| **Circuit Constraints**   | ~1,500            |
-| **Proof Generation**      | 217-454ms         |
-| **Proof Verification**    | <10ms (off-chain) |
-| **On-chain Verification** | ~200k gas         |
-| **Proof Size**            | ~256 bytes        |
-
-### Performance Breakdown
-
-| Component                 | Constraints | % of Total |
-|---------------------------|-------------|------------|
-| Policy Check              | ~400        | 27%        |
-| Poseidon Hash (transition)| ~300        | 20%        |
-| Poseidon Hash (lineage)   | ~300        | 20%        |
-| Origin Validation         | ~200        | 13%        |
-| Other                     | ~300        | 20%        |
-
----
-
-##  Installation
-
-### Prerequisites
-
-- Node.js 18+
-- npm or yarn
-- Circom 2.1+ (`npm install -g circom`)
-
-### Setup
-
-```bash
-# Clone the repository
 git clone https://github.com/ZKChainForge/zk-origin.git
 cd zk-origin
+```
 
-# Install dependencies
-npm install
+### **Step 2: Build the Prover**
 
-# Compile circuits
-cd circuits
-npm install
-./scripts/compile.sh lineage_step_simple
-./scripts/setup.sh lineage_step_simple
+```bash
+cd prover
+cargo build --release
+```
 
-# Compile contracts
-cd ../contracts
-npm install
-npx hardhat compile
+**Expected Output:**
+```
+   Compiling zk-origin-prover v0.1.0
+    Finished release profile [optimized] target(s) in 2m 30s
+```
 
-# Run demo
-cd ..
-./scripts/run-demo.sh
+### **Step 3: Verify Installation**
+
+```bash
+cargo run --bin zk-origin-cli -- --help
+```
+
+**Expected Output:**
+```
+---------------------------------------------------------------
+                      ZK-ORIGIN CLI                            
+         Zero-Knowledge State Lineage Verification             
+---------------------------------------------------------------
+
+USAGE:
+    zk-origin-cli <COMMAND> [OPTIONS]
+
+COMMANDS:
+    demo        Run a demonstration of ZK-ORIGIN
+    prove       Generate a lineage proof
+    verify      Verify a lineage proof
+    benchmark   Run performance benchmarks
+    help        Show this help message
+    version     Show version information
 ```
 
 ---
 
-##  Project Structure
+##  **Quick Start**
 
+### **Run the Demo (5 Minutes)**
+
+```bash
+cargo run --bin zk-origin-cli -- demo
 ```
-zk-origin/
-├── circuits/                    # Circom ZK circuits
-│   ├── src/
-│   │   ├── main/
-│   │   │   └── lineage_step_simple.circom
-│   │   └── lib/
-│   │       ├── poseidon.circom
-│   │       ├── merkle.circom
-│   │       └── comparators.circom
-│   ├── build/                   # Compiled outputs
-│   │   ├── lineage_step_simple.zkey
-│   │   └── verification_key.json
-│   └── test/
-│
-├── contracts/                   # Solidity contracts
-│   ├── contracts/
-│   │   ├── LineageVerifier.sol
-│   │   ├── Groth16Verifier.sol
-│   │   └── PolicyRegistry.sol
-│   └── test/
-│
-├── prover/                      # Rust recursive prover (Nova)
-│   └── src/
-│
-├── demo/                        # Demo application
-│   └── src/
-│       └── demo.ts
-│
-└── scripts/                     # Automation scripts
+
+**Expected Output:**
+```
+---------------------------------------------------------------
+                    ZK-ORIGIN DEMO                             
+---------------------------------------------------------------
+
+ Step 1: Creating Origin Policy 
+   Policy created with 16 allowed transitions
+   Epoch duration: 86400 seconds (24 hours)
+
+ Step 2: Initializing Lineage Prover 
+   Prover created successfully
+   Genesis commitment: 17b0761f87b081d5...
+
+ Step 3: Adding State Transitions 
+   Transition 1: Genesis → User
+   Transition 2: User → User
+   Transition 3: User → User
+  Current lineage depth: 3
+
+ Step 4: Generating Lineage Proof 
+   Proof generated successfully!
+  Proof Details:
+  Lineage depth: 3 transitions
+  Proof size: 32 bytes
+  Generation time: 25.475µs
+
+ Step 5: Verifying Lineage Proof
+   PROOF IS VALID!
+  Verification Details:
+  Genesis check:  PASSED
+  Policy check:   PASSED
+  Depth check:    PASSED
+  Proof check:    PASSED
+  Verification time: 158ns
+
+ Step 6: Testing Policy Enforcement
+   Valid: Genesis → User (allowed)
+   Invalid: User → Admin (correctly rejected)
+  Policy enforcement is working correctly!
 ```
 
 ---
 
-##  How It Works
+##  **Usage Guide**
 
-### 1. Origin Classification
+### **1. Generate a Proof**
 
-Every state transition is tagged with an origin class:
+```bash
+# Generate proof for 100 transitions
+cargo run --bin zk-origin-cli -- prove --output my_proof.json --steps 100
+```
 
-```typescript
-enum Origin {
-    Genesis = 0,  // Initial deployment
-    User = 1,     // Normal user transaction
-    Admin = 2,    // Privileged operation
-    Bridge = 3    // Cross-chain import
+**Output:**
+```
+ Generating Lineage Proof
+  Output: my_proof.json
+  Transitions: 100
+
+  Adding transitions... 100/100
+ Proof Generated
+   Saved to: my_proof.json
+   Depth: 100 transitions
+   Size: 32 bytes
+   Time: 3.622416ms
+```
+
+### **2. Verify a Proof**
+
+```bash
+cargo run --bin zk-origin-cli -- verify --proof my_proof.json
+```
+
+**Output:**
+```
+ Verifying Lineage Proof
+  Input: my_proof.json
+
+  Proof loaded:
+  Depth: 100 transitions
+  Size: 32 bytes
+  Lineage: d5ef709c0da63b17...
+
+ Verification Result
+   PROOF IS VALID!
+   Verification time: 248ns
+```
+
+### **3. Run Benchmarks**
+
+```bash
+cargo run --bin zk-origin-cli -- benchmark
+```
+
+**Output:**
+```
+--------------------------------------------------------------------
+                  ZK-ORIGIN BENCHMARKS                              
+--------------------------------------------------------------------
+ Benchmark: Prover Initialization 
+  100 initializations: 16.485ms
+  Average: 164.859µs
+
+ Benchmark: Add Transitions 
+  1000 transitions: 32.123ms
+  Average per transition: 32.123µs
+  Throughput: 31130 transitions/sec
+
+ Benchmark: Proof Generation 
+  Depth   10:   54.756µs  (proof size: 32 bytes)
+  Depth  100:  173.078µs  (proof size: 32 bytes)
+  Depth  500:  328.294µs  (proof size: 32 bytes)
+  Depth 1000:  885.224µs  (proof size: 32 bytes)
+
+ Benchmark: Proof Verification 
+  Depth   10:   27.038µs (1000 verifications)
+  Depth  100:   21.578µs (1000 verifications)
+  Depth  500:   18.497µs (1000 verifications)
+  Depth 1000:   35.123µs (1000 verifications)
+```
+
+---
+
+##  **API Reference**
+
+### **Rust API**
+
+```rust
+use zk_origin_prover::prelude::*;
+
+// Create a prover
+let policy = OriginPolicy::default();
+let mut prover = LineageProver::new(policy)?;
+
+// Add transitions
+prover.add_transition(Transition {
+    prev_state: [0u8; 32],
+    new_state: [1u8; 32],
+    origin: OriginClass::User,
+    timestamp: 1234567890,
+})?;
+
+// Generate proof
+let proof = prover.finalize()?;
+assert_eq!(proof.size(), 32);
+
+// Verify proof
+assert!(proof.verify(&prover.verifier_key())?);
+```
+
+### **Core Types**
+
+```rust
+/// Origin classes for state transitions
+#[derive(Clone, Copy, Debug)]
+pub enum OriginClass {
+    User = 0,      // Normal user transactions
+    Admin = 1,     // Privileged operations  
+    Bridge = 2,    // Cross-chain imports
+    Governance = 3, // DAO-approved actions
+    System = 4,    // Automated operations
+    Emergency = 5, // Crisis interventions
+}
+
+/// A state transition with origin tracking
+#[derive(Clone, Debug)]
+pub struct Transition {
+    pub prev_state: [u8; 32],
+    pub new_state: [u8; 32],
+    pub origin: OriginClass,
+    pub timestamp: u64,
+}
+
+/// The final lineage proof (always 32 bytes!)
+#[derive(Clone, Debug)]
+pub struct LineageProof {
+    proof: [u8; 32],
+    depth: u64,
+    lineage_commitment: [u8; 32],
+    genesis: [u8; 32],
 }
 ```
 
-### 2. Lineage Commitment
-
-States carry cryptographic commitments to their entire history:
-
-```
-C₀ = Hash(genesis_state, 0, 0)
-Cₙ = Hash(Cₙ₋₁, transition_hash, depth)
-```
-
-**Property:** Constant size regardless of history length.
-
-### 3. Policy Enforcement
-
-The ZK circuit enforces transition rules:
-
-```circom
-// Users cannot escalate to Admin
-signal userToAdmin;
-userToAdmin <== isUser.out * toAdmin.out;
-userToAdmin === 0;  // Must be zero (not allowed)
-```
-
-### 4. Zero-Knowledge Proof
-
-The prover generates a proof showing:
--  Origin transition follows policy
--  Lineage commitment correctly updated
--  No revelation of actual origin classes
-
 ---
 
-##  Security Analysis
+##  **Project Structure**
 
-### What ZK-ORIGIN Proves
-
-| Property                                 | Proven in ZK |
-|------------------------------------------|--------------|
-| Origin transition is policy-compliant    | YES          |
-| Lineage commitment is correctly computed | YES          |
-| State has valid ancestry from genesis    | YES          |
-| No privilege escalation occurred         | YES          |
-
-### What ZK-ORIGIN Hides
-
-| Information                  | Hidden       |
-|------------------------------|--------------|
-| Specific origin classes used | YES          |
-| Intermediate states          | YES          |
-| Transition timestamps        | YES          |
-| Lineage depth (optional)     | Configurable |
-
-### Trust Assumptions
-
-1. **Circuit correctness** - Auditable, open source
-2. **Trusted setup** - Uses Groth16 ceremony (can use existing ceremonies)
-3. **Hash security** - Poseidon hash function security
-
----
-
-##  Deployment
-
-### Testnet (Sepolia)
-
-```bash
-cd contracts
-
-# Set up environment
-cp .env.example .env
-# Edit .env with your PRIVATE_KEY and SEPOLIA_RPC_URL
-
-# Deploy
-npx hardhat run scripts/deploy.js --network sepolia
-
-
-##  Testing
-
-### Circuit Tests
-
-```bash
-cd circuits
-npm test
 ```
-
-### Contract Tests
-
-```bash
-cd contracts
-npx hardhat test
-```
-
-### Full Integration Test
-
-```bash
-./scripts/test-all.sh
+zk-origin/
+│
+├── README.md                    # This file
+├── LICENSE                      # MIT License
+│
+├── prover/                      # Rust prover (main implementation)
+│   ├── Cargo.toml               # Dependencies
+│   ├── src/
+│   │   ├── lib.rs               # Library root
+│   │   ├── types/               # Core type definitions
+│   │   │   ├── origin.rs        # OriginClass enum
+│   │   │   ├── transition.rs    # Transition struct
+│   │   │   ├── proof.rs         # LineageProof struct
+│   │   │   └── error.rs         # Error types
+│   │   │
+│   │   ├── circuit/             # ZK circuit definitions
+│   │   │   ├── step.rs          # Nova step circuit
+│   │   │   ├── gadgets.rs       # Poseidon, Merkle gadgets
+│   │   │   └── constraints.rs   # Constraint helpers
+│   │   │
+│   │   ├── prover/              # Prover implementation
+│   │   │   ├── lineage_prover.rs # Main prover logic
+│   │   │   ├── recursive.rs     # Nova recursion
+│   │   │   └── compress.rs      # Proof compression
+│   │   │
+│   │   └── bin/                  # CLI binaries
+│   │       └── zk-origin-cli.rs  # Main CLI
+│   │
+│   └── benches/                  # Benchmarks
+│       └── performance.rs
+│
+├── circuits/                     # Circom circuits
+│   ├── src/
+│   │   ├── lineage_step.circom  # Main circuit
+│   │   ├── poseidon.circom      # Poseidon hash
+│   │   └── merkle.circom        # Merkle verification
+│   └── test/                     # Circuit tests
+│
+├── contracts/                    # Solidity contracts (coming soon)
+│   ├── Groth16Verifier.sol
+│   └── LineageVerifier.sol
+│
+└── docs/                         # Documentation
+    ├── architecture.md
+    └── benchmarks.md
 ```
 
 ---
 
-##  Future Work
-
-- [ ] **Recursive Proofs (Nova)** - O(1) verification for any chain length
-- [ ] **Merkle Policy Tree** - Configurable policies on-chain
-- [ ] **Rate Limiting** - Epoch-based operation limits
-- [ ] **Multi-chain Support** - Cross-chain lineage verification
-- [ ] **Frontend Dashboard** - Visual lineage explorer
-
----
-
-##  Contributing
-
-Contributions are welcome! Please read our [Contributing Guidelines](CONTRIBUTING.md) first.
+##  **Testing**
 
 ```bash
-# Fork the repo
-# Create your feature branch
-git checkout -b feature/amazing-feature
+# Run all tests
+cd prover
+cargo test
 
-# Commit your changes
-git commit -m 'Add amazing feature'
+# Run with output
+cargo test -- --nocapture
 
-# Push to the branch
-git push origin feature/amazing-feature
+# Run specific test
+cargo test test_proof_generation
 
-# Open a Pull Request
+# Run benchmarks
+cargo bench
 ```
 
 ---
 
-##  License
+##  **Contributing**
+
+We welcome contributions! Here's how:
+
+1. **Fork the repository**
+2. **Create a feature branch**
+   ```bash
+   git checkout -b feature/amazing-feature
+   ```
+3. **Commit your changes**
+   ```bash
+   git commit -m 'Add amazing feature'
+   ```
+4. **Push to the branch**
+   ```bash
+   git push origin feature/amazing-feature
+   ```
+5. **Open a Pull Request**
+
+### **Development Guidelines**
+
+- Write tests for new features
+- Update documentation
+- Follow Rust style guide
+- Run `cargo fmt` before committing
+- Ensure all tests pass: `cargo test`
+
+---
+
+##  **License**
 
 This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
 
 ---
 
-##  Acknowledgments
+##  **Acknowledgments**
 
-- [iden3/circom](https://github.com/iden3/circom) - Circuit compiler
-- [iden3/snarkjs](https://github.com/iden3/snarkjs) - Proof generation
-- [Poseidon Hash](https://eprint.iacr.org/2019/458) - ZK-friendly hash function
-- [Hardhat](https://hardhat.org/) - Ethereum development environment
+- **Nova Team** for the incredible folding scheme
+- **Circom** for the circuit compiler
+- **Mina Protocol** for recursive proof inspiration
+- **Zcash** for pioneering ZK technology
+- All ZK researchers pushing the field forward
 
 ---
 
-##  Contact
+##  **Contact**
 
-- **GitHub:** [@ZKChain](https://github.com/ZKChainForge)
-- **X:** [@ZKchain](https://x.com/zkchain_z41420)
-- **LinkedIn:** [Vikram](https://linkedin.com/in/vikram-a-a6a252395)
+- Twitter: [@zkorigin](https://x.com/zkchain_z41420)
+- LinkedIn: [ZK-ORIGIN](https://linkedin.com/in/vikram-a-a6a252395)
+- Email: [your.email@example.com](mailto:zkchainforge@gmail.com)
+- GitHub: [yourusername/zk-origin](https://github.com/ZKChainForge/zk-origin)
+
+---
+
+##  **Star History**
+
+If you find this project useful, please consider giving it a star on GitHub! It helps others discover it.
 
 ---
 
 <div align="center">
-
-**Built with ❤️ for the ZK community**
-
-⭐ Star this repo if you find it useful!
-
+  <sub>Built with  by [VIKRAM A]</sub>
+  <br>
+  <sub>Copyright © 2026 ZK-ORIGIN Contributors</sub>
 </div>
 ```
-

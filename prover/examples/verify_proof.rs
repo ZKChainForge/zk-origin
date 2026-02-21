@@ -7,7 +7,7 @@ use zk_origin::{
 };
 
 fn main() -> Result<()> {
-    println!("=== ZK-ORIGIN Proof Verification Example ===\n");
+    println!("ZK-ORIGIN Proof Verification \n");
 
     let genesis_hash = [42u8; 32];
     let policy = OriginPolicy::default();
@@ -37,7 +37,7 @@ fn main() -> Result<()> {
     match verifier.verify(&proof) {
         Ok(true) => println!("   Proof is valid"),
         Ok(false) => println!("   Proof is invalid"),
-        Err(e) => println!("  ✗ Error: {}", e),
+        Err(e) => println!("   Error: {}", e),
     }
 
     // Get detailed verification results
@@ -61,7 +61,7 @@ fn main() -> Result<()> {
     }
 
     // Test verification failure cases
-    println!("\n--- Testing Verification Failures ---\n");
+    println!("\n Testing Verification Failures \n");
 
     // Wrong genesis
     println!("Test: Wrong genesis hash");
@@ -69,7 +69,7 @@ fn main() -> Result<()> {
     let verifier_wrong = LineageVerifier::new(wrong_genesis, &policy);
     match verifier_wrong.verify(&proof) {
         Ok(_) => println!("  Unexpected success"),
-        Err(e) => println!("  ✓ Correctly rejected: {}", e),
+        Err(e) => println!("   Correctly rejected: {}", e),
     }
 
     // Wrong policy
@@ -78,11 +78,11 @@ fn main() -> Result<()> {
     let verifier_wrong_policy = LineageVerifier::new(genesis_hash, &wrong_policy);
     match verifier_wrong_policy.verify(&proof) {
         Ok(_) => println!("  Unexpected success"),
-        Err(e) => println!("  ✓ Correctly rejected: {}", e),
+        Err(e) => println!("   Correctly rejected: {}", e),
     }
 
     // Serialization round-trip
-    println!("\n--- Testing Proof Serialization ---\n");
+    println!("\n Testing Proof Serialization \n");
     
     let json = proof.to_json()?;
     println!("  JSON size: {} bytes", json.len());
@@ -96,6 +96,5 @@ fn main() -> Result<()> {
         Err(e) => println!("   Error: {}", e),
     }
 
-    println!("\n=== Example Complete ===");
     Ok(())
 }
