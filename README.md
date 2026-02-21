@@ -635,8 +635,8 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 
 - Twitter: [@zkorigin](https://x.com/zkchain_z41420)
 - LinkedIn: [ZK-ORIGIN](https://linkedin.com/in/vikram-a-a6a252395)
-- Email: [your.email@example.com](mailto:zkchainforge@gmail.com)
-- GitHub: [yourusername/zk-origin](https://github.com/ZKChainForge/zk-origin)
+- Email: [zkchainforge](mailto:zkchainforge@gmail.com)
+- GitHub: [ZKChainForge/zk-origin](https://github.com/ZKChainForge/zk-origin)
 
 ---
 
