@@ -6,6 +6,7 @@ node_modules/
 /dist
 /contracts/node_modules
 /contracts/deployments
+/demo/node_modules
 # pnpm deploy output
 /bundle
 

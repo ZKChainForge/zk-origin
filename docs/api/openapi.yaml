@@ -1,0 +1,163 @@
+
+
+openapi: 3.0.3
+info:
+  title: ZK-ORIGIN API
+  description: Zero-Knowledge State Lineage Verification API
+  version: 1.0.0
+
+servers:
+  - url: https://api.zk-origin.io/v1
+    description: Production
+  - url: http://localhost:3000/v1
+    description: Local development
+
+paths:
+  /lineage/{stateHash}:
+    get:
+      summary: Get lineage for a state
+      parameters:
+        - name: stateHash
+          in: path
+          required: true
+          schema:
+            type: string
+            pattern: '^0x[a-fA-F0-9]{64}$'
+      responses:
+        '200':
+          description: Lineage information
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/LineageInfo'
+        '404':
+          description: State not found
+
+  /prove:
+    post:
+      summary: Generate a lineage proof
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ProveRequest'
+      responses:
+        '200':
+          description: Generated proof
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Proof'
+        '400':
+          description: Invalid input or policy violation
+
+  /verify:
+    post:
+      summary: Verify a proof locally
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/VerifyRequest'
+      responses:
+        '200':
+          description: Verification result
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/VerifyResult'
+
+components:
+  schemas:
+    LineageInfo:
+      type: object
+      properties:
+        stateHash:
+          type: string
+        lineageCommitment:
+          type: string
+        depth:
+          type: integer
+        verified:
+          type: boolean
+        history:
+          type: array
+          items:
+            $ref: '#/components/schemas/HistoryEntry'
+
+    HistoryEntry:
+      type: object
+      properties:
+        stateHash:
+          type: string
+        lineageCommitment:
+          type: string
+        depth:
+          type: integer
+        blockNumber:
+          type: integer
+        transactionHash:
+          type: string
+
+    ProveRequest:
+      type: object
+      required:
+        - prevState
+        - newState
+        - originClass
+      properties:
+        prevState:
+          type: string
+        newState:
+          type: string
+        originClass:
+          type: integer
+          minimum: 0
+          maximum: 6
+        timestamp:
+          type: integer
+
+    Proof:
+      type: object
+      properties:
+        pA:
+          type: array
+          items:
+            type: string
+        pB:
+          type: array
+          items:
+            type: array
+            items:
+              type: string
+        pC:
+          type: array
+          items:
+            type: string
+        publicSignals:
+          type: array
+          items:
+            type: string
+
+    VerifyRequest:
+      type: object
+      required:
+        - proof
+        - publicSignals
+      properties:
+        proof:
+          $ref: '#/components/schemas/Proof'
+        publicSignals:
+          type: array
+          items:
+            type: string
+
+    VerifyResult:
+      type: object
+      properties:
+        valid:
+          type: boolean
+        verifiedAt:
+          type: integer
