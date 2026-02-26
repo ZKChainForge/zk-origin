@@ -6,7 +6,6 @@ use bellpepper_core::{
     ConstraintSystem, SynthesisError,
 };
 use ff::PrimeField;
-
 use super::selector::SelectorGadget;
 
 /// Gadget for Merkle proof verification in circuit
