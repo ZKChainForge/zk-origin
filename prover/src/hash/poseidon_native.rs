@@ -11,14 +11,20 @@ use ff::{ Field};
 use generic_array::typenum::{U2, U3, U4, U5};
 
 /// Poseidon constants for different arities
-#[allow(dead_code)]
+/// Poseidon parameter sets for supported arities.
 pub struct PoseidonParams {
+    /// Poseidon constants for arity 2.
     pub constants_2: PoseidonConstants<Fr, U2>,
+
+    /// Poseidon constants for arity 3.
     pub constants_3: PoseidonConstants<Fr, U3>,
+
+    /// Poseidon constants for arity 4.
     pub constants_4: PoseidonConstants<Fr, U4>,
+
+    /// Poseidon constants for arity 5.
     pub constants_5: PoseidonConstants<Fr, U5>,
 }
-
 impl PoseidonParams {
     /// Create new Poseidon parameters
     pub fn new() -> Self {
