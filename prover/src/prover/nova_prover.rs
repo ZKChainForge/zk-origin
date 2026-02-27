@@ -2,12 +2,16 @@
 //!
 //! This module provides the Nova IVC integration.
 //! Note: Full Nova integration requires careful version matching.
-
+#[allow(unused_imports)]
 use pasta_curves::pallas::Scalar as Fr;
+
+#[allow(unused_imports)]
 use ff::PrimeField;
+
+#[allow(unused_imports)]
+use crate::circuit::step::LineageStepCircuit;
 use std::time::Instant;
 
-use crate::circuit::step::LineageStepCircuit;
 use crate::types::{StepWitness, LineageProof, LineageCommitment};
 use crate::types::lineage::CounterCommitment;
 use crate::types::proof::ProofMetadata;

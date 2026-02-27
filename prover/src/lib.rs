@@ -65,7 +65,7 @@
 #![warn(missing_docs)]
 #![warn(rustdoc::missing_crate_level_docs)]
 
-pub mod utils;
+
 pub mod types;
 pub mod hash;
 pub mod circuit;

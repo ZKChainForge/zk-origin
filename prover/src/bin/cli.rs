@@ -506,12 +506,12 @@ fn cmd_benchmark_nova() -> Result<()> {
     std::io::stdin().read_line(&mut input).ok();
 
     use zk_origin::prover::nova_prover::NovaParams;
-
+    
     // Benchmark: Setup
     println!(" Benchmark: Nova Setup");
     let start = Instant::now();
     let policy_root = [0u8; 32];
-    let params = NovaParams::setup(policy_root)?;
+    let _params = NovaParams::setup(policy_root)?;
     let setup_time = start.elapsed();
     
     println!("    Setup time: {:.2}s", setup_time.as_secs_f64());
