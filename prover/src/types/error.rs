@@ -1,10 +1,10 @@
 //! Error types for ZK-ORIGIN
 
-use thiserror::Error;
 use std::fmt;
+use thiserror::Error;
 
 /// Main error type for ZK-ORIGIN operations
-#[derive(Error, Debug)]
+#[derive(Debug, Error)]
 pub enum ZkOriginError {
     /// Policy violation - transition not allowed
     #[error("Policy violation: transition from {from} to {to} is not allowed")]
@@ -16,33 +16,33 @@ pub enum ZkOriginError {
     },
 
     /// Rate limit exceeded
-    #[error("Rate limit exceeded for {origin_class}: {current}/{limit} in epoch {epoch}")]
+    #[error("Rate limit exceeded for {origin}: {current}/{limit} in epoch {epoch}")]
     RateLimitExceeded {
-        /// The origin class that hit the limit
-        origin_class: String,
+        /// Origin class that exceeded limit
+        origin: String,
         /// Current count
         current: u32,
-        /// The limit
+        /// Maximum limit
         limit: u32,
-        /// Current epoch
+        /// Epoch ID
         epoch: u64,
     },
 
-    /// Invalid lineage - state doesn't match expected
+    /// Invalid state transition
+    #[error("Invalid state transition: {0}")]
+    InvalidTransition(String),
+
+    /// Invalid lineage
     #[error("Invalid lineage: {0}")]
     InvalidLineage(String),
 
-    /// Invalid state hash
-    #[error("Invalid state hash: {0}")]
-    InvalidStateHash(String),
+    /// Genesis mismatch
+    #[error("Genesis commitment mismatch")]
+    GenesisMismatch,
 
-    /// Witness generation failed
-    #[error("Witness generation failed: {0}")]
-    WitnessGenerationFailed(String),
-
-    /// Proving failed
-    #[error("Proving failed: {0}")]
-    ProvingFailed(String),
+    /// Not initialized
+    #[error("Not initialized: {0}")]
+    NotInitialized(String),
 
     /// Verification failed
     #[error("Verification failed: {0}")]
@@ -52,48 +52,31 @@ pub enum ZkOriginError {
     #[error("Invalid proof: {0}")]
     InvalidProof(String),
 
-    /// Circuit error
-    #[error("Circuit error: {0}")]
-    CircuitError(String),
-
     /// Serialization error
     #[error("Serialization error: {0}")]
     SerializationError(String),
 
-    /// Configuration error
-    #[error("Configuration error: {0}")]
-    ConfigurationError(String),
+    /// Deserialization error
+    #[error("Deserialization error: {0}")]
+    DeserializationError(String),
+
+    /// Proving error
+    #[error("Proving error: {0}")]
+    ProvingError(String),
+
+    /// Circuit error
+    #[error("Circuit error: {0}")]
+    CircuitError(String),
 
     /// Internal error
     #[error("Internal error: {0}")]
     InternalError(String),
-
-    /// Not initialized
-    #[error("Prover not initialized: {0}")]
-    NotInitialized(String),
-
-    /// Epoch mismatch
-    #[error("Epoch mismatch: expected {expected}, got {actual}")]
-    EpochMismatch {
-        /// Expected epoch
-        expected: u64,
-        /// Actual epoch
-        actual: u64,
-    },
-
-    /// Genesis mismatch
-    #[error("Genesis mismatch: proof genesis doesn't match expected")]
-    GenesisMismatch,
-
-    /// Depth overflow
-    #[error("Lineage depth overflow: {0} exceeds maximum")]
-    DepthOverflow(u64),
-
-    /// IO error
-    #[error("IO error: {0}")]
-    IoError(#[from] std::io::Error),
 }
 
+/// Result type alias
+pub type Result<T> = std::result::Result<T, ZkOriginError>;
+
+// Helper constructors
 impl ZkOriginError {
     /// Create a policy violation error
     pub fn policy_violation(from: impl fmt::Display, to: impl fmt::Display) -> Self {
@@ -106,99 +89,41 @@ impl ZkOriginError {
     /// Create a rate limit error
     pub fn rate_limit(origin: impl fmt::Display, current: u32, limit: u32, epoch: u64) -> Self {
         Self::RateLimitExceeded {
-            origin_class: origin.to_string(),
+            origin: origin.to_string(),
             current,
             limit,
             epoch,
         }
     }
 
-    /// Check if this is a policy-related error
-    pub fn is_policy_error(&self) -> bool {
-        matches!(self, Self::PolicyViolation { .. } | Self::RateLimitExceeded { .. })
+    /// Create a proving error
+    pub fn proving(msg: impl fmt::Display) -> Self {
+        Self::ProvingError(msg.to_string())
     }
 
-    /// Check if this is a verification error
-    pub fn is_verification_error(&self) -> bool {
-        matches!(self, Self::VerificationFailed(_) | Self::InvalidProof(_))
+    /// Create a serialization error
+    pub fn serialization(msg: impl fmt::Display) -> Self {
+        Self::SerializationError(msg.to_string())
     }
 
-    /// Get error code for programmatic handling
-    pub fn code(&self) -> &'static str {
-        match self {
-            Self::PolicyViolation { .. } => "POLICY_VIOLATION",
-            Self::RateLimitExceeded { .. } => "RATE_LIMIT_EXCEEDED",
-            Self::InvalidLineage(_) => "INVALID_LINEAGE",
-            Self::InvalidStateHash(_) => "INVALID_STATE_HASH",
-            Self::WitnessGenerationFailed(_) => "WITNESS_GEN_FAILED",
-            Self::ProvingFailed(_) => "PROVING_FAILED",
-            Self::VerificationFailed(_) => "VERIFICATION_FAILED",
-            Self::InvalidProof(_) => "INVALID_PROOF",
-            Self::CircuitError(_) => "CIRCUIT_ERROR",
-            Self::SerializationError(_) => "SERIALIZATION_ERROR",
-            Self::ConfigurationError(_) => "CONFIG_ERROR",
-            Self::InternalError(_) => "INTERNAL_ERROR",
-            Self::NotInitialized(_) => "NOT_INITIALIZED",
-            Self::EpochMismatch { .. } => "EPOCH_MISMATCH",
-            Self::GenesisMismatch => "GENESIS_MISMATCH",
-            Self::DepthOverflow(_) => "DEPTH_OVERFLOW",
-            Self::IoError(_) => "IO_ERROR",
-        }
+    /// Create a deserialization error
+    pub fn deserialization(msg: impl fmt::Display) -> Self {
+        Self::DeserializationError(msg.to_string())
     }
 }
 
-/// Result type alias for ZK-ORIGIN operations
-pub type Result<T> = std::result::Result<T, ZkOriginError>;
-
-/// Extension trait for Results
-pub trait ResultExt<T> {
-    /// Add context to an error
-    fn context(self, msg: impl Into<String>) -> Result<T>;
-}
-
-impl<T, E: std::error::Error> ResultExt<T> for std::result::Result<T, E> {
-    fn context(self, msg: impl Into<String>) -> Result<T> {
-        self.map_err(|e| ZkOriginError::InternalError(format!("{}: {}", msg.into(), e)))
-    }
-}
-
-impl From<bincode::Error> for ZkOriginError {
-    fn from(e: bincode::Error) -> Self {
-        ZkOriginError::SerializationError(e.to_string())
-    }
-}
-
+/// Convert serde_json::Error to ZkOriginError for `?` usage
 impl From<serde_json::Error> for ZkOriginError {
-    fn from(e: serde_json::Error) -> Self {
-        ZkOriginError::SerializationError(e.to_string())
+    fn from(err: serde_json::Error) -> Self {
+        ZkOriginError::SerializationError(err.to_string())
     }
 }
 
-impl From<hex::FromHexError> for ZkOriginError {
-    fn from(e: hex::FromHexError) -> Self {
-        ZkOriginError::SerializationError(format!("Hex decode error: {}", e))
+/// Optionally, also convert bincode errors if your crate uses them
+impl From<bincode::Error> for ZkOriginError {
+    fn from(err: bincode::Error) -> Self {
+        ZkOriginError::SerializationError(err.to_string())
     }
-}
-
-/// Macro for creating internal errors with location info
-#[macro_export]
-macro_rules! internal_error {
-    ($msg:expr) => {
-        $crate::ZkOriginError::InternalError(format!(
-            "{} at {}:{}",
-            $msg,
-            file!(),
-            line!()
-        ))
-    };
-    ($fmt:expr, $($arg:tt)*) => {
-        $crate::ZkOriginError::InternalError(format!(
-            "{} at {}:{}",
-            format!($fmt, $($arg)*),
-            file!(),
-            line!()
-        ))
-    };
 }
 
 #[cfg(test)]
@@ -206,38 +131,25 @@ mod tests {
     use super::*;
 
     #[test]
-    fn test_policy_violation_error() {
+    fn test_error_display() {
         let err = ZkOriginError::policy_violation("User", "Admin");
-        assert!(err.is_policy_error());
-        assert_eq!(err.code(), "POLICY_VIOLATION");
         assert!(err.to_string().contains("User"));
         assert!(err.to_string().contains("Admin"));
     }
 
     #[test]
-    fn test_rate_limit_error() {
-        let err = ZkOriginError::rate_limit("Admin", 10, 10, 42);
-        assert!(err.is_policy_error());
-        assert_eq!(err.code(), "RATE_LIMIT_EXCEEDED");
+    fn test_proving_error() {
+        let err = ZkOriginError::proving("test error");
+        assert!(matches!(err, ZkOriginError::ProvingError(_)));
     }
 
     #[test]
-    fn test_error_codes() {
-        let errors = vec![
-            ZkOriginError::InvalidLineage("test".into()),
-            ZkOriginError::ProvingFailed("test".into()),
-            ZkOriginError::GenesisMismatch,
-        ];
-
-        for err in errors {
-            assert!(!err.code().is_empty());
+    fn test_serde_from() {
+        let json_err: serde_json::Error = serde_json::from_str::<u32>("bad").unwrap_err();
+        let zk_err: ZkOriginError = json_err.into();
+        match zk_err {
+            ZkOriginError::SerializationError(_) => {}
+            _ => panic!("Expected SerializationError"),
         }
-    }
-
-    #[test]
-    fn test_internal_error_macro() {
-        let err = internal_error!("Something went wrong");
-        assert!(err.to_string().contains("Something went wrong"));
-        assert!(err.to_string().contains("error.rs"));
     }
 }

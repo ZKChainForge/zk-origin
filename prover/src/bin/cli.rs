@@ -1,531 +1,396 @@
-//! ZK-ORIGIN Command Line Interface
+//! ZK-ORIGIN CLI
 
-use std::path::PathBuf;
 use std::time::Instant;
-
-use zk_origin::{
-    LineageProver, OriginPolicy, Transition, OriginClass,
-    LineageVerifier, LineageProof,
-    Result, ZkOriginError,
-    expected_performance,
-};
+use zk_origin::*;
 
 fn main() {
-    if let Err(e) = run() {
-        eprintln!("Error: {}", e);
-        std::process::exit(1);
-    }
-}
-
-fn run() -> Result<()> {
     let args: Vec<String> = std::env::args().collect();
     
     if args.len() < 2 {
-        print_usage();
-        return Ok(());
+        print_help();
+        return;
     }
-    
+
     match args[1].as_str() {
-        "demo" => cmd_demo()?,
-        "demo-nova" => cmd_demo_nova()?,
-        "prove" => cmd_prove(&args[2..])?,
-        "verify" => cmd_verify(&args[2..])?,
-        "benchmark" => cmd_benchmark()?,
-        "benchmark-nova" => cmd_benchmark_nova()?,
-        "info" => cmd_info(),
-        "help" | "--help" | "-h" => print_usage(),
-        "version" | "--version" | "-v" => print_version(),
+        "demo" => run_demo(),
+        "benchmark" => run_benchmark(),
+        "help" | "-h" | "--help" => print_help(),
+        "version" | "-v" | "--version" => print_version(),
+        "mode" => print_mode(),
         _ => {
-            eprintln!("Unknown command: {}", args[1]);
-            print_usage();
-            return Err(ZkOriginError::ConfigurationError(
-                format!("Unknown command: {}", args[1])
-            ));
+            println!("Unknown command: {}", args[1]);
+            print_help();
         }
     }
-    
-    Ok(())
 }
 
-fn print_usage() {
+fn print_help() {
     println!(r#"
 ╔═══════════════════════════════════════════════════════════════╗
-║                       ZK-ORIGIN CLI                           ║
-║          Zero-Knowledge State Lineage Verification            ║
+║                    ZK-ORIGIN CLI                              ║
+║       Zero-Knowledge State Lineage Verification               ║
 ╚═══════════════════════════════════════════════════════════════╝
 
 USAGE:
-    zk-origin-cli <COMMAND> [OPTIONS]
+    zk-origin-cli <COMMAND>
 
 COMMANDS:
-    demo           Run commitment mode demonstration (fast)
-    demo-nova      Run Nova ZK mode demonstration (slow, real proofs)
-    prove          Generate a lineage proof
-    verify         Verify a lineage proof
-    benchmark      Run commitment mode benchmarks
-    benchmark-nova Run Nova mode benchmarks (very slow)
-    info           Show library information and performance estimates
-    help           Show this help message
-    version        Show version information
+    demo        Run a demonstration
+    benchmark   Run performance benchmarks
+    mode        Show current proving mode
+    help        Show this help message
+    version     Show version information
 
-EXAMPLES:
-    zk-origin-cli demo
-    zk-origin-cli demo-nova
-    zk-origin-cli prove --output proof.json
-    zk-origin-cli verify --proof proof.json
-    zk-origin-cli benchmark
-    zk-origin-cli info
+PROVING MODES:
+    commitment-mode (default)  Fast but NOT zero-knowledge
+    real-nova                  Real ZK proofs (slow)
 
-OPTIONS:
-    -h, --help      Show help information
-    -v, --version   Show version information
+BUILD FOR REAL ZK:
+    cargo build --features real-nova --no-default-features
 "#);
 }
 
 fn print_version() {
-    println!("zk-origin-cli v{}", zk_origin::VERSION);
-    println!("Zero-Knowledge State Lineage Verification");
+    println!("zk-origin-prover v{}", VERSION);
+    println!("Proving mode: {}", proving_mode());
 }
 
-fn cmd_info() {
-    println!();
-    println!("╔═══════════════════════════════════════════════════════════════╗");
-    println!("║                    ZK-ORIGIN Information                      ║");
-    println!("╚═══════════════════════════════════════════════════════════════╝");
-    println!();
+fn print_mode() {
+    println!("Current proving mode: {}", proving_mode());
+    println!("Is real ZK: {}", is_real_zk_enabled());
     
     let perf = expected_performance();
-    
-    println!(" Commitment Mode (hash-based, no ZK privacy):");
-    println!("    Add transition:   ~{}µs", perf.commitment_mode.add_transition_us);
-    println!("    Finalize:         ~{}µs", perf.commitment_mode.finalize_us);
-    println!("    Verify:           ~{}µs", perf.commitment_mode.verify_us);
-    println!("    Proof size:       {} bytes", perf.commitment_mode.proof_size_bytes);
-    println!();
-    
-    println!(" Nova Mode (real ZK proofs):");
-    println!("    Setup:            ~{} seconds (one-time)", perf.nova_mode.setup_seconds);
-    println!("    Per step:         ~{}ms", perf.nova_mode.step_ms);
-    println!("    Compression:      ~{} seconds", perf.nova_mode.compression_seconds);
-    println!("    Verify:           ~{}ms", perf.nova_mode.verify_ms);
-    println!("    Proof size:       ~{}KB", perf.nova_mode.proof_size_bytes / 1000);
-    println!();
-    
-    println!(" Origin Classes:");
-    for class in OriginClass::all() {
-        println!("   {} = {} (rate limit: {})", 
-            *class as u8,
-            class,
-            class.default_rate_limit()
-        );
-    }
-    println!();
-    
-    println!("  Configuration:");
-    println!("    Origin classes:   {}", zk_origin::NUM_ORIGIN_CLASSES);
-    println!("    Policy tree depth: {}", zk_origin::POLICY_TREE_DEPTH);
-    println!("    Max lineage depth: {}", zk_origin::MAX_LINEAGE_DEPTH);
+    println!("\nExpected performance:");
+    println!("  Setup:        {}", perf.setup_time);
+    println!("  Per step:     {}", perf.step_time);
+    println!("  Compression:  {}", perf.compression_time);
+    println!("  Verification: {}", perf.verification_time);
+    println!("  Proof size:   {}", perf.proof_size);
 }
 
-fn cmd_demo() -> Result<()> {
-    println!("╔═══════════════════════════════════════════════════════════════╗");
-    println!("║              ZK-ORIGIN DEMO (Commitment Mode)                 ║");
-    println!("╚═══════════════════════════════════════════════════════════════╝");
+fn run_demo() {
+    println!(r#"
+╔═══════════════════════════════════════════════════════════════╗
+║                    ZK-ORIGIN DEMO                             ║
+║               Mode: {:40}║
+╚═══════════════════════════════════════════════════════════════╝
+"#, proving_mode());
 
-    // Step 1: Create policy
-    println!(" Step 1: Creating Origin Policy");
+    if !is_real_zk_enabled() {
+        println!("⚠️  WARNING: Running in COMMITMENT MODE");
+        println!("⚠️  This is NOT zero-knowledge!");
+        println!("⚠️  For real ZK, rebuild with:");
+        println!("⚠️    cargo build --features real-nova --no-default-features");
+        println!();
+    }
+
+      println!("📋 Step 1: Creating Origin Policy");
     let policy = OriginPolicy::default();
-    println!("    Policy created with {} allowed transitions", policy.num_allowed());
-    println!("    Epoch duration: {} seconds (24 hours)", policy.epoch_duration);
-   
 
-    // Step 2: Create prover
-    println!(" Step 2: Initializing Lineage Prover");
-    let mut prover = LineageProver::new(policy.clone())?;
-    let genesis_hash = [0u8; 32];
-    // ... continuing cmd_demo() function
+      println!(
+    "   Policy created with {} allowed transitions",
+     policy.allowed_transitions().len()
+            ); 
 
-    prover.initialize(genesis_hash)?;
-    println!("    Prover created successfully");
-    println!("    Genesis state initialized");
-    println!("    Genesis commitment: {}...", 
-        hex::encode(&prover.current_lineage().unwrap().value[..8]));
-    println!();
+    // Step 2: Initialize prover
+    println!("\n🔧 Step 2: Initializing Lineage Prover");
+    
+    if is_real_zk_enabled() {
+        println!("   ⏳ Setting up Nova parameters (this takes 30-120 seconds)...");
+    }
+    
+    let start = Instant::now();
+    
+    let mut prover = match LineageProver::new(policy.clone()) {
+        Ok(p) => p,
+        Err(e) => {
+            println!("   ❌ Failed to create prover: {}", e);
+            return;
+        }
+    };
+    
+    let genesis = [0u8; 32];
+    if let Err(e) = prover.initialize(genesis) {
+        println!("   ❌ Failed to initialize: {}", e);
+        return;
+    }
+    
+    let init_time = start.elapsed();
+    println!("   ✅ Prover initialized in {:?}", init_time);
+    println!("   Genesis: 0x{}...", &hex::encode(&genesis)[..16]);
 
     // Step 3: Add transitions
-    println!(" Step 3: Adding State Transitions");
+    println!("\n📝 Step 3: Adding Transitions");
+    
+    if is_real_zk_enabled() {
+        println!("   ⏳ Each step takes 500-2000ms with real Nova...");
+    }
     
     let transitions = vec![
-        ("Genesis → User", OriginClass::User, "User initiated first action"),
-        ("User → User", OriginClass::User, "User continued operations"),
-        ("User → User", OriginClass::User, "User completed workflow"),
+        (OriginClass::User, "Genesis → User"),
+        (OriginClass::User, "User → User"),
+        (OriginClass::User, "User → User"),
     ];
 
-    let start = Instant::now();
-    for (i, (desc, origin, _note)) in transitions.iter().enumerate() {
-        let t = Transition::new(
-            [i as u8; 32],
-            [(i + 1) as u8; 32],
+    let mut prev_state = genesis;
+    for (i, (origin, desc)) in transitions.iter().enumerate() {
+        let new_state = [(i + 1) as u8; 32];
+        let transition = Transition::new(
+            prev_state,
+            new_state,
             *origin,
             (i as u64 + 1) * 1000,
         );
         
-        match prover.add_transition(t) {
-            Ok(_) => println!("    Transition {}: {}", i + 1, desc),
-            Err(e) => println!("    Transition {}: {} - Error: {}", i + 1, desc, e),
+        let start = Instant::now();
+        match prover.add_transition(transition) {
+            Ok(_) => {
+                let elapsed = start.elapsed();
+                println!("   ✅ Step {}: {} ({:?})", i + 1, desc, elapsed);
+            }
+            Err(e) => {
+                println!("   ❌ Step {}: {} - Error: {}", i + 1, desc, e);
+                return;
+            }
         }
+        
+        prev_state = new_state;
     }
-    let transition_time = start.elapsed();
     
-    println!("     Transitions added in {:?}", transition_time);
-    println!("    Current lineage depth: {}", prover.current_depth());
+    println!("   Current depth: {}", prover.current_depth());
 
     // Step 4: Generate proof
-    println!(" Step 4: Generating Lineage Proof");
-    let start = Instant::now();
-    let proof = prover.finalize()?;
-    let proof_time = start.elapsed();
+    println!("\n🔐 Step 4: Generating Proof");
     
-    println!("    Proof generated successfully!");
-    println!("    Proof Details:");
-    println!("       Lineage depth: {} transitions", proof.num_steps);
-    println!("       Proof size: {} bytes", proof.proof_size());
-    println!("       Generation time: {:?}", proof_time);
-    println!("       Final lineage: {}...", &proof.final_lineage.to_hex()[..16]);
-    println!("       Genesis: {}...", &proof.genesis_commitment.to_hex()[..16]);
-    println!();
+    if is_real_zk_enabled() {
+        println!("   ⏳ Compressing proof (this takes 10-60 seconds)...");
+    }
+    
+    let start = Instant::now();
+    
+    let proof = match prover.finalize() {
+        Ok(p) => p,
+        Err(e) => {
+            println!("   ❌ Failed to generate proof: {}", e);
+            return;
+        }
+    };
+    
+    let prove_time = start.elapsed();
+    println!("   ✅ Proof generated in {:?}", prove_time);
+    println!("   Proof size: {} bytes ({:.2} KB)", 
+             proof.proof_size(), 
+             proof.proof_size() as f64 / 1024.0);
+    println!("   Is real ZK: {}", proof.is_real_zk());
+    println!("   Depth: {} steps", proof.num_steps);
+    println!("   Final lineage: 0x{}...", &proof.final_lineage.to_hex()[..16]);
 
-    // Step 5: Verify proof
-    println!(" Step 5: Verifying Lineage Proof");
-    let verifier = LineageVerifier::new(genesis_hash, &policy);
-    
+    // Step 5: Verify
+    println!("\n✔️  Step 5: Verifying Proof");
     let start = Instant::now();
-    let verification_result = verifier.verify(&proof);
-    let verify_time = start.elapsed();
     
-    match verification_result {
+    match proof.verify() {
         Ok(true) => {
-            println!("    PROOF IS VALID!");
-            println!("    Verification Details:");
-            let detailed = verifier.verify_detailed(&proof);
-            println!("       Genesis check:  {}", if detailed.genesis_valid { " PASSED" } else { " FAILED" });
-            println!("       Policy check:   {}", if detailed.policy_valid { " PASSED" } else { "FAILED" });
-            println!("       Depth check:    {}", if detailed.depth_valid { " PASSED" } else { " FAILED" });
-            println!("       Proof check:    {}", if detailed.proof_valid { " PASSED" } else { " FAILED" });
-            println!("       Verification time: {:?}", verify_time);
+            let verify_time = start.elapsed();
+            println!("   ✅ PROOF VALID ({:?})", verify_time);
         }
         Ok(false) => {
-            println!("    PROOF IS INVALID!");
+            println!("   ❌ PROOF INVALID");
         }
         Err(e) => {
-            println!("    Verification error: {}", e);
+            println!("   ❌ Verification error: {}", e);
         }
     }
-    println!();
 
-    // Step 6: Test policy violation
-    println!("  Step 6: Testing Policy Enforcement");
-    let mut test_prover = LineageProver::new(policy.clone())?;
-    test_prover.initialize([0u8; 32])?;
+    // Step 6: Policy enforcement demo
+    println!("\n🛡️  Step 6: Testing Policy Enforcement");
     
-    // Valid transition
-    let valid_t = Transition::new([0u8; 32], [1u8; 32], OriginClass::User, 1000);
-    test_prover.add_transition(valid_t)?;
-    println!("    Valid: Genesis → User (allowed)");
+    let mut test_prover = LineageProver::new(policy.clone()).unwrap();
+    test_prover.initialize([0u8; 32]).unwrap();
     
-    // Invalid transition (User → Admin not allowed in default policy)
-    let invalid_t = Transition::new([1u8; 32], [2u8; 32], OriginClass::Admin, 2000);
-    match test_prover.add_transition(invalid_t) {
-        Ok(_) => println!("   ? User → Admin succeeded (unexpected)"),
-        Err(ZkOriginError::PolicyViolation { from, to }) => {
-            println!("    Invalid: {} → {} (correctly rejected)", from, to);
-        }
-        Err(e) => println!("    Error: {}", e),
+    // Valid: Genesis -> User
+    let valid = Transition::new([0u8; 32], [1u8; 32], OriginClass::User, 1000);
+    match test_prover.validate_transition(&valid) {
+        Ok(_) => println!("   ✅ Genesis → User: ALLOWED (correct)"),
+        Err(e) => println!("   ❌ Genesis → User: BLOCKED - {}", e),
     }
-    Ok(())
+    
+    // Add the valid transition
+    test_prover.add_transition(valid).unwrap();
+    
+    // Invalid: User -> Admin (not allowed by default policy)
+    let invalid = Transition::new([1u8; 32], [2u8; 32], OriginClass::Admin, 2000);
+    match test_prover.validate_transition(&invalid) {
+        Ok(_) => println!("   ❌ User → Admin: ALLOWED (unexpected!)"),
+        Err(_) => println!("   ✅ User → Admin: BLOCKED (correct - policy enforced)"),
+    }
+
+    // Summary
+    println!("\n{}", "═".repeat(63));
+    println!("                         SUMMARY");
+    println!("{}", "═".repeat(63));
+    println!("  Proving mode:     {}", proving_mode());
+    println!("  Steps proven:     {}", proof.num_steps);
+    println!("  Proof size:       {} bytes", proof.proof_size());
+    println!("  Real ZK proof:    {}", proof.is_real_zk());
+    println!("  Policy enforced:  ✅");
+    
+    if proof.is_real_zk() {
+        println!("\n  🎉 This is a REAL zero-knowledge proof!");
+        println!("  🔒 Cryptographically secure lineage verification.");
+    } else {
+        println!("\n  ⚠️  This is a COMMITMENT-based proof (not ZK).");
+        println!("  📝 Suitable for development and testing only.");
+    }
+    
+    println!("{}", "═".repeat(63));
 }
 
-fn cmd_demo_nova() -> Result<()> {
-    println!("Press Enter to continue or Ctrl+C to cancel...");
-    
-    let mut input = String::new();
-    std::io::stdin().read_line(&mut input).ok();
-    
-    use zk_origin::prover::nova_prover::{NovaParams, NovaLineageProver};
-    
-    // Step 1: Setup
-    println!(" Step 1: Setting up Nova public parameters...");
-    
-    let start = Instant::now();
-    let policy_root = [0u8; 32]; // Simplified for demo
-    let params = NovaParams::setup(policy_root)?;
-    let setup_time = start.elapsed();
-    
-    println!("    Setup complete in {:.2}s", setup_time.as_secs_f64());
-    println!();
-    
-    // Step 2: Initialize prover
-    println!(" Step 2: Initializing Nova prover...");
-    let mut prover = NovaLineageProver::new(params);
-    prover.initialize([0u8; 32], 0)?;
-    println!("    Prover initialized with genesis state");
-    
-    // Step 3: Add steps
-    println!(" Step 3: Adding transition steps...");
-    
-    // We need to create witnesses for Nova
-    // For a real demo, you'd use the WitnessGenerator
-    println!("   • Nova setup is expensive (~{}s) but done once", setup_time.as_secs());
-    
-    Ok(())
-}
+fn run_benchmark() {
+    println!(r#"
+╔═══════════════════════════════════════════════════════════════╗
+║                 ZK-ORIGIN BENCHMARKS                          ║
+║               Mode: {:40}║
+╚═══════════════════════════════════════════════════════════════╝
+"#, proving_mode());
 
-fn cmd_prove(args: &[String]) -> Result<()> {
-    let output_path = args.iter()
-        .position(|a| a == "--output" || a == "-o")
-        .and_then(|i| args.get(i + 1))
-        .map(PathBuf::from)
-        .unwrap_or_else(|| PathBuf::from("proof.json"));
-
-    let num_transitions: usize = args.iter()
-        .position(|a| a == "--steps" || a == "-n")
-        .and_then(|i| args.get(i + 1))
-        .and_then(|s| s.parse().ok())
-        .unwrap_or(5);
-
-    let use_nova = args.iter().any(|a| a == "--nova");
-
-
-    println!(" Generating Lineage Proof");
-    println!("    Output: {}", output_path.display());
-    println!("    Transitions: {}", num_transitions);
-    println!("    Mode: {}", if use_nova { "Nova (ZK)" } else { "Commitment" });
-
-    if use_nova {
-        println!("  Nova mode requested. This will be slow...");
-        // Nova implementation would go here
-        println!("   Nova proving not yet implemented in CLI.");
-        println!("   Use the library directly for Nova proofs.");
-        return Ok(());
+    if !is_real_zk_enabled() {
+        println!("⚠️  Running in COMMITMENT MODE - these are NOT real ZK benchmarks!");
+        println!("⚠️  Real Nova benchmarks will be 1000x slower.");
+        println!();
     }
 
     let policy = OriginPolicy::default();
-    let mut prover = LineageProver::new(policy)?;
-    prover.initialize([0u8; 32])?;
 
-    let start = Instant::now();
+    // Benchmark 1: Initialization
+    println!("📊 Benchmark 1: Prover Initialization");
+    let iterations = if is_real_zk_enabled() { 1 } else { 10 };
     
+    let start = Instant::now();
+    for _ in 0..iterations {
+        let mut prover = LineageProver::new(policy.clone()).unwrap();
+        prover.initialize([0u8; 32]).unwrap();
+    }
+    let total = start.elapsed();
+    let avg = total / iterations as u32;
+    
+    println!("   {} iterations: {:?}", iterations, total);
+    println!("   Average: {:?}", avg);
+    
+    if is_real_zk_enabled() {
+        println!("   (Nova setup is one-time cost, can be cached)");
+    }
+
+    // Benchmark 2: Adding transitions
+    println!("\n📊 Benchmark 2: Adding Transitions");
+    
+    let num_transitions = if is_real_zk_enabled() { 5 } else { 100 };
+    
+    let mut prover = LineageProver::new(policy.clone()).unwrap();
+    prover.initialize([0u8; 32]).unwrap();
+    
+    let start = Instant::now();
     for i in 0..num_transitions {
-        let t = Transition::new(
+        let transition = Transition::new(
             [i as u8; 32],
             [(i + 1) as u8; 32],
             OriginClass::User,
             (i as u64 + 1) * 1000,
         );
-        prover.add_transition(t)?;
-        print!("\r    Adding transitions... {}/{}", i + 1, num_transitions);
+        prover.add_transition(transition).unwrap();
     }
-    println!();
-
-    let proof = prover.finalize()?;
-    let duration = start.elapsed();
-
-    // Save proof
-    let json = proof.to_json()?;
-    std::fs::write(&output_path, &json)?;
-
-    println!();
-    println!(" Proof Generated");
-    println!("    Saved to: {}", output_path.display());
-    println!("    Depth: {} transitions", proof.num_steps);
-    println!("    Size: {} bytes", proof.proof_size());
-    println!("    Time: {:?}", duration);
-    println!();
-
-    Ok(())
-}
-
-fn cmd_verify(args: &[String]) -> Result<()> {
-    let proof_path = args.iter()
-        .position(|a| a == "--proof" || a == "-p")
-        .and_then(|i| args.get(i + 1))
-        .map(PathBuf::from)
-        .unwrap_or_else(|| PathBuf::from("proof.json"));
-
-    println!();
-    println!(" Verifying Lineage Proof");
-    println!("    Input: {}", proof_path.display());
-    println!();
-
-    // Load proof
-    let json = std::fs::read_to_string(&proof_path)?;
-    let proof = LineageProof::from_json(&json)?;
-
-    println!("Proof loaded:");
-    println!("    Depth: {} transitions", proof.num_steps);
-    println!("    Size: {} bytes", proof.proof_size());
-    println!("    Lineage: {}...", &proof.final_lineage.to_hex()[..16]);
-    println!();
-
-    // Verify
-    let policy = OriginPolicy::default();
-    let genesis_hash = [0u8; 32];
-    let verifier = LineageVerifier::new(genesis_hash, &policy);
-
-    let start = Instant::now();
-    let result = verifier.verify(&proof);
-    let duration = start.elapsed();
-
-    match result {
-        Ok(true) => {
-            println!(" Verification Result");
-            println!("    Status: VALID");
-            println!("    Time: {:?}", duration);
-        }
-        Ok(false) => {
-            println!(" Verification Result");
-            println!("    Status: INVALID");
-        }
-        Err(e) => {
-            println!(" Verification Result");
-            println!("    Error: {}", e);
-        }
+    let total = start.elapsed();
+    let avg = total / num_transitions as u32;
+    
+    println!("   {} transitions: {:?}", num_transitions, total);
+    println!("   Average per transition: {:?}", avg);
+    
+    if is_real_zk_enabled() {
+        let tps = 1000.0 / avg.as_millis() as f64;
+        println!("   Throughput: {:.2} transitions/sec", tps);
+    } else {
+        let tps = 1_000_000.0 / avg.as_micros() as f64;
+        println!("   Throughput: {:.0} transitions/sec (commitment mode)", tps);
     }
-    println!();
 
-    Ok(())
-}
-
-fn cmd_benchmark() -> Result<()> {
-    println!("╔═══════════════════════════════════════════════════════════════╗");
-    println!("║              ZK-ORIGIN BENCHMARKS (Commitment Mode)           ║");
-    println!("╚═══════════════════════════════════════════════════════════════╝");
-   
-
-    let policy = OriginPolicy::default();
-
-    // Benchmark: Prover initialization
-    println!(" Benchmark: Prover Initialization");
-    let start = Instant::now();
-    for _ in 0..100 {
-        let mut prover = LineageProver::new(policy.clone())?;
-        prover.initialize([0u8; 32])?;
-    }
-    let duration = start.elapsed();
-    println!("    100 initializations: {:?}", duration);
-    println!("    Average: {:?}", duration / 100);
-    println!();
-
-    // Benchmark: Add transitions
-    println!(" Benchmark: Add Transitions");
-    let mut prover = LineageProver::new(policy.clone())?;
-    prover.initialize([0u8; 32])?;
+    // Benchmark 3: Proof generation
+    println!("\n📊 Benchmark 3: Proof Generation (Finalization)");
     
     let start = Instant::now();
-    for i in 0..1000 {
-        let t = Transition::new(
-            [i as u8; 32],
-            [(i + 1) as u8; 32],
-            OriginClass::User,
-            i as u64 * 1000,
-        );
-        prover.add_transition(t)?;
-    }
-    let duration = start.elapsed();
-    println!("    1000 transitions: {:?}", duration);
-    println!("    Average per transition: {:?}", duration / 1000);
-    println!("   Throughput: {:.0} transitions/sec", 1000.0 / duration.as_secs_f64());
-    println!();
-
-    // Benchmark: Proof generation at different depths
-    println!(" Benchmark: Proof Generation");
-    for &depth in &[10, 100, 500, 1000] {
-        let mut prover = LineageProver::new(policy.clone())?;
-        prover.initialize([0u8; 32])?;
-        
-        for i in 0..depth {
-            let t = Transition::new(
-                [i as u8; 32],
-                [(i + 1) as u8; 32],
-                OriginClass::User,
-                i as u64 * 1000,
-            );
-            prover.add_transition(t)?;
-        }
-        
-        let start = Instant::now();
-        let proof = prover.finalize()?;
-        let duration = start.elapsed();
-        
-        println!("    Depth {:>4}: {:>10?}  (proof size: {} bytes)", 
-                 depth, duration, proof.proof_size());
-    }
-    println!();
-
-    // Benchmark: Verification
-    println!(" Benchmark: Proof Verification");
-    let genesis_hash = [0u8; 32];
-    let verifier = LineageVerifier::new(genesis_hash, &policy);
+    let proof = prover.finalize().unwrap();
+    let prove_time = start.elapsed();
     
-    for &depth in &[10, 100, 500, 1000] {
-        let mut prover = LineageProver::new(policy.clone())?;
-        prover.initialize([0u8; 32])?;
-        
-        for i in 0..depth {
-            let t = Transition::new(
-                [i as u8; 32],
-                [(i + 1) as u8; 32],
-                OriginClass::User,
-                i as u64 * 1000,
-            );
-            prover.add_transition(t)?;
-        }
-        
-        let proof = prover.finalize()?;
-        
-        let start = Instant::now();
-        for _ in 0..1000 {
-            let _ = verifier.verify(&proof);
-        }
-        let duration = start.elapsed();
-        
-        println!("    Depth {:>4}: {:>10?} (1000 verifications)", depth, duration);
-    }
+    println!("   Depth {} proof: {:?}", proof.num_steps, prove_time);
+    println!("   Proof size: {} bytes ({:.2} KB)", 
+             proof.proof_size(),
+             proof.proof_size() as f64 / 1024.0);
+    println!("   Is real ZK: {}", proof.is_real_zk());
 
-    Ok(())
-}
-
-fn cmd_benchmark_nova() -> Result<()> {
-    println!();
-    println!("╔═══════════════════════════════════════════════════════════════╗");
-    println!("║               ZK-ORIGIN BENCHMARKS (Nova Mode)                ║");
-    println!("╚═══════════════════════════════════════════════════════════════╝");
-    println!("Press Enter to continue or Ctrl+C to cancel...");
+    // Benchmark 4: Verification
+    println!("\n📊 Benchmark 4: Proof Verification");
     
-    let mut input = String::new();
-    std::io::stdin().read_line(&mut input).ok();
-
-    use zk_origin::prover::nova_prover::NovaParams;
+    let verify_iterations = if is_real_zk_enabled() { 1 } else { 100 };
     
-    // Benchmark: Setup
-    println!(" Benchmark: Nova Setup");
     let start = Instant::now();
-    let policy_root = [0u8; 32];
-    let _params = NovaParams::setup(policy_root)?;
-    let setup_time = start.elapsed();
+    for _ in 0..verify_iterations {
+        let _ = proof.verify().unwrap();
+    }
+    let total = start.elapsed();
+    let avg = total / verify_iterations as u32;
     
-    println!("    Setup time: {:.2}s", setup_time.as_secs_f64());
-    println!();
+    println!("   {} verifications: {:?}", verify_iterations, total);
+    println!("   Average: {:?}", avg);
 
-    println!(" Benchmark: Nova Step Proving");
-    println!("     Full step proving requires witness generation.");
-    println!("    Setup overhead: {:.2}s", setup_time.as_secs_f64());
-    println!("    Expected per-step time: 100-500ms");
-    println!();
-
+    // Summary table
+    println!("\n{}", "═".repeat(63));
+    println!("                    BENCHMARK SUMMARY");
+    println!("{}", "═".repeat(63));
+    println!("  {:30} {:>15} {:>12}", "Operation", "Time", "Notes");
+    println!("{}", "─".repeat(63));
     
+    if is_real_zk_enabled() {
+        println!("  {:30} {:>15} {:>12}", 
+                 "Nova Setup", 
+                 format!("{:?}", avg),
+                 "one-time");
+        println!("  {:30} {:>15} {:>12}", 
+                 "Per Step", 
+                 format!("{:?}", total / num_transitions as u32),
+                 "real ZK");
+        println!("  {:30} {:>15} {:>12}", 
+                 "Compression", 
+                 format!("{:?}", prove_time),
+                 "real ZK");
+    } else {
+        println!("  {:30} {:>15} {:>12}", 
+                 "Initialization", 
+                 format!("{:?}", avg),
+                 "fast");
+        println!("  {:30} {:>15} {:>12}", 
+                 "Per Transition", 
+                 format!("{:?}", total / num_transitions as u32),
+                 "NOT ZK");
+        println!("  {:30} {:>15} {:>12}", 
+                 "Finalization", 
+                 format!("{:?}", prove_time),
+                 "NOT ZK");
+    }
     
-
-    Ok(())
+    println!("  {:30} {:>15} {:>12}", 
+             "Proof Size", 
+             format!("{} B", proof.proof_size()),
+             if proof.is_real_zk() { "real ZK" } else { "hash only" });
+    
+    println!("{}", "═".repeat(63));
+    
+    // Expected performance comparison
+    println!("\n📈 Expected Performance Comparison:");
+    let perf = expected_performance();
+    println!("  Mode: {}", proving_mode());
+    println!("  Setup:        {}", perf.setup_time);
+    println!("  Per Step:     {}", perf.step_time);
+    println!("  Compression:  {}", perf.compression_time);
+    println!("  Verification: {}", perf.verification_time);
+    println!("  Proof Size:   {}", perf.proof_size);
+    println!("  Real ZK:      {}", perf.is_real_zk);
 }
-    

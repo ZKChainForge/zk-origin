@@ -80,8 +80,9 @@ fn main() -> Result<()> {
         Ok(_) => println!("  Unexpected success"),
         Err(e) => println!("   Correctly rejected: {}", e),
     }
-
+    
     // Serialization round-trip
+
     println!("\n Testing Proof Serialization \n");
     
     let json = proof.to_json()?;
