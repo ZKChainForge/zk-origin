@@ -77,14 +77,14 @@ fn run_demo() {
 "#, proving_mode());
 
     if !is_real_zk_enabled() {
-        println!("⚠️  WARNING: Running in COMMITMENT MODE");
-        println!("⚠️  This is NOT zero-knowledge!");
-        println!("⚠️  For real ZK, rebuild with:");
-        println!("⚠️    cargo build --features real-nova --no-default-features");
+        println!("  WARNING: Running in COMMITMENT MODE");
+        println!("  This is NOT zero-knowledge!");
+        println!("  For real ZK, rebuild with:");
+        println!("    cargo build --features real-nova --no-default-features");
         println!();
     }
 
-      println!("📋 Step 1: Creating Origin Policy");
+      println!(" Step 1: Creating Origin Policy");
     let policy = OriginPolicy::default();
 
       println!(
@@ -93,10 +93,10 @@ fn run_demo() {
             ); 
 
     // Step 2: Initialize prover
-    println!("\n🔧 Step 2: Initializing Lineage Prover");
+    println!("\n Step 2: Initializing Lineage Prover");
     
     if is_real_zk_enabled() {
-        println!("   ⏳ Setting up Nova parameters (this takes 30-120 seconds)...");
+        println!("    Setting up Nova parameters (this takes 30-120 seconds)...");
     }
     
     let start = Instant::now();
@@ -104,26 +104,26 @@ fn run_demo() {
     let mut prover = match LineageProver::new(policy.clone()) {
         Ok(p) => p,
         Err(e) => {
-            println!("   ❌ Failed to create prover: {}", e);
+            println!("    Failed to create prover: {}", e);
             return;
         }
     };
     
     let genesis = [0u8; 32];
     if let Err(e) = prover.initialize(genesis) {
-        println!("   ❌ Failed to initialize: {}", e);
+        println!("    Failed to initialize: {}", e);
         return;
     }
     
     let init_time = start.elapsed();
-    println!("   ✅ Prover initialized in {:?}", init_time);
+    println!("    Prover initialized in {:?}", init_time);
     println!("   Genesis: 0x{}...", &hex::encode(&genesis)[..16]);
 
     // Step 3: Add transitions
-    println!("\n📝 Step 3: Adding Transitions");
+    println!("\n Step 3: Adding Transitions");
     
     if is_real_zk_enabled() {
-        println!("   ⏳ Each step takes 500-2000ms with real Nova...");
+        println!("    Each step takes 500-2000ms with real Nova...");
     }
     
     let transitions = vec![
@@ -146,10 +146,10 @@ fn run_demo() {
         match prover.add_transition(transition) {
             Ok(_) => {
                 let elapsed = start.elapsed();
-                println!("   ✅ Step {}: {} ({:?})", i + 1, desc, elapsed);
+                println!("    Step {}: {} ({:?})", i + 1, desc, elapsed);
             }
             Err(e) => {
-                println!("   ❌ Step {}: {} - Error: {}", i + 1, desc, e);
+                println!("    Step {}: {} - Error: {}", i + 1, desc, e);
                 return;
             }
         }
@@ -160,10 +160,10 @@ fn run_demo() {
     println!("   Current depth: {}", prover.current_depth());
 
     // Step 4: Generate proof
-    println!("\n🔐 Step 4: Generating Proof");
+    println!("\n Step 4: Generating Proof");
     
     if is_real_zk_enabled() {
-        println!("   ⏳ Compressing proof (this takes 10-60 seconds)...");
+        println!("    Compressing proof (this takes 10-60 seconds)...");
     }
     
     let start = Instant::now();
@@ -171,13 +171,13 @@ fn run_demo() {
     let proof = match prover.finalize() {
         Ok(p) => p,
         Err(e) => {
-            println!("   ❌ Failed to generate proof: {}", e);
+            println!("    Failed to generate proof: {}", e);
             return;
         }
     };
     
     let prove_time = start.elapsed();
-    println!("   ✅ Proof generated in {:?}", prove_time);
+    println!("    Proof generated in {:?}", prove_time);
     println!("   Proof size: {} bytes ({:.2} KB)", 
              proof.proof_size(), 
              proof.proof_size() as f64 / 1024.0);
@@ -186,24 +186,24 @@ fn run_demo() {
     println!("   Final lineage: 0x{}...", &proof.final_lineage.to_hex()[..16]);
 
     // Step 5: Verify
-    println!("\n✔️  Step 5: Verifying Proof");
+    println!("\n  Step 5: Verifying Proof");
     let start = Instant::now();
     
     match proof.verify() {
         Ok(true) => {
             let verify_time = start.elapsed();
-            println!("   ✅ PROOF VALID ({:?})", verify_time);
+            println!("    PROOF VALID ({:?})", verify_time);
         }
         Ok(false) => {
-            println!("   ❌ PROOF INVALID");
+            println!("    PROOF INVALID");
         }
         Err(e) => {
-            println!("   ❌ Verification error: {}", e);
+            println!("    Verification error: {}", e);
         }
     }
 
     // Step 6: Policy enforcement demo
-    println!("\n🛡️  Step 6: Testing Policy Enforcement");
+    println!("\n  Step 6: Testing Policy Enforcement");
     
     let mut test_prover = LineageProver::new(policy.clone()).unwrap();
     test_prover.initialize([0u8; 32]).unwrap();
@@ -211,8 +211,8 @@ fn run_demo() {
     // Valid: Genesis -> User
     let valid = Transition::new([0u8; 32], [1u8; 32], OriginClass::User, 1000);
     match test_prover.validate_transition(&valid) {
-        Ok(_) => println!("   ✅ Genesis → User: ALLOWED (correct)"),
-        Err(e) => println!("   ❌ Genesis → User: BLOCKED - {}", e),
+        Ok(_) => println!("    Genesis → User: ALLOWED (correct)"),
+        Err(e) => println!("    Genesis → User: BLOCKED - {}", e),
     }
     
     // Add the valid transition
@@ -221,8 +221,8 @@ fn run_demo() {
     // Invalid: User -> Admin (not allowed by default policy)
     let invalid = Transition::new([1u8; 32], [2u8; 32], OriginClass::Admin, 2000);
     match test_prover.validate_transition(&invalid) {
-        Ok(_) => println!("   ❌ User → Admin: ALLOWED (unexpected!)"),
-        Err(_) => println!("   ✅ User → Admin: BLOCKED (correct - policy enforced)"),
+        Ok(_) => println!("    User → Admin: ALLOWED (unexpected!)"),
+        Err(_) => println!("    User → Admin: BLOCKED (correct - policy enforced)"),
     }
 
     // Summary
@@ -233,14 +233,14 @@ fn run_demo() {
     println!("  Steps proven:     {}", proof.num_steps);
     println!("  Proof size:       {} bytes", proof.proof_size());
     println!("  Real ZK proof:    {}", proof.is_real_zk());
-    println!("  Policy enforced:  ✅");
+    println!("  Policy enforced:  ");
     
     if proof.is_real_zk() {
-        println!("\n  🎉 This is a REAL zero-knowledge proof!");
+        println!("\n   This is a REAL zero-knowledge proof!");
         println!("  🔒 Cryptographically secure lineage verification.");
     } else {
-        println!("\n  ⚠️  This is a COMMITMENT-based proof (not ZK).");
-        println!("  📝 Suitable for development and testing only.");
+        println!("\n    This is a COMMITMENT-based proof (not ZK).");
+        println!("   Suitable for development and testing only.");
     }
     
     println!("{}", "═".repeat(63));
@@ -255,15 +255,15 @@ fn run_benchmark() {
 "#, proving_mode());
 
     if !is_real_zk_enabled() {
-        println!("⚠️  Running in COMMITMENT MODE - these are NOT real ZK benchmarks!");
-        println!("⚠️  Real Nova benchmarks will be 1000x slower.");
+        println!("  Running in COMMITMENT MODE - these are NOT real ZK benchmarks!");
+        println!("  Real Nova benchmarks will be 1000x slower.");
         println!();
     }
 
     let policy = OriginPolicy::default();
 
     // Benchmark 1: Initialization
-    println!("📊 Benchmark 1: Prover Initialization");
+    println!(" Benchmark 1: Prover Initialization");
     let iterations = if is_real_zk_enabled() { 1 } else { 10 };
     
     let start = Instant::now();
@@ -282,7 +282,7 @@ fn run_benchmark() {
     }
 
     // Benchmark 2: Adding transitions
-    println!("\n📊 Benchmark 2: Adding Transitions");
+    println!("\n Benchmark 2: Adding Transitions");
     
     let num_transitions = if is_real_zk_enabled() { 5 } else { 100 };
     
@@ -314,7 +314,7 @@ fn run_benchmark() {
     }
 
     // Benchmark 3: Proof generation
-    println!("\n📊 Benchmark 3: Proof Generation (Finalization)");
+    println!("\n Benchmark 3: Proof Generation (Finalization)");
     
     let start = Instant::now();
     let proof = prover.finalize().unwrap();
@@ -327,7 +327,7 @@ fn run_benchmark() {
     println!("   Is real ZK: {}", proof.is_real_zk());
 
     // Benchmark 4: Verification
-    println!("\n📊 Benchmark 4: Proof Verification");
+    println!("\n Benchmark 4: Proof Verification");
     
     let verify_iterations = if is_real_zk_enabled() { 1 } else { 100 };
     
@@ -384,7 +384,7 @@ fn run_benchmark() {
     println!("{}", "═".repeat(63));
     
     // Expected performance comparison
-    println!("\n📈 Expected Performance Comparison:");
+    println!("\n Expected Performance Comparison:");
     let perf = expected_performance();
     println!("  Mode: {}", proving_mode());
     println!("  Setup:        {}", perf.setup_time);
