@@ -1,70 +1,28 @@
-//! ZK-ORIGIN: Zero-Knowledge State Lineage Verification
+//! # ZK-ORIGIN: Zero-Knowledge State Lineage Verification
 //!
-//! This library provides cryptographic verification of state provenance
-//! using Nova IVC (Incrementally Verifiable Computation).
+//! ## Implementation Modes
 //!
-//! # Overview
+//! ### Commitment Mode (default)
+//! - Uses hash-based commitments
+//! - **NOT cryptographically zero-knowledge**
+//! - Fast: microseconds per operation
 //!
-//! ZK-ORIGIN proves that a state has valid lineage - meaning it was derived
-//! through a chain of authorized transitions from a known genesis state.
+//! ### Real Nova Mode (`real-nova` feature)
+//! - Uses Nova IVC for actual ZK proofs
+//! - **Cryptographically secure**
+//! - Slow: seconds per operation
 //!
-//! # Modes
+//! ## Building
 //!
-//! The library supports two modes:
+//! ```bash
+//! # Development (fast, not real ZK)
+//! cargo build
 //!
-//! 1. **Commitment Mode** (default): Fast hash-based commitments for development
-//! 2. **Nova Mode** (with `nova` feature): Full ZK proofs using Nova IVC
-//!
-//! # Example (Commitment Mode)
-//!
-//! ```rust,no_run
-//! use zk_origin::{LineageProver, OriginPolicy, Transition, OriginClass};
-//!
-//! // Create a policy
-//! let policy = OriginPolicy::default();
-//!
-//! // Create prover
-//! let mut prover = LineageProver::new(policy).unwrap();
-//! prover.initialize([0u8; 32]).unwrap();
-//!
-//! // Add transitions
-//! let transition = Transition::new(
-//!     [0u8; 32],  // prev_state_hash
-//!     [1u8; 32],  // new_state_hash
-//!     OriginClass::User,
-//!     1000000,    // timestamp
-//! );
-//! prover.add_transition(transition).unwrap();
-//!
-//! // Generate proof
-//! let proof = prover.finalize().unwrap();
-//!
-//! // Verify
-//! assert!(proof.verify().unwrap());
-//! ```
-//!
-//! # Example (Nova Mode)
-//!
-//! ```rust,ignore
-//! use zk_origin::prover::{NovaParams, NovaLineageProver};
-//!
-//! // Setup (expensive: ~30 seconds)
-//! let params = NovaParams::setup([0u8; 32]).unwrap();
-//!
-//! // Create prover
-//! let mut prover = NovaLineageProver::new(params);
-//! prover.initialize([0u8; 32], 0).unwrap();
-//!
-//! // Add steps (each step: 100-500ms)
-//! prover.prove_step(&witness).unwrap();
-//!
-//! // Finalize (compression: 10-60 seconds)
-//! let proof = prover.finalize().unwrap();
+//! # Production (real ZK proofs)
+//! cargo build --features real-nova --no-default-features
 //! ```
 
 #![warn(missing_docs)]
-#![warn(rustdoc::missing_crate_level_docs)]
-
 
 pub mod types;
 pub mod hash;
@@ -72,7 +30,7 @@ pub mod circuit;
 pub mod prover;
 pub mod verifier;
 
-// Re-export main types for convenience
+// Re-export main types
 pub use types::{
     origin::OriginClass,
     lineage::LineageCommitment,
@@ -87,8 +45,16 @@ pub use prover::lineage_prover::LineageProver;
 pub use prover::witness_gen::WitnessGenerator;
 pub use verifier::verify::LineageVerifier;
 
-// Nova exports (always available, but expensive to use)
+// Conditional exports based on features
+#[cfg(feature = "real-nova")]
 pub use prover::nova_prover::{NovaParams, NovaLineageProver, CompressedNovaProof};
+
+#[cfg(feature = "commitment-mode")]
+pub use prover::commitment_prover::{CommitmentParams, CommitmentProver};
+
+// Always export these for checking mode at runtime
+pub use prover::nova_prover as nova;
+pub use prover::commitment_prover as commitment;
 
 /// Library version
 pub const VERSION: &str = env!("CARGO_PKG_VERSION");
@@ -102,65 +68,63 @@ pub const POLICY_TREE_DEPTH: usize = 4;
 /// Maximum lineage depth supported
 pub const MAX_LINEAGE_DEPTH: u64 = 1_000_000;
 
-/// Check if Nova proving is available
-pub fn nova_available() -> bool {
-    true // Always available in this version
+/// Check if real Nova ZK proving is enabled
+pub fn is_real_zk_enabled() -> bool {
+    cfg!(feature = "real-nova")
 }
 
-/// Get expected proving times
-pub fn expected_performance() -> PerformanceEstimates {
-    PerformanceEstimates {
-        commitment_mode: CommitmentModePerformance {
-            add_transition_us: 20,
-            finalize_us: 50,
-            verify_us: 10,
-            proof_size_bytes: 32,
-        },
-        nova_mode: NovaModePerformance {
-            setup_seconds: 15,
-            step_ms: 200,
-            compression_seconds: 30,
-            verify_ms: 20,
-            proof_size_bytes: 15000,
-        },
+/// Check if commitment mode is enabled
+pub fn is_commitment_mode() -> bool {
+    cfg!(feature = "commitment-mode") || !cfg!(feature = "real-nova")
+}
+
+/// Get the current proving mode as a string
+pub fn proving_mode() -> &'static str {
+    if cfg!(feature = "real-nova") {
+        "Nova IVC (Real ZK)"
+    } else {
+        "Commitment Mode (Not ZK)"
     }
 }
 
-/// Performance estimates for different modes
+/// Expected performance for current mode
+pub fn expected_performance() -> PerformanceEstimates {
+    if cfg!(feature = "real-nova") {
+        PerformanceEstimates {
+            setup_time: "30-120 seconds".to_string(),
+            step_time: "500-2000 ms".to_string(),
+            compression_time: "10-60 seconds".to_string(),
+            verification_time: "10-50 ms".to_string(),
+            proof_size: "10-20 KB".to_string(),
+            is_real_zk: true,
+        }
+    } else {
+        PerformanceEstimates {
+            setup_time: "< 1 ms".to_string(),
+            step_time: "10-50 µs".to_string(),
+            compression_time: "< 1 ms".to_string(),
+            verification_time: "< 1 µs".to_string(),
+            proof_size: "32 bytes".to_string(),
+            is_real_zk: false,
+        }
+    }
+}
+
+/// Performance estimates
 #[derive(Debug, Clone)]
 pub struct PerformanceEstimates {
-    /// Commitment mode performance
-    pub commitment_mode: CommitmentModePerformance,
-    /// Nova mode performance
-    pub nova_mode: NovaModePerformance,
-}
-
-/// Commitment mode performance estimates
-#[derive(Debug, Clone)]
-pub struct CommitmentModePerformance {
-    /// Time to add a transition (microseconds)
-    pub add_transition_us: u64,
-    /// Time to finalize (microseconds)
-    pub finalize_us: u64,
-    /// Time to verify (microseconds)
-    pub verify_us: u64,
-    /// Proof size in bytes
-    pub proof_size_bytes: usize,
-}
-
-/// Nova mode performance estimates
-#[derive(Debug, Clone)]
-pub struct NovaModePerformance {
-    /// Setup time (seconds)
-    pub setup_seconds: u64,
-    /// Time per step (milliseconds)
-    pub step_ms: u64,
-    /// Compression time (seconds)
-    pub compression_seconds: u64,
-    /// Verification time (milliseconds)
-    pub verify_ms: u64,
-    /// Proof size in bytes
-    pub proof_size_bytes: usize,
+    /// Expected setup time
+    pub setup_time: String,
+    /// Expected time per step
+    pub step_time: String,
+    /// Expected compression time
+    pub compression_time: String,
+    /// Expected verification time
+    pub verification_time: String,
+    /// Expected proof size
+    pub proof_size: String,
+    /// Whether this is real ZK
+    pub is_real_zk: bool,
 }
 
 #[cfg(test)]
@@ -174,13 +138,9 @@ mod tests {
     }
 
     #[test]
-    fn test_nova_available() {
-        assert!(nova_available());
-    }
-
-    #[test]
-    fn test_performance_estimates() {
-        let perf = expected_performance();
-        assert!(perf.nova_mode.step_ms > perf.commitment_mode.add_transition_us);
+    fn test_mode_detection() {
+        let mode = proving_mode();
+        assert!(!mode.is_empty());
+        println!("Current proving mode: {}", mode);
     }
 }

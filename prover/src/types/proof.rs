@@ -5,14 +5,9 @@ use serde::{Deserialize, Serialize};
 use std::fmt;
 
 /// A complete lineage proof that can be verified.
-///
-/// This is the final output of the prover, containing:
-/// - The compressed SNARK proof
-/// - Public outputs (lineage commitment, counters)
-/// - Metadata for verification
 #[derive(Clone, Serialize, Deserialize)]
 pub struct LineageProof {
-    /// The compressed proof bytes
+    /// The proof bytes (compressed SNARK or commitment hash)
     pub proof_bytes: Vec<u8>,
     
     /// Final lineage commitment
@@ -32,6 +27,10 @@ pub struct LineageProof {
     
     /// Proof metadata
     pub metadata: ProofMetadata,
+    
+    /// Verifier key bytes (for Nova proofs)
+    #[serde(default)]
+    pub verifier_key: Option<Vec<u8>>,
 }
 
 impl LineageProof {
@@ -52,6 +51,7 @@ impl LineageProof {
             num_steps,
             policy_hash,
             metadata: ProofMetadata::default(),
+            verifier_key: None,
         }
     }
 
@@ -61,9 +61,22 @@ impl LineageProof {
         self
     }
 
+    /// Add verifier key
+    pub fn with_verifier_key(mut self, vk: Vec<u8>) -> Self {
+        self.verifier_key = Some(vk);
+        self
+    }
+
     /// Get the size of the proof in bytes
     pub fn proof_size(&self) -> usize {
         self.proof_bytes.len()
+    }
+
+    /// Check if this is a real ZK proof (vs commitment)
+    pub fn is_real_zk(&self) -> bool {
+        // Real Nova proofs are at least 1KB
+        // Commitment "proofs" are 32 bytes
+        self.proof_bytes.len() > 1000
     }
 
     /// Serialize the proof to bytes
@@ -86,8 +99,11 @@ impl LineageProof {
         serde_json::from_str(json)
     }
 
-    /// Verify the proof (placeholder)
+    /// Basic verification (structure only)
+    /// 
+    /// For real cryptographic verification, use LineageVerifier
     pub fn verify(&self) -> crate::Result<bool> {
+        // Basic structural checks
         if self.proof_bytes.is_empty() {
             return Err(crate::ZkOriginError::InvalidProof("Empty proof".into()));
         }
@@ -97,6 +113,15 @@ impl LineageProof {
         if self.final_lineage.depth != self.num_steps {
             return Err(crate::ZkOriginError::InvalidProof("Depth mismatch".into()));
         }
+        
+        // For real ZK proofs, we'd need the public params to verify
+        // This just does structural validation
+        if self.is_real_zk() && self.verifier_key.is_none() {
+            return Err(crate::ZkOriginError::InvalidProof(
+                "Real ZK proof requires verifier key".into()
+            ));
+        }
+        
         Ok(true)
     }
 
@@ -107,6 +132,7 @@ impl LineageProof {
             depth: self.num_steps,
             proof_size: self.proof_size(),
             genesis_hash: self.genesis_commitment.to_hex(),
+            is_real_zk: self.is_real_zk(),
         }
     }
 }
@@ -117,6 +143,7 @@ impl fmt::Debug for LineageProof {
             .field("final_lineage", &self.final_lineage)
             .field("num_steps", &self.num_steps)
             .field("proof_size", &self.proof_size())
+            .field("is_real_zk", &self.is_real_zk())
             .field("genesis", &self.genesis_commitment)
             .finish()
     }
@@ -126,38 +153,36 @@ impl fmt::Display for LineageProof {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         write!(
             f,
-            "LineageProof(depth={}, size={}B, lineage={})",
+            "LineageProof(depth={}, size={}B, zk={}, lineage={})",
             self.num_steps,
             self.proof_size(),
+            self.is_real_zk(),
             self.final_lineage
         )
     }
 }
 
 /// Metadata about the proof generation
-/// Metadata about the proof generation
 #[derive(Clone, Debug, Default, Serialize, Deserialize)]
 pub struct ProofMetadata {
-    /// UNIX timestamp (seconds) when the proof was generated
+    /// UNIX timestamp when generated
     pub generated_at: u64,
-
-    /// Time taken to generate the proof (milliseconds)
+    
+    /// Proving time in milliseconds
     pub proving_time_ms: u64,
-
-    /// Version of the prover software
+    
+    /// Prover version
     pub prover_version: String,
-
-    /// Elliptic curve(s) used for proving
+    
+    /// Curve used
     pub curve: String,
-
-    /// Optional human-readable notes
+    
+    /// Optional notes
     pub notes: Option<String>,
 }
 
-
 impl ProofMetadata {
-    /// Create a new `ProofMetadata` instance with default values
-    /// and the current system timestamp.
+    /// Create new metadata with current timestamp
     pub fn new() -> Self {
         Self {
             generated_at: std::time::SystemTime::now()
@@ -170,55 +195,50 @@ impl ProofMetadata {
         }
     }
 
-    /// Set the proving time in milliseconds.
+    /// Set proving time
     pub fn with_proving_time(mut self, ms: u64) -> Self {
         self.proving_time_ms = ms;
         self
     }
 
-    /// Attach human-readable notes to the metadata.
+    /// Set notes
     pub fn with_notes(mut self, notes: impl Into<String>) -> Self {
         self.notes = Some(notes.into());
         self
     }
 }
 
-
-/// Summary of a proof for display
-/// Summary of a proof for display
+/// Summary of a proof
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ProofSummary {
-    /// Hex-encoded final lineage commitment
+    /// Lineage hash
     pub lineage_hash: String,
-
-    /// Number of transitions in the lineage
+    /// Depth
     pub depth: u64,
-
-    /// Size of the proof in bytes
+    /// Proof size
     pub proof_size: usize,
-
-    /// Hex-encoded genesis commitment
+    /// Genesis hash
     pub genesis_hash: String,
+    /// Whether real ZK
+    pub is_real_zk: bool,
 }
-
 
 impl fmt::Display for ProofSummary {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         writeln!(f, "Lineage Proof Summary:")?;
-        writeln!(f, "  Lineage:  {}...", &self.lineage_hash[..16])?;
+        writeln!(f, "  Lineage:  {}...", &self.lineage_hash[..16.min(self.lineage_hash.len())])?;
         writeln!(f, "  Depth:    {}", self.depth)?;
         writeln!(f, "  Size:     {} bytes", self.proof_size)?;
-        writeln!(f, "  Genesis:  {}...", &self.genesis_hash[..16])
+        writeln!(f, "  Real ZK:  {}", self.is_real_zk)?;
+        writeln!(f, "  Genesis:  {}...", &self.genesis_hash[..16.min(self.genesis_hash.len())])
     }
 }
 
 /// Batch of proofs
-/// Batch of lineage proofs
 #[derive(Clone, Debug, Default, Serialize, Deserialize)]
 pub struct ProofBatch {
-    /// Collection of lineage proofs
+    /// Proofs in batch
     pub proofs: Vec<LineageProof>,
-
-    /// Optional identifier for the batch
+    /// Batch ID
     pub batch_id: Option<String>,
 }

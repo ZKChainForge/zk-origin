@@ -1,15 +1,10 @@
-# prover/Cargo.toml
-
 [package]
 name = "zk-origin-prover"
-version = "0.2.0"
+version = "0.3.0"
 edition = "2021"
 authors = ["ZK-ORIGIN Contributors"]
 description = "Zero-Knowledge State Lineage Verification using Nova IVC"
 license = "MIT"
-repository = "https://github.com/ZKChainForge/zk-origin"
-keywords = ["zero-knowledge", "nova", "lineage", "blockchain", "cryptography"]
-categories = ["cryptography", "blockchain"]
 
 [lib]
 name = "zk_origin"
@@ -20,8 +15,8 @@ name = "zk-origin-cli"
 path = "src/bin/cli.rs"
 
 [dependencies]
-# Nova proving system
-nova-snark = "0.31"
+# Nova proving system - use version with correct API
+nova-snark = { version = "0.31", default-features = false }
 pasta_curves = "0.5"
 
 # Circuit building
@@ -46,7 +41,7 @@ hex = "0.4"
 thiserror = "1.0"
 anyhow = "1.0"
 
-# Hashing (for non-circuit operations)
+# Hashing
 sha2 = "0.10"
 
 # Utilities
@@ -54,51 +49,16 @@ rand = "0.8"
 rand_core = "0.6"
 lazy_static = "1.4"
 
-# Async (for API)
-tokio = { version = "1.0", features = ["full"], optional = true }
-
-# Metrics (optional)
-prometheus = { version = "0.13", optional = true }
-
 [dev-dependencies]
 criterion = { version = "0.5", features = ["html_reports"] }
 proptest = "1.4"
 tempfile = "3.10"
 
 [features]
-default = []
-nova = []  # Enable full Nova integration
-api = ["tokio"]
-metrics = ["prometheus"]
-
-[[bench]]
-name = "proving"
-harness = false
-
-[[bench]]
-name = "verification"
-harness = false
-
-[[bench]]
-name = "folding"
-harness = false
-
-[[example]]
-name = "simple_lineage"
-
-[[example]]
-name = "multi_transition"
-
-[[example]]
-name = "verify_proof"
-
-[[example]]
-name = "full_demo"
+default = ["commitment-mode"]
+commitment-mode = []
+real-nova = []
 
 [profile.release]
 opt-level = 3
 lto = "thin"
-
-[profile.bench]
-opt-level = 3
-debug = false

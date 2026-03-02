@@ -90,6 +90,23 @@ impl StepWitness {
         }
     }
 
+     /// Returns a reference to the policy proof bytes.
+/// 
+/// Each element is a 32-byte array representing a single proof step.
+    pub fn policy_proof_bytes(&self) -> &Vec<[u8; 32]> {
+    &self.policy_proof
+     }
+
+    /// Compute new counters after this transition
+    pub fn compute_new_counters(&self) -> [u32; 6] {
+        let mut new_counters = self.prev_counters;
+        if (self.new_origin as usize) < new_counters.len() {
+            new_counters[self.new_origin as usize] = 
+                new_counters[self.new_origin as usize].saturating_add(1);
+        }
+        new_counters
+    }
+
     /// Create a genesis witness
     pub fn genesis(
         genesis_state_hash: [u8; 32],
@@ -166,15 +183,7 @@ impl StepWitness {
         hash
     }
 
-    /// Compute new counter values
-    pub fn compute_new_counters(&self) -> [u32; 6] {
-        let mut new_counters = self.prev_counters;
-        let idx = self.new_origin as usize;
-        if idx < new_counters.len() {
-            new_counters[idx] = new_counters[idx].saturating_add(1);
-        }
-        new_counters
-    }
+    
 
     /// Compute new counter commitment
     pub fn compute_new_counter_commitment(&self) -> [u8; 32] {
