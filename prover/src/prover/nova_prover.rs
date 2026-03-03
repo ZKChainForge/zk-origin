@@ -3,12 +3,21 @@
 //! This module provides actual ZK proofs using Nova folding.
 //! Requires the `real-nova` feature flag.
 
+//use std::time::Instant as _Instant;
+//use crate::types::LineageCommitment as _LineageCommitment;
+//use crate::types::proof::ProofMetadata as _ProofMetadata;
+//use crate::types::lineage::CounterCommitment as _CounterCommitment;
+#[allow(unused_imports)]
 use std::time::Instant;
-use serde::{Serialize, Deserialize};
-
-use crate::types::{LineageCommitment, LineageProof, StepWitness};
-use crate::types::lineage::CounterCommitment;
+#[allow(unused_imports)]
+use crate::types::LineageCommitment;
+#[allow(unused_imports)]
 use crate::types::proof::ProofMetadata;
+#[allow(unused_imports)]
+use crate::types::lineage::CounterCommitment;
+use crate::types::LineageProof;
+use crate::types::StepWitness;
+use serde::{Serialize, Deserialize};
 use crate::{Result, ZkOriginError};
 
 // ============================================================================
@@ -251,7 +260,6 @@ impl NovaParams {
     pub fn setup(policy_root: [u8; 32]) -> Result<Self> {
         println!("═══════════════════════════════════════════════════════════════");
         println!("  Setting up Nova public parameters...");
-        println!("  This will take 30-120 seconds. Please wait.");
         println!("═══════════════════════════════════════════════════════════════");
         
         let start = Instant::now();
@@ -260,7 +268,7 @@ impl NovaParams {
         
         let setup_time_ms = start.elapsed().as_millis() as u64;
         
-        println!("  ✅ Nova setup completed in {:.2} seconds", setup_time_ms as f64 / 1000.0);
+        println!("   Nova setup completed in {:.2} seconds", setup_time_ms as f64 / 1000.0);
         println!("═══════════════════════════════════════════════════════════════");
         
         Ok(Self {
@@ -271,13 +279,15 @@ impl NovaParams {
         })
     }
 
-    #[cfg(not(feature = "real-nova"))]
-    pub fn setup(_policy_root: [u8; 32]) -> Result<Self> {
-        Err(ZkOriginError::NotInitialized(
-            "Nova proving requires the 'real-nova' feature. \
-             Build with: cargo build --features real-nova --no-default-features".into()
-        ))
-    }
+          /// Setup the prover. This stub is used when the `real-nova` feature is disabled.
+         /// Always returns an error indicating that `real-nova` is required.
+           #[cfg(not(feature = "real-nova"))]
+                pub fn setup(_policy_root: [u8; 32]) -> Result<Self> {
+                     Err(ZkOriginError::NotInitialized(
+        "Nova proving requires the 'real-nova' feature. \
+         Build with: cargo build --features real-nova --no-default-features".into()
+    ))
+}
 
     /// Get the policy root
     pub fn policy_root(&self) -> &[u8; 32] {
@@ -308,7 +318,13 @@ impl NovaParams {
 /// Nova-based recursive prover for lineage verification
 pub struct NovaLineageProver<'a> {
     /// Policy root
-    policy_root: [u8; 32],
+    
+
+     #[allow(dead_code)]
+     policy_root: [u8; 32],
+
+     #[allow(dead_code)]
+      proof_accumulator: Vec<u8>,
     
     /// Genesis commitment
     genesis_commitment: [u8; 32],
@@ -325,8 +341,7 @@ pub struct NovaLineageProver<'a> {
     /// Total proving time in milliseconds
     total_proving_time_ms: u64,
     
-    /// Accumulated proof data
-    proof_accumulator: Vec<u8>,
+    
     
     #[cfg(feature = "real-nova")]
     pp: Option<&'a real_nova_impl::NovaPublicParams>,
@@ -375,19 +390,22 @@ impl<'a> NovaLineageProver<'a> {
         }
     }
 
-    #[cfg(not(feature = "real-nova"))]
-    pub fn new(_params: &'a NovaParams) -> Self {
-        Self {
-            policy_root: [0u8; 32],
-            genesis_commitment: [0u8; 32],
-            current_lineage: [0u8; 32],
-            current_counters: [0u8; 32],
-            num_steps: 0,
-            total_proving_time_ms: 0,
-            proof_accumulator: Vec::new(),
-            _phantom: std::marker::PhantomData,
-        }
+    /// Creates a new `NovaLineageProver` stub when the `real-nova` feature is disabled.
+/// All fields are initialized to default values.  
+/// This stub always returns an uninitialized prover until `real-nova` is enabled.
+#[cfg(not(feature = "real-nova"))]
+pub fn new(_params: &'a NovaParams) -> Self {
+    Self {
+        policy_root: [0u8; 32],
+        genesis_commitment: [0u8; 32],
+        current_lineage: [0u8; 32],
+        current_counters: [0u8; 32],
+        num_steps: 0,
+        total_proving_time_ms: 0,
+        proof_accumulator: Vec::new(),
+        _phantom: std::marker::PhantomData,
     }
+}
 
     /// Initialize the prover with genesis state
     #[cfg(feature = "real-nova")]
@@ -416,16 +434,20 @@ impl<'a> NovaLineageProver<'a> {
         Ok(())
     }
 
-    #[cfg(not(feature = "real-nova"))]
-    pub fn initialize(
-        &mut self,
-        _genesis_lineage: [u8; 32],
-        _initial_counters: [u8; 32],
-    ) -> Result<()> {
-        Err(ZkOriginError::NotInitialized(
-            "Nova proving requires the 'real-nova' feature".into()
-        ))
-    }
+    /// Initializes the prover with a genesis lineage and initial counters.
+/// 
+/// This stub is used when the `real-nova` feature is disabled and
+/// always returns a `NotInitialized` error.
+#[cfg(not(feature = "real-nova"))]
+pub fn initialize(
+    &mut self,
+    _genesis_lineage: [u8; 32],
+    _initial_counters: [u8; 32],
+) -> Result<()> {
+    Err(ZkOriginError::NotInitialized(
+        "Nova proving requires the 'real-nova' feature".into()
+    ))
+}
 
     /// Prove a single step
     #[cfg(feature = "real-nova")]
@@ -488,7 +510,10 @@ impl<'a> NovaLineageProver<'a> {
         
         Ok(())
     }
-
+    /// Proves a single step in the lineage.
+///
+/// This stub is used when the `real-nova` feature is disabled and
+/// always returns a `NotInitialized` error.
     #[cfg(not(feature = "real-nova"))]
     pub fn prove_step(&mut self, _witness: &StepWitness) -> Result<()> {
         Err(ZkOriginError::NotInitialized(
@@ -524,7 +549,11 @@ impl<'a> NovaLineageProver<'a> {
         
         Ok(true)
     }
-
+     
+     /// Proves a single step in the lineage.
+///
+/// This stub is used when the `real-nova` feature is disabled and
+/// always returns a `NotInitialized` error.
     #[cfg(not(feature = "real-nova"))]
     pub fn verify(&self) -> Result<bool> {
         Err(ZkOriginError::NotInitialized(
@@ -556,7 +585,7 @@ impl<'a> NovaLineageProver<'a> {
         
         let compression_time_ms = start.elapsed().as_millis() as u64;
         
-        println!("  ✅ Compression completed in {}ms", compression_time_ms);
+        println!("   Compression completed in {}ms", compression_time_ms);
         println!("  Proof size: {} bytes ({:.2} KB)", proof_bytes.len(), proof_bytes.len() as f64 / 1024.0);
         
         Ok(CompressedNovaProof {
@@ -569,7 +598,12 @@ impl<'a> NovaLineageProver<'a> {
             compression_time_ms,
         })
     }
+     
 
+     /// Proves a single step in the lineage.
+///
+/// This stub is used when the `real-nova` feature is disabled and
+/// always returns a `NotInitialized` error.
     #[cfg(not(feature = "real-nova"))]
     pub fn compress(&self) -> Result<CompressedNovaProof> {
         Err(ZkOriginError::NotInitialized(
@@ -603,7 +637,13 @@ impl<'a> NovaLineageProver<'a> {
         
         Ok(proof)
     }
+    
 
+
+    /// Proves a single step in the lineage.
+///
+/// This stub is used when the `real-nova` feature is disabled and
+/// always returns a `NotInitialized` error.
     #[cfg(not(feature = "real-nova"))]
     pub fn finalize(&self) -> Result<LineageProof> {
         Err(ZkOriginError::NotInitialized(

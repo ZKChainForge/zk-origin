@@ -21,6 +21,8 @@ use crate::types::{
 };
 use crate::prover::WitnessGenerator;
 use crate::{Result, ZkOriginError};
+use std::marker::PhantomData;
+
 
 #[cfg(feature = "real-nova")]
 use crate::prover::nova_prover::{NovaParams, NovaLineageProver};
@@ -33,38 +35,38 @@ use crate::prover::commitment_prover::{CommitmentParams, CommitmentProver};
 /// This automatically selects the correct backend:
 /// - With `real-nova` feature: Uses Nova IVC for real ZK proofs
 /// - With `commitment-mode` feature: Uses hash commitments (fast but not ZK)
-pub struct LineageProver {
+pub struct LineageProver<'a> {
     /// Policy being enforced
     policy: OriginPolicy,
-    
+
     /// Witness generator
     witness_gen: WitnessGenerator,
-    
+
     /// Genesis commitment
     genesis_commitment: LineageCommitment,
-    
+
     /// Number of transitions processed
     num_transitions: u64,
-    
+
     /// Whether initialized
     initialized: bool,
-    
+
     /// Backend prover (Nova or Commitment)
     #[cfg(feature = "real-nova")]
-    backend: Option<NovaLineageProver>,
+    backend: Option<NovaLineageProver<'a>>,
 
-    #[cfg(feature = "real-nova")]
-     backend: Option<NovaLineageProver>,
-    
     #[cfg(feature = "commitment-mode")]
     backend: Option<CommitmentProver>,
-    
+
+     #[cfg(not(feature = "real-nova"))]
+    _marker: PhantomData<&'a ()>,
+
     /// Nova params (if using real Nova)
     #[cfg(feature = "real-nova")]
     nova_params: Option<std::sync::Arc<NovaParams>>,
 }
 
-impl LineageProver {
+impl<'a> LineageProver<'a> {
     /// Create a new lineage prover with the given policy
     ///
     /// NOTE: With `real-nova` feature, this triggers Nova setup which takes 30-120 seconds!
@@ -82,8 +84,12 @@ impl LineageProver {
             num_transitions: 0,
             initialized: false,
             backend: None,
+
             #[cfg(feature = "real-nova")]
             nova_params: None,
+
+            #[cfg(not(feature = "real-nova"))]
+            _marker: PhantomData,
         })
     }
 
@@ -255,8 +261,9 @@ impl LineageProver {
         self.num_transitions = 0;
         self.initialized = false;
         self.backend = None;
-    }
+    
 }
+
 
 /// Builder for LineageProver
 pub struct LineageProverBuilder {
@@ -267,21 +274,43 @@ pub struct LineageProverBuilder {
 }
 
 impl LineageProverBuilder {
-    /// Create a new builder
-    pub fn new() -> Self {
-        Self {
-            policy: None,
-            genesis_hash: None,
-            #[cfg(feature = "real-nova")]
-            nova_params: None,
-        }
-    }
-
-    /// Set the policy
     pub fn policy(mut self, policy: OriginPolicy) -> Self {
         self.policy = Some(policy);
         self
     }
+
+    pub fn genesis(mut self, hash: [u8; 32]) -> Self {
+        self.genesis_hash = Some(hash);
+        self
+    }
+
+    #[cfg(feature = "real-nova")]
+    pub fn with_params(mut self, params: std::sync::Arc<NovaParams>) -> Self {
+        self.nova_params = Some(params);
+        self
+    }
+
+    pub fn build(self) -> Result<LineageProver<'static>> {
+        let policy = self.policy.unwrap_or_default();
+        let mut prover = LineageProver::new(policy)?;
+        if let Some(genesis) = self.genesis_hash {
+            prover.initialize(genesis)?;
+        }
+        Ok(prover)
+    }
+}
+
+    /// Set the policy
+    pub fn build(self) -> Result<LineageProver<'static>> {
+    let policy = self.policy.unwrap_or_default();  // ✅ get OriginPolicy
+    let mut prover = LineageProver::new(policy)?;
+    
+    if let Some(genesis) = self.genesis_hash {
+        prover.initialize(genesis)?;
+    }
+    
+    Ok(prover)
+}
 
     /// Set genesis state hash
     pub fn genesis(mut self, hash: [u8; 32]) -> Self {
@@ -297,25 +326,32 @@ impl LineageProverBuilder {
     }
 
     /// Build the prover
-    pub fn build(self) -> Result<LineageProver> {
-        let policy = self.policy.unwrap_or_default();
-        
-        #[cfg(feature = "real-nova")]
-        let mut prover = if let Some(params) = self.nova_params {
+    pub fn build(self) -> Result<LineageProver<'a>> {
+    let policy = self.policy.unwrap_or_default();
+
+    // declare prover first
+    let mut prover: LineageProver<'a>;
+
+    #[cfg(feature = "real-nova")]
+    {
+        prover = if let Some(params) = self.nova_params {
             LineageProver::with_params(policy, params)?
         } else {
             LineageProver::new(policy)?
         };
-        
-        #[cfg(feature = "commitment-mode")]
-        let mut prover = LineageProver::new(policy)?;
-        
-        if let Some(genesis) = self.genesis_hash {
-            prover.initialize(genesis)?;
-        }
-        
-        Ok(prover)
     }
+
+    #[cfg(feature = "commitment-mode")]
+    {
+        prover = LineageProver::new(policy)?;
+    }
+
+    if let Some(genesis) = self.genesis_hash {
+        prover.initialize(genesis)?;
+    }
+
+    Ok(prover)
+}
 }
 
 impl Default for LineageProverBuilder {
@@ -324,12 +360,13 @@ impl Default for LineageProverBuilder {
     }
 }
 
+
 #[cfg(test)]
 mod tests {
     use super::*;
     use crate::types::OriginClass;
 
-    fn create_prover() -> LineageProver {
+    fn create_prover() -> LineageProver<'a> {
         let mut prover = LineageProver::new(OriginPolicy::default()).unwrap();
         prover.initialize([0u8; 32]).unwrap();
         prover
@@ -421,4 +458,6 @@ mod tests {
         
         assert!(result.is_err());
     }
+}
+
 }
