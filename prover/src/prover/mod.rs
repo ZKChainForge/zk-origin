@@ -12,7 +12,6 @@ pub mod recursive;
 // Always compile both modules, but some functionality is feature-gated
 pub mod nova_prover;
 pub mod commitment_prover;
-pub use nova_prover::NovaLineageProver;
 
 // Re-exports
 pub use lineage_prover::{LineageProver, LineageProverBuilder};
