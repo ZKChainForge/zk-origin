@@ -19,6 +19,7 @@ path = "src/bin/cli.rs"
 nova-snark = { version = "0.31", default-features = false }
 pasta_curves = "0.5"
 
+
 # Circuit building
 bellpepper = "0.4"
 bellpepper-core = "0.4"

@@ -1,146 +1,118 @@
-//! # ZK-ORIGIN: Zero-Knowledge State Lineage Verification
+//! ZK-Origin Prover Library
 //!
-//! ## Implementation Modes
+//! Provides zero-knowledge proofs for data lineage verification.
 //!
-//! ### Commitment Mode (default)
-//! - Uses hash-based commitments
-//! - **NOT cryptographically zero-knowledge**
-//! - Fast: microseconds per operation
+//! ## Features
+//! - `real-nova`: Use Nova IVC for real ZK proofs (slow, ~30-120s setup)
+//! - `commitment-mode`: Use hash commitments (fast, but NOT zero-knowledge)
 //!
-//! ### Real Nova Mode (`real-nova` feature)
-//! - Uses Nova IVC for actual ZK proofs
-//! - **Cryptographically secure**
-//! - Slow: seconds per operation
-//!
-//! ## Building
-//!
-//! ```bash
-//! # Development (fast, not real ZK)
-//! cargo build
-//!
-//! # Production (real ZK proofs)
-//! cargo build --features real-nova --no-default-features
-//! ```
+//! Enable exactly ONE of these features.
 
 #![warn(missing_docs)]
 
+#[cfg(all(feature = "real-nova", feature = "commitment-mode"))]
+compile_error!("Enable only one of 'real-nova' or 'commitment-mode'");
+
+#[cfg(not(any(feature = "real-nova", feature = "commitment-mode")))]
+compile_error!("Enable either 'real-nova' or 'commitment-mode' feature");
+
 pub mod types;
-pub mod hash;
-pub mod circuit;
 pub mod prover;
 pub mod verifier;
+pub mod hash;
+
+// Re-export error types from types module (not a separate top-level module)
+pub use types::error::{ZkOriginError, Result};
 
 // Re-export main types
 pub use types::{
-    origin::OriginClass,
-    lineage::LineageCommitment,
-    transition::Transition,
-    policy::OriginPolicy,
-    witness::StepWitness,
-    proof::LineageProof,
-    error::{ZkOriginError, Result},
+    OriginClass, OriginPolicy, Transition,
+    LineageProof, LineageCommitment,
 };
 
-pub use prover::lineage_prover::LineageProver;
-pub use prover::witness_gen::WitnessGenerator;
-pub use verifier::verify::LineageVerifier;
+// Re-export prover types
+pub use prover::{LineageProver, LineageProverBuilder, WitnessGenerator};
 
-// Conditional exports based on features
 #[cfg(feature = "real-nova")]
-pub use prover::nova_prover::{NovaParams, NovaLineageProver, CompressedNovaProof};
+pub use prover::{NovaParams, NovaLineageProver, CompressedNovaProof};
 
 #[cfg(feature = "commitment-mode")]
-pub use prover::commitment_prover::{CommitmentParams, CommitmentProver};
+pub use prover::{CommitmentParams, CommitmentProver};
 
-// Always export these for checking mode at runtime
-pub use prover::nova_prover as nova;
-pub use prover::commitment_prover as commitment;
+// Re-export verifier
+pub use verifier::LineageVerifier;
 
-/// Library version
-pub const VERSION: &str = env!("CARGO_PKG_VERSION");
+/// Get the current proving mode as a string
+pub fn proving_mode() -> &'static str {
+    #[cfg(feature = "real-nova")]
+    return "Nova IVC (Real ZK)";
 
-/// Number of origin classes supported
-pub const NUM_ORIGIN_CLASSES: usize = 6;
+    #[cfg(feature = "commitment-mode")]
+    return "Hash Commitments (NOT ZK)";
+}
 
-/// Merkle tree depth for policy tree
-pub const POLICY_TREE_DEPTH: usize = 4;
-
-/// Maximum lineage depth supported
-pub const MAX_LINEAGE_DEPTH: u64 = 1_000_000;
-
-/// Check if real Nova ZK proving is enabled
+/// Check if real ZK is enabled
 pub fn is_real_zk_enabled() -> bool {
     cfg!(feature = "real-nova")
 }
 
-/// Check if commitment mode is enabled
-pub fn is_commitment_mode() -> bool {
-    cfg!(feature = "commitment-mode") || !cfg!(feature = "real-nova")
-}
-
-/// Get the current proving mode as a string
-pub fn proving_mode() -> &'static str {
-    if cfg!(feature = "real-nova") {
-        "Nova IVC (Real ZK)"
-    } else {
-        "Commitment Mode (Not ZK)"
-    }
-}
-
-/// Expected performance for current mode
-pub fn expected_performance() -> PerformanceEstimates {
-    if cfg!(feature = "real-nova") {
-        PerformanceEstimates {
-            setup_time: "30-120 seconds".to_string(),
-            step_time: "500-2000 ms".to_string(),
-            compression_time: "10-60 seconds".to_string(),
-            verification_time: "10-50 ms".to_string(),
-            proof_size: "10-20 KB".to_string(),
-            is_real_zk: true,
-        }
-    } else {
-        PerformanceEstimates {
-            setup_time: "< 1 ms".to_string(),
-            step_time: "10-50 µs".to_string(),
-            compression_time: "< 1 ms".to_string(),
-            verification_time: "< 1 µs".to_string(),
-            proof_size: "32 bytes".to_string(),
-            is_real_zk: false,
-        }
-    }
-}
-
-/// Performance estimates
-#[derive(Debug, Clone)]
-pub struct PerformanceEstimates {
-    /// Expected setup time
-    pub setup_time: String,
-    /// Expected time per step
-    pub step_time: String,
-    /// Expected compression time
-    pub compression_time: String,
-    /// Expected verification time
-    pub verification_time: String,
-    /// Expected proof size
-    pub proof_size: String,
-    /// Whether this is real ZK
-    pub is_real_zk: bool,
-}
+/// Library version
+pub const VERSION: &str = env!("CARGO_PKG_VERSION");
 
 #[cfg(test)]
 mod tests {
     use super::*;
 
     #[test]
-    fn test_library_loads() {
-        assert!(!VERSION.is_empty());
-        assert_eq!(NUM_ORIGIN_CLASSES, 6);
+    fn test_proving_mode() {
+        let mode = proving_mode();
+        assert!(!mode.is_empty());
+        println!("Proving mode: {}", mode);
     }
 
     #[test]
-    fn test_mode_detection() {
-        let mode = proving_mode();
-        assert!(!mode.is_empty());
-        println!("Current proving mode: {}", mode);
+    fn test_version() {
+        assert!(!VERSION.is_empty());
+        println!("Library version: {}", VERSION);
+    }
+
+    #[test]
+    #[cfg(feature = "commitment-mode")]
+    fn test_commitment_mode_enabled() {
+        assert!(!is_real_zk_enabled());
+        assert!(proving_mode().contains("NOT ZK"));
+    }
+
+    #[test]
+    #[cfg(feature = "real-nova")]
+    fn test_nova_mode_enabled() {
+        assert!(is_real_zk_enabled());
+        assert!(proving_mode().contains("Nova"));
+    }
+
+    #[test]
+    fn test_basic_types() {
+        // Create a default policy (it already has rules)
+        let _policy = OriginPolicy::default();
+
+        // Test transition
+        let transition = Transition::new(
+            [0u8; 32],
+            [1u8; 32],
+            OriginClass::User,
+            1000,
+        );
+        assert_eq!(transition.timestamp, 1000);
+        assert_eq!(transition.origin_class, OriginClass::User);
+
+        // Test commitment
+        let commitment = LineageCommitment::genesis([42u8; 32]);
+        assert!(commitment.is_genesis());
+    }
+
+    #[test]
+    fn test_error_types() {
+        let err = ZkOriginError::InvalidLineage("test".into());
+        assert!(err.to_string().contains("Invalid lineage"));
     }
 }
