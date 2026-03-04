@@ -526,10 +526,10 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 | Section                      | What Changed                                                   |
 |------------------------------|----------------------------------------------------------------|
 | **Real Nova Implementation** | Added your actual Nova metrics (1.45s setup, 9.8K constraints) |
-| **Benchmarks**               | Your exact demo output with 148ms, 47µs, 67ms proving times    |
+| **Benchmarks**               |  exact demo output with 148ms, 47µs, 67ms proving times        |
 | **Proof Size**               | Updated to ~10KB (real Nova)                                   |
 | **Verification**             | 277ns real verification                                        |
 | **Policy Enforcement**       | Shows working Genesis→User Accept and User→Admin Block         |
 | **Architecture**             | Nova-specific details with constraint counts                   |
-| **Quick Start**              | Your exact terminal output for reference                       |
+| **Quick Start**              |  exact terminal output for reference                           |
 
