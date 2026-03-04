@@ -122,9 +122,9 @@
 │  │              LAYER 2: POLICY ENGINE                     │    │
 │  │  ┌─────────────────────────────────────────────────────┐│    │
 │  │  │  Allowed Transitions:                               ││    │
-│  │  │  • User → User: ✓                                   ││    │
-│  │  │  • User → Admin: ✗                                  ││    │
-│  │  │  • Admin → Bridge: ✓                                ││    │
+│  │  │  • User → User: Accept                              ││    │
+│  │  │  • User → Admin: Block                              ││    │
+│  │  │  • Admin → Bridge: Accept                           │|    │
 │  │  └─────────────────────────────────────────────────────┘│    │
 │  └─────────────────────────────────────────────────────────┘    │
 │                          │                                      │
@@ -235,8 +235,8 @@
 │                                                                 │
 │  ┌─────────────────────────────────────────────────────────┐    │
 │  │  Policy Enforcement                                     │    │
-│  │  ├── Genesis → User:  ALLOWED (148ms)                  │    │
-│  │  └── User → Admin:  BLOCKED (policy circuit)           │    │
+│  │  ├── Genesis → User:  ALLOWED (148ms)                   │    │
+│  │  └── User → Admin:  BLOCKED (policy circuit)            │    │
 │  └─────────────────────────────────────────────────────────┘    │
 │                                                                 │
 └─────────────────────────────────────────────────────────────────┘
@@ -315,13 +315,13 @@ Finished release profile [optimized] target(s) in 2m 30s
   Current depth: 3
 
 ═ Step 4: Generating Proof
-  ⏳ Compressing proof (this takes 10-60 seconds)...
+   Compressing proof (this takes 10-60 seconds)...
   Proof generated in 2.20228036s
   Proof size: 10072 bytes (9.84 KB)
   Is real ZK: true
 
 ═ Step 5: Verifying Proof
-  ✓ PROOF VALID (277ns)
+   PROOF VALID (277ns)
 
 ═ Step 6: Testing Policy Enforcement
   Genesis → User:  ALLOWED
@@ -412,7 +412,7 @@ cargo test test_proof_generation
 
 ---
 
-## 📊 **Performance Summary**
+## **Performance Summary**
 
 ```
 ┌─────────────────────────────────────────────────────────────────┐
