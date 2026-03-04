@@ -103,7 +103,7 @@ fn run_demo() {
     println!("\n═ Step 2: Initializing Lineage Prover");
     
     if is_real_zk_enabled() {
-        println!("  ⏳ Setting up Nova parameters (this takes 30-120 seconds)...");
+        println!("   Setting up Nova parameters (this takes 30-120 seconds)...");
     }
     
     let start = Instant::now();
@@ -117,7 +117,7 @@ fn run_demo() {
     }
     
     let init_time = start.elapsed();
-    println!("  ✓ Prover initialized in {:?}", init_time);
+    println!("   Prover initialized in {:?}", init_time);
     println!("  Genesis: 0x{}...", hex_encode(&genesis, 16));
 
     // Step 3: Add transitions
