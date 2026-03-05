@@ -7,6 +7,7 @@ node_modules/
 /contracts/node_modules
 /contracts/deployments
 /demo/node_modules
+/circuits/node_modules
 # pnpm deploy output
 /bundle
 
