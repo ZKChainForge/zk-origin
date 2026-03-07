@@ -1,116 +1,178 @@
-// scripts/deploy.js
-require("dotenv").config();
-const { ethers, network } = require("hardhat");
+const hre = require("hardhat");
 const fs = require("fs");
 const path = require("path");
 
+// Configuration - Replace with actual values from your prover
+const GENESIS_COMMITMENT = BigInt("0x1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef");
+const POLICY_ROOT = BigInt("0xabcdef1234567890abcdef1234567890abcdef1234567890abcdef12345678");
+const ALLOW_DUPLICATES = false;
+
 async function main() {
-  console.log("\n ZK-ORIGIN Contract Deployment\n");
+  
+  console.log("║                    ZK-ORIGIN DEPLOYMENT                        ║");
+  
 
-  // Set deployer account based on network
-  let deployer;
-  if (network.name === "sepolia") {
-    if (!process.env.PRIVATE_KEY) {
-      throw new Error("PRIVATE_KEY not set in .env for Sepolia deployment");
-    }
-    deployer = new ethers.Wallet(process.env.PRIVATE_KEY, ethers.provider);
-  } else {
-    [deployer] = await ethers.getSigners();
+  const [deployer] = await hre.ethers.getSigners();
+  const network = hre.network.name;
+  const chainId = (await hre.ethers.provider.getNetwork()).chainId;
+
+  console.log(`Network: ${network} (chainId: ${chainId})`);
+  console.log(`Deployer: ${deployer.address}`);
+  
+  const balance = await hre.ethers.provider.getBalance(deployer.address);
+  console.log(`Balance: ${hre.ethers.formatEther(balance)} ETH\n`);
+
+  // Check minimum balance
+  const minBalance = hre.ethers.parseEther("0.1");
+  if (balance < minBalance) {
+    console.error(" Insufficient balance. Need at least 0.1 ETH for deployment.");
+    process.exit(1);
   }
 
-  console.log("Deploying with account:", deployer.address);
-  console.log("Network:", network.name);
+  // ============ Deploy Groth16Verifier ============
+  console.log("═ Step 1: Deploying Groth16Verifier...");
+  
+  const Groth16Verifier = await hre.ethers.getContractFactory("Groth16Verifier");
+  const groth16Verifier = await Groth16Verifier.deploy();
+  await groth16Verifier.waitForDeployment();
+  const groth16Address = await groth16Verifier.getAddress();
+  
+  console.log(`   Groth16Verifier deployed at: ${groth16Address}`);
 
-  const balance = await ethers.provider.getBalance(deployer.address);
-  console.log("Balance:", ethers.utils.formatEther(balance), "ETH\n");
-
-  // Deploy Groth16Verifier (or mock if not available)
-  let groth16VerifierAddress;
-  try {
-    console.log("Deploying Groth16Verifier...");
-    const Groth16Verifier = await ethers.getContractFactory("Groth16Verifier", deployer);
-    const groth16Verifier = await Groth16Verifier.deploy();
-    await groth16Verifier.deployed();
-    groth16VerifierAddress = groth16Verifier.address;
-    console.log(" Groth16Verifier deployed to:", groth16VerifierAddress);
-  } catch (error) {
-    console.log(" Real Groth16Verifier not found, deploying Mock...");
-    
-    // FIX: Use fully qualified name to avoid ambiguity
-    const MockVerifier = await ethers.getContractFactory(
-      "contracts/contracts/MockGroth16Verifier.sol:MockGroth16Verifier",
-      deployer
-    );
-    
-    const mockVerifier = await MockVerifier.deploy();
-    await mockVerifier.deployed();
-    groth16VerifierAddress = mockVerifier.address;
-    console.log(" MockGroth16Verifier deployed to:", groth16VerifierAddress);
+  // Wait for confirmations on testnet
+  if (network !== "hardhat" && network !== "localhost") {
+    console.log("  Waiting for confirmations...");
+    await groth16Verifier.deploymentTransaction().wait(2);
+    console.log("   Confirmed");
   }
 
-  // Deploy LineageVerifier
-  console.log("\nDeploying LineageVerifier...");
-  const LineageVerifier = await ethers.getContractFactory("LineageVerifier", deployer);
-  const lineageVerifier = await LineageVerifier.deploy(groth16VerifierAddress);
-  await lineageVerifier.deployed();
-  const lineageVerifierAddress = lineageVerifier.address;
-  console.log(" LineageVerifier deployed to:", lineageVerifierAddress);
+  // ============ Deploy LineageVerifier ============
+  console.log("\n═ Step 2: Deploying LineageVerifier...");
+  console.log(`  Genesis: 0x${GENESIS_COMMITMENT.toString(16).padStart(64, '0')}`);
+  console.log(`  Policy:  0x${POLICY_ROOT.toString(16).padStart(64, '0')}`);
+  console.log(`  Verifier: ${groth16Address}`);
+  console.log(`  Allow Duplicates: ${ALLOW_DUPLICATES}`);
 
-  // Deploy PolicyRegistry
-  console.log("\nDeploying PolicyRegistry...");
-  const PolicyRegistry = await ethers.getContractFactory("PolicyRegistry", deployer);
-  const policyRegistry = await PolicyRegistry.deploy();
-  await policyRegistry.deployed();
-  const policyRegistryAddress = policyRegistry.address;
-  console.log(" PolicyRegistry deployed to:", policyRegistryAddress);
+  const LineageVerifier = await hre.ethers.getContractFactory("LineageVerifier");
+  const lineageVerifier = await LineageVerifier.deploy(
+    GENESIS_COMMITMENT,
+    POLICY_ROOT,
+    groth16Address,
+    ALLOW_DUPLICATES
+  );
+  await lineageVerifier.waitForDeployment();
+  const lineageAddress = await lineageVerifier.getAddress();
 
-  // Save deployment info
+  console.log(`   LineageVerifier deployed at: ${lineageAddress}`);
+
+  // Wait for confirmations on testnet
+  if (network !== "hardhat" && network !== "localhost") {
+    console.log("  Waiting for confirmations...");
+    await lineageVerifier.deploymentTransaction().wait(2);
+    console.log("   Confirmed");
+  }
+
+  // ============ Verify Deployment ============
+  console.log("\n═ Step 3: Verifying deployment...");
+  
+  const storedGenesis = await lineageVerifier.getGenesisCommitment();
+  const storedPolicy = await lineageVerifier.getPolicyRoot();
+  const storedVerifier = await lineageVerifier.getVerifierAddress();
+
+  const genesisMatch = storedGenesis === GENESIS_COMMITMENT;
+  const policyMatch = storedPolicy === POLICY_ROOT;
+  const verifierMatch = storedVerifier === groth16Address;
+
+  console.log(`  Genesis commitment: ${genesisMatch ? "✓" : "✗"}`);
+  console.log(`  Policy root: ${policyMatch ? "✓" : "✗"}`);
+  console.log(`  Verifier address: ${verifierMatch ? "✓" : "✗"}`);
+
+  if (!genesisMatch || !policyMatch || !verifierMatch) {
+    console.error("\n Deployment verification failed!");
+    process.exit(1);
+  }
+
+  // ============ Save Deployment Info ============
+  console.log("\n═ Step 4: Saving deployment info...");
+
   const deploymentInfo = {
-    network: network.name,
+    network: network,
+    chainId: Number(chainId),
     deployer: deployer.address,
-    timestamp: new Date().toISOString(),
+    deployedAt: new Date().toISOString(),
     contracts: {
-      Groth16Verifier: groth16VerifierAddress,
-      LineageVerifier: lineageVerifierAddress,
-      PolicyRegistry: policyRegistryAddress,
+      Groth16Verifier: groth16Address,
+      LineageVerifier: lineageAddress
     },
+    config: {
+      genesisCommitment: "0x" + GENESIS_COMMITMENT.toString(16).padStart(64, '0'),
+      policyRoot: "0x" + POLICY_ROOT.toString(16).padStart(64, '0'),
+      allowDuplicates: ALLOW_DUPLICATES
+    },
+    transactions: {
+      Groth16Verifier: groth16Verifier.deploymentTransaction().hash,
+      LineageVerifier: lineageVerifier.deploymentTransaction().hash
+    }
   };
 
-  const deploymentsDir = path.join(__dirname, "../deployments", network.name);
+  // Create deployments directory if needed
+  const deploymentsDir = path.join(__dirname, "..", "deployments", network);
   if (!fs.existsSync(deploymentsDir)) {
     fs.mkdirSync(deploymentsDir, { recursive: true });
   }
 
-  fs.writeFileSync(
-    path.join(deploymentsDir, "addresses.json"),
-    JSON.stringify(deploymentInfo, null, 2)
-  );
+  // Save addresses
+  const addressesPath = path.join(deploymentsDir, "addresses.json");
+  fs.writeFileSync(addressesPath, JSON.stringify(deploymentInfo, null, 2));
+  console.log(`   Saved to ${addressesPath}`);
 
-  console.log("\n Deployment complete!");
-  console.log(" Deployment info saved to:", path.join(deploymentsDir, "addresses.json"));
+  // Save deployment log
+  const logPath = path.join(deploymentsDir, "deployment-log.txt");
+  const logContent = `
+ZK-ORIGIN Deployment Log
+========================
+Network: ${network}
+Chain ID: ${chainId}
+Deployer: ${deployer.address}
+Timestamp: ${deploymentInfo.deployedAt}
 
-  console.log("\n Contract Addresses:");
-  console.log("  Groth16Verifier:", groth16VerifierAddress);
-  console.log("  LineageVerifier:", lineageVerifierAddress);
-  console.log("  PolicyRegistry:", policyRegistryAddress);
+Contracts:
+- Groth16Verifier: ${groth16Address}
+- LineageVerifier: ${lineageAddress}
 
-  // Etherscan verification instructions
-  if (network.name === "sepolia") {
-    console.log("\n Verify on Etherscan:");
-    console.log(
-      `npx hardhat verify --network sepolia ${lineageVerifierAddress} ${groth16VerifierAddress}`
-    );
-    
-    console.log("\n Live URLs:");
-    console.log(`  https://sepolia.etherscan.io/address/${groth16VerifierAddress}`);
-    console.log(`  https://sepolia.etherscan.io/address/${lineageVerifierAddress}`);
-    console.log(`  https://sepolia.etherscan.io/address/${policyRegistryAddress}`);
+Transactions:
+- Groth16Verifier: ${deploymentInfo.transactions.Groth16Verifier}
+- LineageVerifier: ${deploymentInfo.transactions.LineageVerifier}
+
+Configuration:
+- Genesis: ${deploymentInfo.config.genesisCommitment}
+- Policy: ${deploymentInfo.config.policyRoot}
+- Allow Duplicates: ${ALLOW_DUPLICATES}
+`;
+  fs.appendFileSync(logPath, logContent);
+  console.log(`   Appended to ${logPath}`);
+
+  
+  console.log(`  Network:          ${network.padEnd(43)}║`);
+  console.log(`  Groth16Verifier:  ${groth16Address}  ║`);
+  console.log(`  LineageVerifier:  ${lineageAddress}  ║`);
+  
+
+  // ============ Etherscan Verification Reminder ============
+  if (network === "sepolia") {
+    console.log(" To verify on Etherscan, run:");
+    console.log(`   npx hardhat verify --network sepolia ${groth16Address}`);
+    console.log(`   npx hardhat verify --network sepolia ${lineageAddress} "${GENESIS_COMMITMENT}" "${POLICY_ROOT}" "${groth16Address}" ${ALLOW_DUPLICATES}\n`);
   }
+
+  return deploymentInfo;
 }
 
 main()
   .then(() => process.exit(0))
   .catch((error) => {
-    console.error("\n Deployment failed:", error);
+    console.error(error);
     process.exit(1);
   });
+
+module.exports = { main };
