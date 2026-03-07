@@ -8,6 +8,8 @@ node_modules/
 /contracts/deployments
 /demo/node_modules
 /circuits/node_modules
+/contracts/artifacts
+/contracts/cache
 # pnpm deploy output
 /bundle
 
