@@ -20,10 +20,10 @@ async function main() {
   console.log(`Deployer: ${deployer.address}`);
   
   const balance = await hre.ethers.provider.getBalance(deployer.address);
-  console.log(`Balance: ${hre.ethers.formatEther(balance)} ETH\n`);
+  console.log(`Balance: ${hre.ethers.utils.formatEther(balance)} ETH\n`);
 
   // Check minimum balance
-  const minBalance = hre.ethers.parseEther("0.1");
+  const minBalance = hre.ethers.utils.parseEther("0.1");
   if (balance < minBalance) {
     console.error(" Insufficient balance. Need at least 0.1 ETH for deployment.");
     process.exit(1);
@@ -34,8 +34,8 @@ async function main() {
   
   const Groth16Verifier = await hre.ethers.getContractFactory("Groth16Verifier");
   const groth16Verifier = await Groth16Verifier.deploy();
-  await groth16Verifier.waitForDeployment();
-  const groth16Address = await groth16Verifier.getAddress();
+  await groth16Verifier.deployed();
+  const groth16Address = groth16Verifier.address;
   
   console.log(`   Groth16Verifier deployed at: ${groth16Address}`);
 
@@ -60,8 +60,8 @@ async function main() {
     groth16Address,
     ALLOW_DUPLICATES
   );
-  await lineageVerifier.waitForDeployment();
-  const lineageAddress = await lineageVerifier.getAddress();
+  await lineageVerifier.deployed();
+  const lineageAddress = lineageVerifier.address;
 
   console.log(`   LineageVerifier deployed at: ${lineageAddress}`);
 
