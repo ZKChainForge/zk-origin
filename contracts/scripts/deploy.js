@@ -2,28 +2,36 @@ const hre = require("hardhat");
 const fs = require("fs");
 const path = require("path");
 
-// Configuration - Replace with actual values from your prover
+// Configuration
 const GENESIS_COMMITMENT = BigInt("0x1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef");
-const POLICY_ROOT = BigInt("0xabcdef1234567890abcdef1234567890abcdef1234567890abcdef12345678");
+const POLICY_ROOT = BigInt("0x00abcdef1234567890abcdef1234567890abcdef1234567890abcdef12345678");
 const ALLOW_DUPLICATES = false;
 
 async function main() {
-  
+  console.log("╔════════════════════════════════════════════════════════════════╗");
   console.log("║                    ZK-ORIGIN DEPLOYMENT                        ║");
-  
+  console.log("╚════════════════════════════════════════════════════════════════╝\n");
 
   const [deployer] = await hre.ethers.getSigners();
   const network = hre.network.name;
-  const chainId = (await hre.ethers.provider.getNetwork()).chainId;
+  
+  // Get chainId - compatible with both ethers v5 and v6
+  const networkData = await hre.ethers.provider.getNetwork();
+  const chainId = networkData.chainId;
 
   console.log(`Network: ${network} (chainId: ${chainId})`);
   console.log(`Deployer: ${deployer.address}`);
   
   const balance = await hre.ethers.provider.getBalance(deployer.address);
-  console.log(`Balance: ${hre.ethers.utils.formatEther(balance)} ETH\n`);
+  
+  // Compatible with both ethers v5 and v6
+  const formatEther = hre.ethers.formatEther || hre.ethers.utils.formatEther;
+  const parseEther = hre.ethers.parseEther || hre.ethers.utils.parseEther;
+  
+  console.log(`Balance: ${formatEther(balance)} ETH\n`);
 
   // Check minimum balance
-  const minBalance = hre.ethers.utils.parseEther("0.1");
+  const minBalance = parseEther("0.1");
   if (balance < minBalance) {
     console.error(" Insufficient balance. Need at least 0.1 ETH for deployment.");
     process.exit(1);
@@ -34,16 +42,27 @@ async function main() {
   
   const Groth16Verifier = await hre.ethers.getContractFactory("Groth16Verifier");
   const groth16Verifier = await Groth16Verifier.deploy();
-  await groth16Verifier.deployed();
-  const groth16Address = groth16Verifier.address;
   
-  console.log(`   Groth16Verifier deployed at: ${groth16Address}`);
+  // Compatible with both ethers v5 and v6
+  if (groth16Verifier.waitForDeployment) {
+    await groth16Verifier.waitForDeployment();
+  } else {
+    await groth16Verifier.deployed();
+  }
+  
+  // Get address - compatible with both versions
+  const groth16Address = groth16Verifier.address || await groth16Verifier.getAddress();
+  
+  console.log(`    Groth16Verifier deployed at: ${groth16Address}`);
 
   // Wait for confirmations on testnet
   if (network !== "hardhat" && network !== "localhost") {
-    console.log("  Waiting for confirmations...");
-    await groth16Verifier.deploymentTransaction().wait(2);
-    console.log("   Confirmed");
+    console.log("    Waiting for confirmations...");
+    const deployTx = groth16Verifier.deployTransaction || groth16Verifier.deploymentTransaction?.();
+    if (deployTx) {
+      await deployTx.wait(2);
+    }
+    console.log("    Confirmed");
   }
 
   // ============ Deploy LineageVerifier ============
@@ -60,16 +79,26 @@ async function main() {
     groth16Address,
     ALLOW_DUPLICATES
   );
-  await lineageVerifier.deployed();
-  const lineageAddress = lineageVerifier.address;
+  
+  // Compatible with both ethers v5 and v6
+  if (lineageVerifier.waitForDeployment) {
+    await lineageVerifier.waitForDeployment();
+  } else {
+    await lineageVerifier.deployed();
+  }
+  
+  const lineageAddress = lineageVerifier.address || await lineageVerifier.getAddress();
 
-  console.log(`   LineageVerifier deployed at: ${lineageAddress}`);
+  console.log(`    LineageVerifier deployed at: ${lineageAddress}`);
 
   // Wait for confirmations on testnet
   if (network !== "hardhat" && network !== "localhost") {
-    console.log("  Waiting for confirmations...");
-    await lineageVerifier.deploymentTransaction().wait(2);
-    console.log("   Confirmed");
+    console.log("    Waiting for confirmations...");
+    const deployTx = lineageVerifier.deployTransaction || lineageVerifier.deploymentTransaction?.();
+    if (deployTx) {
+      await deployTx.wait(2);
+    }
+    console.log("    Confirmed");
   }
 
   // ============ Verify Deployment ============
@@ -79,9 +108,13 @@ async function main() {
   const storedPolicy = await lineageVerifier.getPolicyRoot();
   const storedVerifier = await lineageVerifier.getVerifierAddress();
 
-  const genesisMatch = storedGenesis === GENESIS_COMMITMENT;
-  const policyMatch = storedPolicy === POLICY_ROOT;
-  const verifierMatch = storedVerifier === groth16Address;
+  // Convert to BigInt for comparison
+  const storedGenesisBigInt = BigInt(storedGenesis.toString());
+  const storedPolicyBigInt = BigInt(storedPolicy.toString());
+
+  const genesisMatch = storedGenesisBigInt === GENESIS_COMMITMENT;
+  const policyMatch = storedPolicyBigInt === POLICY_ROOT;
+  const verifierMatch = storedVerifier.toLowerCase() === groth16Address.toLowerCase();
 
   console.log(`  Genesis commitment: ${genesisMatch ? "✓" : "✗"}`);
   console.log(`  Policy root: ${policyMatch ? "✓" : "✗"}`);
@@ -89,11 +122,21 @@ async function main() {
 
   if (!genesisMatch || !policyMatch || !verifierMatch) {
     console.error("\n Deployment verification failed!");
+    console.log(`  Expected genesis: ${GENESIS_COMMITMENT}, got: ${storedGenesisBigInt}`);
+    console.log(`  Expected policy: ${POLICY_ROOT}, got: ${storedPolicyBigInt}`);
+    console.log(`  Expected verifier: ${groth16Address}, got: ${storedVerifier}`);
     process.exit(1);
   }
 
   // ============ Save Deployment Info ============
   console.log("\n═ Step 4: Saving deployment info...");
+
+  const deployTxHash1 = (groth16Verifier.deployTransaction?.hash) || 
+                        (groth16Verifier.deploymentTransaction?.()?.hash) || 
+                        "N/A";
+  const deployTxHash2 = (lineageVerifier.deployTransaction?.hash) || 
+                        (lineageVerifier.deploymentTransaction?.()?.hash) || 
+                        "N/A";
 
   const deploymentInfo = {
     network: network,
@@ -110,8 +153,8 @@ async function main() {
       allowDuplicates: ALLOW_DUPLICATES
     },
     transactions: {
-      Groth16Verifier: groth16Verifier.deploymentTransaction().hash,
-      LineageVerifier: lineageVerifier.deploymentTransaction().hash
+      Groth16Verifier: deployTxHash1,
+      LineageVerifier: deployTxHash2
     }
   };
 
@@ -124,46 +167,15 @@ async function main() {
   // Save addresses
   const addressesPath = path.join(deploymentsDir, "addresses.json");
   fs.writeFileSync(addressesPath, JSON.stringify(deploymentInfo, null, 2));
-  console.log(`   Saved to ${addressesPath}`);
+  console.log(`    Saved to ${addressesPath}`);
 
-  // Save deployment log
-  const logPath = path.join(deploymentsDir, "deployment-log.txt");
-  const logContent = `
-ZK-ORIGIN Deployment Log
-========================
-Network: ${network}
-Chain ID: ${chainId}
-Deployer: ${deployer.address}
-Timestamp: ${deploymentInfo.deployedAt}
-
-Contracts:
-- Groth16Verifier: ${groth16Address}
-- LineageVerifier: ${lineageAddress}
-
-Transactions:
-- Groth16Verifier: ${deploymentInfo.transactions.Groth16Verifier}
-- LineageVerifier: ${deploymentInfo.transactions.LineageVerifier}
-
-Configuration:
-- Genesis: ${deploymentInfo.config.genesisCommitment}
-- Policy: ${deploymentInfo.config.policyRoot}
-- Allow Duplicates: ${ALLOW_DUPLICATES}
-`;
-  fs.appendFileSync(logPath, logContent);
-  console.log(`   Appended to ${logPath}`);
-
-  
-  console.log(`  Network:          ${network.padEnd(43)}║`);
-  console.log(`  Groth16Verifier:  ${groth16Address}  ║`);
-  console.log(`  LineageVerifier:  ${lineageAddress}  ║`);
-  
-
-  // ============ Etherscan Verification Reminder ============
-  if (network === "sepolia") {
-    console.log(" To verify on Etherscan, run:");
-    console.log(`   npx hardhat verify --network sepolia ${groth16Address}`);
-    console.log(`   npx hardhat verify --network sepolia ${lineageAddress} "${GENESIS_COMMITMENT}" "${POLICY_ROOT}" "${groth16Address}" ${ALLOW_DUPLICATES}\n`);
-  }
+  console.log("\n╔════════════════════════════════════════════════════════════════╗");
+  console.log("║                    DEPLOYMENT COMPLETE                           ║");
+  console.log("╠════════════════════════════════════════════════════════════════  ╣");
+  console.log(`║  Network:          ${network.padEnd(43)}                         ║`);
+  console.log(`║  Groth16Verifier:  ${groth16Address}                             ║`);
+  console.log(`║  LineageVerifier:  ${lineageAddress}                             ║`);
+  console.log("╚════════════════════════════════════════════════════════════════╝\n");
 
   return deploymentInfo;
 }
