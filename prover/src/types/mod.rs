@@ -1,17 +1,17 @@
 //! Core type definitions for ZK-ORIGIN
 
-pub mod origin;
-pub mod lineage;
-pub mod transition;
-pub mod policy;
-pub mod witness;
-pub mod proof;
 pub mod error;
+pub mod lineage;
+pub mod origin;
+pub mod policy;
+pub mod proof;
+pub mod transition;
+pub mod witness;
 
-pub use origin::OriginClass;
+pub use error::{Result, ZkOriginError};
 pub use lineage::LineageCommitment;
-pub use transition::Transition;
+pub use origin::OriginClass;
 pub use policy::OriginPolicy;
-pub use witness::StepWitness;
 pub use proof::LineageProof;
-pub use error::{ZkOriginError, Result};
+pub use transition::Transition;
+pub use witness::StepWitness;

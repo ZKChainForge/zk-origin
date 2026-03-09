@@ -1,11 +1,6 @@
 //! Full demo with attack simulation
 
-use zk_origin::{
-    LineageProver,
-    OriginClass,
-    Transition,
-    OriginPolicy,
-};
+use zk_origin::{LineageProver, OriginClass, OriginPolicy, Transition};
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
     println!(" ZK-ORIGIN Full Demo");

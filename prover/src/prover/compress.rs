@@ -8,10 +8,10 @@ use crate::{Result, ZkOriginError};
 pub struct CompressedProof {
     /// Compressed proof bytes
     pub bytes: Vec<u8>,
-    
+
     /// Original proof size
     pub original_size: usize,
-    
+
     /// Compression ratio
     pub ratio: f64,
 }
@@ -20,7 +20,8 @@ impl CompressedProof {
     /// Compress a lineage proof
     pub fn compress(proof: &LineageProof) -> Result<Self> {
         // Serialize proof to bytes
-        let bytes = proof.to_bytes()
+        let bytes = proof
+            .to_bytes()
             .map_err(|e| ZkOriginError::SerializationError(e.to_string()))?;
         let original_size = bytes.len();
 
@@ -52,7 +53,7 @@ pub fn batch_compress(proofs: &[LineageProof]) -> Result<Vec<CompressedProof>> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::types::lineage::{LineageCommitment, CounterCommitment};
+    use crate::types::lineage::{CounterCommitment, LineageCommitment};
 
     /// Helper: create a dummy LineageProof
     fn create_test_proof() -> LineageProof {

@@ -7,16 +7,16 @@ use serde::{Deserialize, Serialize};
 pub struct PublicInputs {
     /// Genesis lineage commitment
     pub genesis_lineage: [u8; 32],
-    
+
     /// Final lineage commitment
     pub final_lineage: [u8; 32],
-    
+
     /// Final counter commitment
     pub final_counters: [u8; 32],
-    
+
     /// Number of steps
     pub num_steps: u64,
-    
+
     /// Policy hash
     pub policy_hash: [u8; 32],
 }
@@ -100,13 +100,7 @@ mod tests {
 
     #[test]
     fn test_public_inputs_serialization() {
-        let inputs = PublicInputs::new(
-            [1u8; 32],
-            [2u8; 32],
-            [3u8; 32],
-            42,
-            [4u8; 32],
-        );
+        let inputs = PublicInputs::new([1u8; 32], [2u8; 32], [3u8; 32], 42, [4u8; 32]);
 
         let bytes = inputs.to_bytes();
         let recovered = PublicInputs::from_bytes(&bytes).unwrap();

@@ -1,4 +1,3 @@
-
 //! Step witness types for circuit proving
 
 use super::{OriginClass, Transition};
@@ -13,46 +12,46 @@ pub struct StepWitness {
     // Previous state info
     /// Hash of the previous state
     pub prev_state_hash: [u8; 32],
-    
+
     /// Previous lineage commitment
     pub prev_lineage_commitment: [u8; 32],
-    
+
     /// Previous origin class
     pub prev_origin: OriginClass,
-    
+
     /// Previous lineage depth
     pub prev_depth: u64,
-    
+
     // New transition info
     /// Hash of the new state
     pub new_state_hash: [u8; 32],
-    
+
     /// Origin class of this transition
     pub new_origin: OriginClass,
-    
+
     /// Transition timestamp
     pub timestamp: u64,
-    
+
     // Policy proof
     /// Merkle proof path for policy verification
     pub policy_proof: Vec<[u8; 32]>,
-    
+
     /// Path indices (0 = left, 1 = right)
     pub policy_indices: Vec<bool>,
-    
+
     /// Policy tree root
     pub policy_root: [u8; 32],
-    
+
     // Counter info
     /// Current epoch ID
     pub epoch_id: u64,
-    
+
     /// Previous counter values
     pub prev_counters: [u32; 6],
-    
+
     /// Rate limits for each origin class
     pub rate_limits: [u32; 6],
-    
+
     /// Previous counter commitment
     pub prev_counter_commitment: [u8; 32],
 }
@@ -90,18 +89,18 @@ impl StepWitness {
         }
     }
 
-     /// Returns a reference to the policy proof bytes.
-/// 
-/// Each element is a 32-byte array representing a single proof step.
+    /// Returns a reference to the policy proof bytes.
+    ///
+    /// Each element is a 32-byte array representing a single proof step.
     pub fn policy_proof_bytes(&self) -> &Vec<[u8; 32]> {
-    &self.policy_proof
-     }
+        &self.policy_proof
+    }
 
     /// Compute new counters after this transition
     pub fn compute_new_counters(&self) -> [u32; 6] {
         let mut new_counters = self.prev_counters;
         if (self.new_origin as usize) < new_counters.len() {
-            new_counters[self.new_origin as usize] = 
+            new_counters[self.new_origin as usize] =
                 new_counters[self.new_origin as usize].saturating_add(1);
         }
         new_counters
@@ -139,26 +138,26 @@ impl StepWitness {
         if self.policy_proof.len() != self.policy_indices.len() {
             return Err("Policy proof length mismatch");
         }
-        
+
         // Check origin classes are valid
         if self.prev_origin as u8 > 5 || self.new_origin as u8 > 5 {
             return Err("Invalid origin class");
         }
-        
+
         Ok(())
     }
 
     /// Compute the transition hash
     pub fn compute_transition_hash(&self) -> [u8; 32] {
-        use sha2::{Sha256, Digest};
-        
+        use sha2::{Digest, Sha256};
+
         let mut hasher = Sha256::new();
-        hasher.update(&self.prev_state_hash);
-        hasher.update(&self.new_state_hash);
-        hasher.update(&[self.new_origin as u8]);
-        hasher.update(&self.timestamp.to_le_bytes());
-        hasher.update(&self.epoch_id.to_le_bytes());
-        
+        hasher.update(self.prev_state_hash);
+        hasher.update(self.new_state_hash);
+        hasher.update([self.new_origin as u8]);
+        hasher.update(self.timestamp.to_le_bytes());
+        hasher.update(self.epoch_id.to_le_bytes());
+
         let result = hasher.finalize();
         let mut hash = [0u8; 32];
         hash.copy_from_slice(&result);
@@ -167,36 +166,34 @@ impl StepWitness {
 
     /// Compute the new lineage commitment
     pub fn compute_new_lineage_commitment(&self) -> [u8; 32] {
-        use sha2::{Sha256, Digest};
-        
+        use sha2::{Digest, Sha256};
+
         let transition_hash = self.compute_transition_hash();
         let new_depth = self.prev_depth + 1;
-        
+
         let mut hasher = Sha256::new();
-        hasher.update(&self.prev_lineage_commitment);
-        hasher.update(&transition_hash);
-        hasher.update(&new_depth.to_le_bytes());
-        
+        hasher.update(self.prev_lineage_commitment);
+        hasher.update(transition_hash);
+        hasher.update(new_depth.to_le_bytes());
+
         let result = hasher.finalize();
         let mut hash = [0u8; 32];
         hash.copy_from_slice(&result);
         hash
     }
 
-    
-
     /// Compute new counter commitment
     pub fn compute_new_counter_commitment(&self) -> [u8; 32] {
-        use sha2::{Sha256, Digest};
-        
+        use sha2::{Digest, Sha256};
+
         let new_counters = self.compute_new_counters();
-        
+
         let mut hasher = Sha256::new();
-        hasher.update(&self.epoch_id.to_le_bytes());
+        hasher.update(self.epoch_id.to_le_bytes());
         for counter in &new_counters {
-            hasher.update(&counter.to_le_bytes());
+            hasher.update(counter.to_le_bytes());
         }
-        
+
         let result = hasher.finalize();
         let mut hash = [0u8; 32];
         hash.copy_from_slice(&result);
@@ -316,13 +313,8 @@ mod tests {
 
     #[test]
     fn test_witness_creation() {
-        let transition = Transition::new(
-            [1u8; 32],
-            [2u8; 32],
-            OriginClass::User,
-            1000,
-        );
-        
+        let transition = Transition::new([1u8; 32], [2u8; 32], OriginClass::User, 1000);
+
         let witness = StepWitness::new(
             &transition,
             [0u8; 32],
@@ -336,7 +328,7 @@ mod tests {
             [1, u32::MAX, 10, 100, 5, 1000],
             [0u8; 32],
         );
-        
+
         assert_eq!(witness.new_origin, OriginClass::User);
         assert_eq!(witness.prev_depth, 0);
         assert_eq!(witness.new_depth(), 1);
@@ -344,14 +336,8 @@ mod tests {
 
     #[test]
     fn test_genesis_witness() {
-        let witness = StepWitness::genesis(
-            [42u8; 32],
-            1000,
-            [0u8; 32],
-            vec![],
-            vec![],
-        );
-        
+        let witness = StepWitness::genesis([42u8; 32], 1000, [0u8; 32], vec![], vec![]);
+
         assert!(witness.is_genesis());
         assert_eq!(witness.prev_depth, 0);
         assert_eq!(witness.new_origin, OriginClass::Genesis);
@@ -360,7 +346,7 @@ mod tests {
     #[test]
     fn test_witness_validation_valid() {
         let transition = Transition::new([1u8; 32], [2u8; 32], OriginClass::User, 1000);
-        
+
         let valid_witness = StepWitness::new(
             &transition,
             [0u8; 32],
@@ -374,14 +360,14 @@ mod tests {
             [1, u32::MAX, 10, 100, 5, 1000],
             [0u8; 32],
         );
-        
+
         assert!(valid_witness.validate_structure().is_ok());
     }
 
     #[test]
     fn test_witness_validation_invalid() {
         let transition = Transition::new([1u8; 32], [2u8; 32], OriginClass::User, 1000);
-        
+
         // Invalid: mismatched proof/indices length
         let invalid_witness = StepWitness::new(
             &transition,
@@ -396,14 +382,14 @@ mod tests {
             [1, u32::MAX, 10, 100, 5, 1000],
             [0u8; 32],
         );
-        
+
         assert!(invalid_witness.validate_structure().is_err());
     }
 
     #[test]
     fn test_transition_hash_deterministic() {
         let transition = Transition::new([1u8; 32], [2u8; 32], OriginClass::User, 1000);
-        
+
         let witness1 = StepWitness::new(
             &transition,
             [0u8; 32],
@@ -417,7 +403,7 @@ mod tests {
             [0; 6],
             [0u8; 32],
         );
-        
+
         let witness2 = StepWitness::new(
             &transition,
             [0u8; 32],
@@ -431,7 +417,7 @@ mod tests {
             [0; 6],
             [0u8; 32],
         );
-        
+
         assert_eq!(
             witness1.compute_transition_hash(),
             witness2.compute_transition_hash()
@@ -441,7 +427,7 @@ mod tests {
     #[test]
     fn test_counter_increment() {
         let transition = Transition::new([1u8; 32], [2u8; 32], OriginClass::Admin, 1000);
-        
+
         let witness = StepWitness::new(
             &transition,
             [0u8; 32],
@@ -455,9 +441,9 @@ mod tests {
             [0; 6],
             [0u8; 32],
         );
-        
+
         let new_counters = witness.compute_new_counters();
-        
+
         // Admin counter should be incremented
         assert_eq!(new_counters[2], 6); // Admin was 5, now 6
         assert_eq!(new_counters[1], 10); // User unchanged
@@ -466,7 +452,7 @@ mod tests {
     #[test]
     fn test_lineage_commitment_changes() {
         let transition = Transition::new([1u8; 32], [2u8; 32], OriginClass::User, 1000);
-        
+
         let witness = StepWitness::new(
             &transition,
             [1u8; 32], // Non-zero previous commitment
@@ -480,9 +466,9 @@ mod tests {
             [0; 6],
             [0u8; 32],
         );
-        
+
         let new_commitment = witness.compute_new_lineage_commitment();
-        
+
         // New commitment should be different from previous
         assert_ne!(new_commitment, witness.prev_lineage_commitment);
         assert_ne!(new_commitment, [0u8; 32]);
@@ -491,12 +477,12 @@ mod tests {
     #[test]
     fn test_witness_batch() {
         let mut batch = WitnessBatch::new();
-        
+
         assert!(batch.is_empty());
-        
+
         let witness = StepWitness::default();
         batch.push(witness);
-        
+
         assert_eq!(batch.len(), 1);
         assert!(!batch.is_empty());
     }
@@ -510,11 +496,11 @@ mod tests {
                 w
             })
             .collect();
-        
+
         let batch: WitnessBatch = witnesses.into_iter().collect();
-        
+
         assert_eq!(batch.len(), 5);
-        
+
         let timestamps: Vec<u64> = batch.iter().map(|w| w.timestamp).collect();
         assert_eq!(timestamps, vec![0, 1000, 2000, 3000, 4000]);
     }
@@ -522,7 +508,7 @@ mod tests {
     #[test]
     fn test_default_witness() {
         let witness = StepWitness::default();
-        
+
         assert_eq!(witness.prev_depth, 0);
         assert_eq!(witness.new_origin, OriginClass::User);
         assert!(witness.policy_proof.is_empty());

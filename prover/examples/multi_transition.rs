@@ -1,10 +1,7 @@
 //! Example demonstrating multiple transitions with different origin classes
 
-use zk_origin::{
-    LineageProver, OriginPolicy, Transition, OriginClass,
-    Result, ZkOriginError,
-};
 use std::time::Instant;
+use zk_origin::{LineageProver, OriginClass, OriginPolicy, Result, Transition, ZkOriginError};
 
 fn main() -> Result<()> {
     println!("ZK-ORIGIN Multi-Transition \n");
@@ -31,13 +28,13 @@ fn main() -> Result<()> {
             *origin,
             (i as u64 + 1) * 1000,
         );
-        
+
         match prover.add_transition(t) {
             Ok(_) => println!("   {}", desc),
             Err(e) => println!("  ✗ {}: {}", desc, e),
         }
     }
-    
+
     // Generate proof for valid sequence
     let proof1 = prover.finalize()?;
     println!("  Generated proof with {} steps\n", proof1.num_steps);
@@ -49,19 +46,23 @@ fn main() -> Result<()> {
 
     // Genesis → User (valid)
     prover2.add_transition(Transition::new(
-        [0u8; 32], [1u8; 32], OriginClass::User, 1000
+        [0u8; 32],
+        [1u8; 32],
+        OriginClass::User,
+        1000,
     ))?;
     println!("   Genesis → User");
 
     // User → Admin (INVALID - not allowed in default policy)
-    let invalid_transition = Transition::new(
-        [1u8; 32], [2u8; 32], OriginClass::Admin, 2000
-    );
-    
+    let invalid_transition = Transition::new([1u8; 32], [2u8; 32], OriginClass::Admin, 2000);
+
     match prover2.add_transition(invalid_transition) {
         Ok(_) => println!("   User → Admin (unexpected!)"),
         Err(ZkOriginError::PolicyViolation { from, to }) => {
-            println!("   User → Admin: Policy violation ({} → {} not allowed)", from, to);
+            println!(
+                "   User → Admin: Policy violation ({} → {} not allowed)",
+                from, to
+            );
         }
         Err(e) => println!("   User → Admin: {}", e),
     }
@@ -73,7 +74,10 @@ fn main() -> Result<()> {
 
     // Genesis → Admin
     prover3.add_transition(Transition::new(
-        [0u8; 32], [1u8; 32], OriginClass::Admin, 1000
+        [0u8; 32],
+        [1u8; 32],
+        OriginClass::Admin,
+        1000,
     ))?;
     println!("   Genesis → Admin");
 
@@ -88,11 +92,14 @@ fn main() -> Result<()> {
             OriginClass::Admin,
             1000 + i as u64,
         );
-        
+
         match prover3.add_transition(t) {
             Ok(_) => println!("   Admin transition #{}", i),
             Err(ZkOriginError::RateLimitExceeded { current, limit, .. }) => {
-                println!("   Admin transition #{}: Rate limit exceeded ({}/{})", i, current, limit);
+                println!(
+                    "   Admin transition #{}: Rate limit exceeded ({}/{})",
+                    i, current, limit
+                );
                 break;
             }
             Err(e) => {
@@ -121,8 +128,14 @@ fn main() -> Result<()> {
     }
 
     let transition_time = start.elapsed();
-    println!("  Added {} transitions in {:?}", num_transitions, transition_time);
-    println!("  Average: {:?} per transition", transition_time / num_transitions);
+    println!(
+        "  Added {} transitions in {:?}",
+        num_transitions, transition_time
+    );
+    println!(
+        "  Average: {:?} per transition",
+        transition_time / num_transitions
+    );
 
     let start = Instant::now();
     let proof4 = prover4.finalize()?;

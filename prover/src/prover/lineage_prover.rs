@@ -6,15 +6,15 @@
 #[cfg(all(feature = "real-nova", feature = "commitment-mode"))]
 compile_error!("Enable only one of 'real-nova' or 'commitment-mode'");
 
-use crate::types::{OriginPolicy, Transition, LineageProof, LineageCommitment};
 use crate::prover::WitnessGenerator;
+use crate::types::{LineageCommitment, LineageProof, OriginPolicy, Transition};
 use crate::{Result, ZkOriginError};
 
 #[cfg(not(feature = "real-nova"))]
 use std::marker::PhantomData;
 
 #[cfg(feature = "real-nova")]
-use crate::prover::nova_prover::{NovaParams, NovaLineageProver};
+use crate::prover::nova_prover::{NovaLineageProver, NovaParams};
 
 #[cfg(feature = "commitment-mode")]
 use crate::prover::commitment_prover::{CommitmentParams, CommitmentProver};
@@ -150,19 +150,17 @@ impl<'a> LineageProver<'a> {
         // Add to backend
         #[cfg(feature = "real-nova")]
         {
-            let backend = self
-                .backend
-                .as_mut()
-                .ok_or(ZkOriginError::NotInitialized("Backend not initialized".into()))?;
+            let backend = self.backend.as_mut().ok_or(ZkOriginError::NotInitialized(
+                "Backend not initialized".into(),
+            ))?;
             backend.prove_step(&witness)?;
         }
 
         #[cfg(feature = "commitment-mode")]
         {
-            let backend = self
-                .backend
-                .as_mut()
-                .ok_or(ZkOriginError::NotInitialized("Backend not initialized".into()))?;
+            let backend = self.backend.as_mut().ok_or(ZkOriginError::NotInitialized(
+                "Backend not initialized".into(),
+            ))?;
             backend.add_step(&witness)?;
         }
 
@@ -182,7 +180,9 @@ impl<'a> LineageProver<'a> {
     /// Check if a transition would be valid without adding it
     pub fn validate_transition(&self, transition: &Transition) -> Result<()> {
         if !self.initialized {
-            return Err(ZkOriginError::NotInitialized("Prover not initialized".into()));
+            return Err(ZkOriginError::NotInitialized(
+                "Prover not initialized".into(),
+            ));
         }
 
         self.witness_gen.would_be_valid(transition)
@@ -191,29 +191,31 @@ impl<'a> LineageProver<'a> {
     /// Finalize and generate the proof
     pub fn finalize(&self) -> Result<LineageProof> {
         if !self.initialized {
-            return Err(ZkOriginError::NotInitialized("Prover not initialized".into()));
+            return Err(ZkOriginError::NotInitialized(
+                "Prover not initialized".into(),
+            ));
         }
 
         if self.num_transitions == 0 {
-            return Err(ZkOriginError::InvalidLineage("No transitions to prove".into()));
+            return Err(ZkOriginError::InvalidLineage(
+                "No transitions to prove".into(),
+            ));
         }
 
         #[cfg(feature = "real-nova")]
         {
-            let backend = self
-                .backend
-                .as_ref()
-                .ok_or(ZkOriginError::NotInitialized("Backend not initialized".into()))?;
+            let backend = self.backend.as_ref().ok_or(ZkOriginError::NotInitialized(
+                "Backend not initialized".into(),
+            ))?;
             return backend.finalize();
         }
 
         #[cfg(feature = "commitment-mode")]
         {
-            let backend = self
-                .backend
-                .as_ref()
-                .ok_or(ZkOriginError::NotInitialized("Backend not initialized".into()))?;
-            return backend.finalize();
+            let backend = self.backend.as_ref().ok_or(ZkOriginError::NotInitialized(
+                "Backend not initialized".into(),
+            ))?;
+            backend.finalize()
         }
     }
 
@@ -373,12 +375,7 @@ mod tests {
     fn test_add_transition() {
         let mut prover = create_prover();
 
-        let transition = Transition::new(
-            [0u8; 32],
-            [1u8; 32],
-            OriginClass::User,
-            1000,
-        );
+        let transition = Transition::new([0u8; 32], [1u8; 32], OriginClass::User, 1000);
 
         let result = prover.add_transition(transition);
         assert!(result.is_ok());
@@ -390,12 +387,7 @@ mod tests {
     fn test_add_transition_not_initialized() {
         let mut prover = LineageProver::new(OriginPolicy::default()).unwrap();
 
-        let transition = Transition::new(
-            [0u8; 32],
-            [1u8; 32],
-            OriginClass::User,
-            1000,
-        );
+        let transition = Transition::new([0u8; 32], [1u8; 32], OriginClass::User, 1000);
 
         let result = prover.add_transition(transition);
         assert!(result.is_err());
