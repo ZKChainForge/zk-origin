@@ -11,10 +11,10 @@ use crate::{Result, ZkOriginError};
 pub struct RecursiveState {
     /// Number of steps accumulated
     num_steps: u64,
-    
+
     /// Current state (z values)
     current_z: [Vec<u8>; 2],
-    
+
     /// Accumulated proof data
     proof_data: Vec<u8>,
 }
@@ -34,11 +34,12 @@ impl RecursiveState {
         // Placeholder: just update state
         let new_lineage = witness.compute_new_lineage_commitment();
         let new_counters = witness.compute_new_counter_commitment();
-        
+
         self.current_z = [new_lineage.to_vec(), new_counters.to_vec()];
-        self.proof_data.extend_from_slice(&witness.compute_transition_hash());
+        self.proof_data
+            .extend_from_slice(&witness.compute_transition_hash());
         self.num_steps += 1;
-        
+
         Ok(())
     }
 
@@ -62,7 +63,7 @@ impl RecursiveState {
 pub struct PublicParameters {
     /// Circuit hash (for identification)
     pub circuit_hash: [u8; 32],
-    
+
     /// Policy root
     pub policy_root: [u8; 32],
 }
@@ -70,14 +71,14 @@ pub struct PublicParameters {
 impl PublicParameters {
     /// Generate public parameters for a policy
     pub fn setup(policy_root: [u8; 32]) -> Result<Self> {
-        use sha2::{Sha256, Digest};
-        
+        use sha2::{Digest, Sha256};
+
         let mut hasher = Sha256::new();
         hasher.update(b"zk-origin-circuit-v1");
-        hasher.update(&policy_root);
-        
+        hasher.update(policy_root);
+
         let circuit_hash: [u8; 32] = hasher.finalize().into();
-        
+
         Ok(Self {
             circuit_hash,
             policy_root,
@@ -88,16 +89,16 @@ impl PublicParameters {
     pub fn from_bytes(bytes: &[u8]) -> Result<Self> {
         if bytes.len() < 64 {
             return Err(ZkOriginError::SerializationError(
-                "Invalid public parameters".into()
+                "Invalid public parameters".into(),
             ));
         }
-        
+
         let mut circuit_hash = [0u8; 32];
         let mut policy_root = [0u8; 32];
-        
+
         circuit_hash.copy_from_slice(&bytes[0..32]);
         policy_root.copy_from_slice(&bytes[32..64]);
-        
+
         Ok(Self {
             circuit_hash,
             policy_root,
@@ -127,7 +128,7 @@ mod tests {
     fn test_public_parameters() {
         let policy_root = [42u8; 32];
         let params = PublicParameters::setup(policy_root).unwrap();
-        
+
         assert_eq!(params.policy_root, policy_root);
         assert_ne!(params.circuit_hash, [0u8; 32]);
     }
@@ -137,7 +138,7 @@ mod tests {
         let params = PublicParameters::setup([1u8; 32]).unwrap();
         let bytes = params.to_bytes();
         let recovered = PublicParameters::from_bytes(&bytes).unwrap();
-        
+
         assert_eq!(params.circuit_hash, recovered.circuit_hash);
         assert_eq!(params.policy_root, recovered.policy_root);
     }

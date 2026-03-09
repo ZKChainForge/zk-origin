@@ -9,22 +9,24 @@ use std::fmt;
 /// allowing the protocol to enforce policies about which transitions are allowed.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
 #[repr(u8)]
+#[derive(Default)]
 pub enum OriginClass {
     /// Genesis state - the initial state of the system
     Genesis = 0,
-    
+
     /// User transaction - normal user-initiated state change
+    #[default]
     User = 1,
-    
+
     /// Admin operation - privileged administrative action
     Admin = 2,
-    
+
     /// Bridge import - state imported from another chain
     Bridge = 3,
-    
+
     /// Governance action - DAO-approved state change
     Governance = 4,
-    
+
     /// System operation - automated protocol-level change
     System = 5,
 }
@@ -91,12 +93,6 @@ impl fmt::Display for OriginClass {
             OriginClass::Governance => write!(f, "Governance"),
             OriginClass::System => write!(f, "System"),
         }
-    }
-}
-
-impl Default for OriginClass {
-    fn default() -> Self {
-        OriginClass::User
     }
 }
 

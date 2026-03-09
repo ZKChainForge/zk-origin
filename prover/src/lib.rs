@@ -16,25 +16,22 @@ compile_error!("Enable only one of 'real-nova' or 'commitment-mode'");
 #[cfg(not(any(feature = "real-nova", feature = "commitment-mode")))]
 compile_error!("Enable either 'real-nova' or 'commitment-mode' feature");
 
-pub mod types;
-pub mod prover;
-pub mod verifier;
 pub mod hash;
+pub mod prover;
+pub mod types;
+pub mod verifier;
 
 // Re-export error types from types module (not a separate top-level module)
-pub use types::error::{ZkOriginError, Result};
+pub use types::error::{Result, ZkOriginError};
 
 // Re-export main types
-pub use types::{
-    OriginClass, OriginPolicy, Transition,
-    LineageProof, LineageCommitment,
-};
+pub use types::{LineageCommitment, LineageProof, OriginClass, OriginPolicy, Transition};
 
 // Re-export prover types
 pub use prover::{LineageProver, LineageProverBuilder, WitnessGenerator};
 
 #[cfg(feature = "real-nova")]
-pub use prover::{NovaParams, NovaLineageProver, CompressedNovaProof};
+pub use prover::{CompressedNovaProof, NovaLineageProver, NovaParams};
 
 #[cfg(feature = "commitment-mode")]
 pub use prover::{CommitmentParams, CommitmentProver};
@@ -96,12 +93,7 @@ mod tests {
         let _policy = OriginPolicy::default();
 
         // Test transition
-        let transition = Transition::new(
-            [0u8; 32],
-            [1u8; 32],
-            OriginClass::User,
-            1000,
-        );
+        let transition = Transition::new([0u8; 32], [1u8; 32], OriginClass::User, 1000);
         assert_eq!(transition.timestamp, 1000);
         assert_eq!(transition.origin_class, OriginClass::User);
 

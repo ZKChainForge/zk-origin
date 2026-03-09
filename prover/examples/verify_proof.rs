@@ -1,9 +1,8 @@
 //! Example demonstrating proof verification
 
 use zk_origin::{
-    LineageProver, LineageVerifier, OriginPolicy, Transition, OriginClass,
-    Result,
-    verifier::verify::verify_proof,
+    verifier::verify::verify_proof, LineageProver, LineageVerifier, OriginClass, OriginPolicy,
+    Result, Transition,
 };
 
 fn main() -> Result<()> {
@@ -28,12 +27,16 @@ fn main() -> Result<()> {
     }
 
     let proof = prover.finalize()?;
-    println!("  Proof generated: {} steps, {} bytes\n", proof.num_steps, proof.proof_size());
+    println!(
+        "  Proof generated: {} steps, {} bytes\n",
+        proof.num_steps,
+        proof.proof_size()
+    );
 
     // Method 1: Verify using LineageVerifier
     println!("Step 2: Verifying with LineageVerifier...");
     let verifier = LineageVerifier::new(genesis_hash, &policy);
-    
+
     match verifier.verify(&proof) {
         Ok(true) => println!("   Proof is valid"),
         Ok(false) => println!("   Proof is invalid"),
@@ -80,17 +83,17 @@ fn main() -> Result<()> {
         Ok(_) => println!("  Unexpected success"),
         Err(e) => println!("   Correctly rejected: {}", e),
     }
-    
+
     // Serialization round-trip
 
     println!("\n Testing Proof Serialization \n");
-    
+
     let json = proof.to_json()?;
     println!("  JSON size: {} bytes", json.len());
-    
+
     let recovered = zk_origin::LineageProof::from_json(&json)?;
     println!("  Recovered proof: {} steps", recovered.num_steps);
-    
+
     match verifier.verify(&recovered) {
         Ok(true) => println!("   Recovered proof is valid"),
         Ok(false) => println!("   Recovered proof is invalid"),

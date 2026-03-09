@@ -1,10 +1,7 @@
 //! Witness generation for lineage proofs
 
-use crate::types::{
-    OriginClass, OriginPolicy, Transition, StepWitness,
-    LineageCommitment,
-};
 use crate::types::lineage::EpochCounters;
+use crate::types::{LineageCommitment, OriginClass, OriginPolicy, StepWitness, Transition};
 
 use crate::hash::merkle::{build_policy_tree, generate_policy_proof};
 use crate::{Result, ZkOriginError};
@@ -13,22 +10,22 @@ use crate::{Result, ZkOriginError};
 pub struct WitnessGenerator {
     /// The origin policy
     policy: OriginPolicy,
-    
+
     /// Policy Merkle tree
     policy_tree: crate::hash::MerkleTree,
-    
+
     /// Mapping from (from, to) to tree index
     policy_mapping: Vec<(u8, u8, usize)>,
-    
+
     /// Current lineage state
     current_lineage: LineageCommitment,
-    
+
     /// Previous origin class
     prev_origin: OriginClass,
-    
+
     /// Current epoch counters
     counters: EpochCounters,
-    
+
     /// Epoch duration in seconds
     epoch_duration: u64,
 }
@@ -37,16 +34,16 @@ impl WitnessGenerator {
     /// Create a new witness generator
     pub fn new(policy: OriginPolicy) -> Self {
         let epoch_duration = policy.epoch_duration;
-        
+
         // Build policy tree
         let allowed: Vec<(u8, u8)> = policy
             .allowed_transitions()
             .iter()
             .map(|(f, t)| (*f as u8, *t as u8))
             .collect();
-        
+
         let (policy_tree, policy_mapping) = build_policy_tree(&allowed);
-        
+
         Self {
             policy,
             policy_tree,
@@ -68,7 +65,10 @@ impl WitnessGenerator {
     /// Generate witness for a transition
     pub fn generate_witness(&mut self, transition: &Transition) -> Result<StepWitness> {
         // Check if transition is allowed by policy
-        if !self.policy.is_allowed(self.prev_origin, transition.origin_class) {
+        if !self
+            .policy
+            .is_allowed(self.prev_origin, transition.origin_class)
+        {
             return Err(ZkOriginError::policy_violation(
                 self.prev_origin,
                 transition.origin_class,
@@ -83,7 +83,10 @@ impl WitnessGenerator {
 
         // Check rate limit
         let limit = self.policy.get_rate_limit(transition.origin_class);
-        if self.counters.would_exceed_limit(transition.origin_class, limit) {
+        if self
+            .counters
+            .would_exceed_limit(transition.origin_class, limit)
+        {
             return Err(ZkOriginError::rate_limit(
                 transition.origin_class,
                 self.counters.get(transition.origin_class),
@@ -98,10 +101,9 @@ impl WitnessGenerator {
             &self.policy_mapping,
             self.prev_origin as u8,
             transition.origin_class as u8,
-        ).ok_or_else(|| {
-            ZkOriginError::InvalidLineage(
-                "Cannot generate policy proof for transition".into()
-            )
+        )
+        .ok_or_else(|| {
+            ZkOriginError::InvalidLineage("Cannot generate policy proof for transition".into())
         })?;
 
         // Build witness
@@ -160,7 +162,10 @@ impl WitnessGenerator {
     /// Check if a transition would be valid (without executing)
     pub fn would_be_valid(&self, transition: &Transition) -> Result<()> {
         // Check policy
-        if !self.policy.is_allowed(self.prev_origin, transition.origin_class) {
+        if !self
+            .policy
+            .is_allowed(self.prev_origin, transition.origin_class)
+        {
             return Err(ZkOriginError::policy_violation(
                 self.prev_origin,
                 transition.origin_class,
@@ -204,7 +209,7 @@ mod tests {
     #[test]
     fn test_witness_generator_creation() {
         let gen = create_generator();
-        
+
         assert_eq!(gen.current_depth(), 0);
         assert_eq!(gen.prev_origin, OriginClass::Genesis);
     }

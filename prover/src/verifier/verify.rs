@@ -1,18 +1,18 @@
 //! Proof verification implementation
 
 use crate::types::lineage::LineageCommitment;
-use crate::types::OriginPolicy;
 use crate::types::proof::LineageProof;
+use crate::types::OriginPolicy;
 use crate::{Result, ZkOriginError};
 
 /// Verifier for lineage proofs
 pub struct LineageVerifier {
     /// Expected genesis commitment
     expected_genesis: LineageCommitment,
-    
+
     /// Expected policy hash
     expected_policy_hash: [u8; 32],
-    
+
     /// Policy (for reference)
     #[allow(dead_code)]
     policy: OriginPolicy,
@@ -38,15 +38,13 @@ impl LineageVerifier {
         // Check 2: Policy matches
         if proof.policy_hash != self.expected_policy_hash {
             return Err(ZkOriginError::VerificationFailed(
-                "Policy hash mismatch".into()
+                "Policy hash mismatch".into(),
             ));
         }
 
         // Check 3: Depth consistency
         if proof.final_lineage.depth != proof.num_steps {
-            return Err(ZkOriginError::VerificationFailed(
-                "Depth mismatch".into()
-            ));
+            return Err(ZkOriginError::VerificationFailed("Depth mismatch".into()));
         }
 
         // Check 4: Proof non-empty
@@ -70,10 +68,8 @@ impl LineageVerifier {
         result.proof_valid = !proof.proof_bytes.is_empty();
         result.is_real_zk = proof.is_real_zk();
 
-        result.is_valid = result.genesis_valid
-            && result.policy_valid
-            && result.depth_valid
-            && result.proof_valid;
+        result.is_valid =
+            result.genesis_valid && result.policy_valid && result.depth_valid && result.proof_valid;
 
         result
     }
@@ -143,13 +139,17 @@ mod tests {
     use super::*;
     use crate::types::lineage::CounterCommitment;
 
-    fn create_test_proof(genesis_hash: [u8; 32], policy: &OriginPolicy, large: bool) -> LineageProof {
+    fn create_test_proof(
+        genesis_hash: [u8; 32],
+        policy: &OriginPolicy,
+        large: bool,
+    ) -> LineageProof {
         let proof_bytes = if large {
             vec![0u8; 5000]
         } else {
             vec![1, 2, 3, 4]
         };
-        
+
         LineageProof::new(
             proof_bytes,
             LineageCommitment::new([1u8; 32], 5),
@@ -165,10 +165,10 @@ mod tests {
         let genesis = [0u8; 32];
         let policy = OriginPolicy::default();
         let proof = create_test_proof(genesis, &policy, false);
-        
+
         let verifier = LineageVerifier::new(genesis, &policy);
         let result = verifier.verify(&proof);
-        
+
         assert!(result.is_ok());
         assert!(result.unwrap());
     }
@@ -179,12 +179,15 @@ mod tests {
         let wrong_genesis = [1u8; 32];
         let policy = OriginPolicy::default();
         let proof = create_test_proof(wrong_genesis, &policy, false);
-        
+
         let verifier = LineageVerifier::new(genesis, &policy);
         let result = verifier.verify(&proof);
-        
+
         assert!(result.is_err());
-        assert!(matches!(result.unwrap_err(), ZkOriginError::GenesisMismatch));
+        assert!(matches!(
+            result.unwrap_err(),
+            ZkOriginError::GenesisMismatch
+        ));
     }
 
     #[test]
@@ -192,10 +195,10 @@ mod tests {
         let genesis = [0u8; 32];
         let policy = OriginPolicy::default();
         let proof = create_test_proof(genesis, &policy, false);
-        
+
         let verifier = LineageVerifier::new(genesis, &policy);
         let result = verifier.verify_detailed(&proof);
-        
+
         assert!(result.is_valid);
         assert!(!result.is_real_zk);
     }
@@ -205,9 +208,9 @@ mod tests {
         let genesis = [0u8; 32];
         let policy = OriginPolicy::default();
         let proof = create_test_proof(genesis, &policy, false);
-        
+
         let result = verify_proof(&proof, genesis, &policy);
-        
+
         assert!(result.is_ok());
     }
 }

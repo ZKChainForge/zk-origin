@@ -1,23 +1,17 @@
-
 //! src/prover/nova_prover.rs
 
+use crate::types::{LineageProof, StepWitness};
 use crate::{Result, ZkOriginError};
-use crate::types::{LineageProof, StepWitness, LineageCommitment};
-use crate::types::lineage::CounterCommitment;
-use crate::types::proof::ProofMetadata;
 
 #[cfg(feature = "real-nova")]
 use {
+    crate::prover::nova_circuit::LineageStepCircuit,
+    ff::{Field, PrimeField},
     nova_snark::{
-        traits::{
-            circuit::TrivialCircuit,
-            snark::RelaxedR1CSSNARKTrait,
-        },
+        traits::{circuit::TrivialCircuit, snark::RelaxedR1CSSNARKTrait},
         CompressedSNARK, PublicParams, RecursiveSNARK,
     },
     pasta_curves::{pallas, vesta},
-    crate::prover::nova_circuit::LineageStepCircuit,
-    ff::{Field, PrimeField},
     std::time::Instant,
 };
 
@@ -60,32 +54,43 @@ impl NovaParams {
     pub fn setup(policy_root: [u8; 32]) -> Result<Self> {
         println!("Setting up Nova public parameters...");
         let start = Instant::now();
-        
+
         let circuit_primary = LineageStepCircuit::<F1>::default();
         let circuit_secondary = TrivialCircuit::<F2>::default();
-        
+
         let pp = PublicParams::<G1, G2, C1, C2>::setup(
             &circuit_primary,
             &circuit_secondary,
             &*S1::ck_floor(),
             &*S2::ck_floor(),
         );
-        
+
         println!("Nova setup complete in {:?}", start.elapsed());
         println!("  Primary circuit constraints: ~{}", pp.num_constraints().0);
-        println!("  Secondary circuit constraints: ~{}", pp.num_constraints().1);
-        
+        println!(
+            "  Secondary circuit constraints: ~{}",
+            pp.num_constraints().1
+        );
+
         Ok(Self { pp, policy_root })
     }
-    
-    pub fn public_params(&self) -> &PublicParams<G1, G2, C1, C2> { &self.pp }
-    pub fn policy_root(&self) -> [u8; 32] { self.policy_root }
+
+    pub fn public_params(&self) -> &PublicParams<G1, G2, C1, C2> {
+        &self.pp
+    }
+    pub fn policy_root(&self) -> [u8; 32] {
+        self.policy_root
+    }
 }
 
 #[cfg(not(feature = "real-nova"))]
 impl NovaParams {
-    pub fn setup(policy_root: [u8; 32]) -> Result<Self> { Ok(Self { policy_root }) }
-    pub fn policy_root(&self) -> [u8; 32] { self.policy_root }
+    pub fn setup(policy_root: [u8; 32]) -> Result<Self> {
+        Ok(Self { policy_root })
+    }
+    pub fn policy_root(&self) -> [u8; 32] {
+        self.policy_root
+    }
 }
 
 #[cfg(feature = "real-nova")]
@@ -126,7 +131,11 @@ impl<'a> NovaLineageProver<'a> {
         }
     }
 
-    pub fn initialize(&mut self, genesis_lineage: [u8; 32], initial_counters: [u8; 32]) -> Result<()> {
+    pub fn initialize(
+        &mut self,
+        genesis_lineage: [u8; 32],
+        initial_counters: [u8; 32],
+    ) -> Result<()> {
         let lineage_f = bytes_to_field::<F1>(&genesis_lineage);
         let counters_f = bytes_to_field::<F1>(&initial_counters);
         self.z0_primary = vec![lineage_f, counters_f];
@@ -144,7 +153,9 @@ impl<'a> NovaLineageProver<'a> {
 
     pub fn prove_step(&mut self, witness: &StepWitness) -> Result<()> {
         if !self.initialized {
-            return Err(ZkOriginError::NotInitialized("Nova prover not initialized".into()));
+            return Err(ZkOriginError::NotInitialized(
+                "Nova prover not initialized".into(),
+            ));
         }
         let start = Instant::now();
         let current_lineage = self.zi_primary[0];
@@ -155,23 +166,48 @@ impl<'a> NovaLineageProver<'a> {
         let timestamp = F1::from(witness.timestamp);
         let policy_root = bytes_to_field::<F1>(&witness.policy_root);
         let epoch_id = F1::from(witness.epoch_id);
-        let policy_path: Vec<F1> = witness.policy_proof.iter().map(|p| bytes_to_field::<F1>(p)).collect();
+        let policy_path: Vec<F1> = witness
+            .policy_proof
+            .iter()
+            .map(|p| bytes_to_field::<F1>(p))
+            .collect();
         let rate_limits: [F1; 6] = std::array::from_fn(|i| F1::from(witness.rate_limits[i] as u64));
         let state_product = prev_state * new_state;
         let transition_hash = state_product + origin + timestamp;
         let lineage_product = current_lineage * transition_hash;
         let new_lineage = lineage_product + current_lineage + transition_hash;
         let new_counters = current_counters + origin + epoch_id;
-        let circuit = LineageStepCircuit::new(current_lineage, current_counters, prev_state, new_state, origin, timestamp, policy_root, policy_path, witness.policy_indices.clone(), epoch_id, rate_limits);
+        let circuit = LineageStepCircuit::new(
+            current_lineage,
+            current_counters,
+            prev_state,
+            new_state,
+            origin,
+            timestamp,
+            policy_root,
+            policy_path,
+            witness.policy_indices.clone(),
+            epoch_id,
+            rate_limits,
+        );
         let secondary_circuit = TrivialCircuit::<F2>::default();
         if self.recursive_snark.is_none() {
-            let snark = RecursiveSNARK::new(&self.params.pp, &circuit, &secondary_circuit, &self.z0_primary, &[F2::ZERO]).map_err(|e| ZkOriginError::proving(format!("RecursiveSNARK::new: {:?}", e)))?;
+            let snark = RecursiveSNARK::new(
+                &self.params.pp,
+                &circuit,
+                &secondary_circuit,
+                &self.z0_primary,
+                &[F2::ZERO],
+            )
+            .map_err(|e| ZkOriginError::proving(format!("RecursiveSNARK::new: {:?}", e)))?;
             self.zi_primary = vec![new_lineage, new_counters];
             self.recursive_snark = Some(Box::new(snark));
             self.num_steps = 1;
         } else {
             let snark = self.recursive_snark.as_mut().unwrap();
-            snark.prove_step(&self.params.pp, &circuit, &secondary_circuit).map_err(|e| ZkOriginError::proving(format!("prove_step failed: {:?}", e)))?;
+            snark
+                .prove_step(&self.params.pp, &circuit, &secondary_circuit)
+                .map_err(|e| ZkOriginError::proving(format!("prove_step failed: {:?}", e)))?;
             self.zi_primary = vec![new_lineage, new_counters];
             self.num_steps += 1;
         }
@@ -182,49 +218,112 @@ impl<'a> NovaLineageProver<'a> {
     }
 
     pub fn finalize(&self) -> Result<LineageProof> {
-        if !self.initialized { return Err(ZkOriginError::NotInitialized("Not initialized".into())); }
-        if self.num_steps == 0 { return Err(ZkOriginError::InvalidLineage("No steps to prove".into())); }
-        let snark = self.recursive_snark.as_ref().ok_or_else(|| ZkOriginError::InternalError("No SNARK".into()))?;
+        if !self.initialized {
+            return Err(ZkOriginError::NotInitialized("Not initialized".into()));
+        }
+        if self.num_steps == 0 {
+            return Err(ZkOriginError::InvalidLineage("No steps to prove".into()));
+        }
+        let snark = self
+            .recursive_snark
+            .as_ref()
+            .ok_or_else(|| ZkOriginError::InternalError("No SNARK".into()))?;
         let verifiable_steps = self.num_steps.saturating_sub(1).max(1);
         println!("Verifying recursive SNARK ({} steps)...", verifiable_steps);
         let verify_start = Instant::now();
-        snark.verify(&self.params.pp, verifiable_steps, &self.z0_primary, &[F2::ZERO]).map_err(|e| ZkOriginError::proving(format!("verify: {:?}", e)))?;
+        snark
+            .verify(
+                &self.params.pp,
+                verifiable_steps,
+                &self.z0_primary,
+                &[F2::ZERO],
+            )
+            .map_err(|e| ZkOriginError::proving(format!("verify: {:?}", e)))?;
         println!("  Verified in {:?}", verify_start.elapsed());
         println!("Compressing proof...");
         let compress_start = Instant::now();
-        let (pk, vk) = CompressedSNARK::<G1, G2, C1, C2, S1, S2>::setup(&self.params.pp).map_err(|e| ZkOriginError::proving(format!("setup: {:?}", e)))?;
-        let compressed = CompressedSNARK::prove(&self.params.pp, &pk, snark).map_err(|e| ZkOriginError::proving(format!("compress: {:?}", e)))?;
+        let (pk, vk) = CompressedSNARK::<G1, G2, C1, C2, S1, S2>::setup(&self.params.pp)
+            .map_err(|e| ZkOriginError::proving(format!("setup: {:?}", e)))?;
+        let compressed = CompressedSNARK::prove(&self.params.pp, &pk, snark)
+            .map_err(|e| ZkOriginError::proving(format!("compress: {:?}", e)))?;
         println!("  Compressed in {:?}", compress_start.elapsed());
         let proof_bytes = bincode::serialize(&compressed)?;
         let vk_bytes = bincode::serialize(&vk)?;
-        println!("  Proof size: {} bytes ({:.2} KB)", proof_bytes.len(), proof_bytes.len() as f64 / 1024.0);
-        let proving_time_ms = self.proving_start.map(|s| s.elapsed().as_millis() as u64).unwrap_or(0);
-        Ok(LineageProof { proof_bytes, final_lineage: LineageCommitment::new(self.final_lineage, self.num_steps as u64), final_counters: CounterCommitment::new(self.final_counters, 0), genesis_commitment: LineageCommitment::new(self.genesis_lineage, 0), num_steps: self.num_steps as u64, policy_hash: self.params.policy_root, metadata: ProofMetadata::new().with_proving_time(proving_time_ms), verifier_key: Some(vk_bytes) })
+        println!(
+            "  Proof size: {} bytes ({:.2} KB)",
+            proof_bytes.len(),
+            proof_bytes.len() as f64 / 1024.0
+        );
+        let proving_time_ms = self
+            .proving_start
+            .map(|s| s.elapsed().as_millis() as u64)
+            .unwrap_or(0);
+        Ok(LineageProof {
+            proof_bytes,
+            final_lineage: LineageCommitment::new(self.final_lineage, self.num_steps as u64),
+            final_counters: CounterCommitment::new(self.final_counters, 0),
+            genesis_commitment: LineageCommitment::new(self.genesis_lineage, 0),
+            num_steps: self.num_steps as u64,
+            policy_hash: self.params.policy_root,
+            metadata: ProofMetadata::new().with_proving_time(proving_time_ms),
+            verifier_key: Some(vk_bytes),
+        })
     }
-    pub fn step_count(&self) -> usize { self.num_steps }
-    pub fn is_initialized(&self) -> bool { self.initialized }
+    pub fn step_count(&self) -> usize {
+        self.num_steps
+    }
+    pub fn is_initialized(&self) -> bool {
+        self.initialized
+    }
 }
 
 #[cfg(not(feature = "real-nova"))]
 impl<'a> NovaLineageProver<'a> {
-    pub fn new(params: &'a NovaParams) -> Self { Self { _params: params, initialized: false, step_count: 0 } }
-    pub fn initialize(&mut self, _: [u8; 32], _: [u8; 32]) -> Result<()> { self.initialized = true; self.step_count = 0; Ok(()) }
-    pub fn prove_step(&mut self, _: &StepWitness) -> Result<()> { 
-        if !self.initialized { return Err(ZkOriginError::NotInitialized("".into())); }
-        self.step_count += 1; Ok(()) 
+    pub fn new(params: &'a NovaParams) -> Self {
+        Self {
+            _params: params,
+            initialized: false,
+            step_count: 0,
+        }
     }
-    pub fn finalize(&self) -> Result<LineageProof> { Err(ZkOriginError::InternalError("Nova not enabled".into())) }
-    pub fn step_count(&self) -> usize { self.step_count }
-    pub fn is_initialized(&self) -> bool { self.initialized }
+    pub fn initialize(&mut self, _: [u8; 32], _: [u8; 32]) -> Result<()> {
+        self.initialized = true;
+        self.step_count = 0;
+        Ok(())
+    }
+    pub fn prove_step(&mut self, _: &StepWitness) -> Result<()> {
+        if !self.initialized {
+            return Err(ZkOriginError::NotInitialized("".into()));
+        }
+        self.step_count += 1;
+        Ok(())
+    }
+    pub fn finalize(&self) -> Result<LineageProof> {
+        Err(ZkOriginError::InternalError("Nova not enabled".into()))
+    }
+    pub fn step_count(&self) -> usize {
+        self.step_count
+    }
+    pub fn is_initialized(&self) -> bool {
+        self.initialized
+    }
 }
 
 #[cfg(feature = "real-nova")]
 #[derive(Clone, Debug, serde::Serialize, serde::Deserialize)]
-pub struct CompressedNovaProof { pub proof_bytes: Vec<u8>, pub num_steps: usize, pub z0_primary: Vec<u8>, pub vk_bytes: Vec<u8> }
+pub struct CompressedNovaProof {
+    pub proof_bytes: Vec<u8>,
+    pub num_steps: usize,
+    pub z0_primary: Vec<u8>,
+    pub vk_bytes: Vec<u8>,
+}
 
 #[cfg(not(feature = "real-nova"))]
 #[derive(Clone, Debug)]
-pub struct CompressedNovaProof { pub proof_bytes: Vec<u8>, pub num_steps: usize }
+pub struct CompressedNovaProof {
+    pub proof_bytes: Vec<u8>,
+    pub num_steps: usize,
+}
 
 #[cfg(feature = "real-nova")]
 fn bytes_to_field<F: PrimeField>(bytes: &[u8; 32]) -> F {

@@ -14,7 +14,7 @@ use std::fmt;
 pub struct LineageCommitment {
     /// The commitment value (Poseidon hash output)
     pub value: [u8; 32],
-    
+
     /// The depth of the lineage (number of transitions from genesis)
     pub depth: u64,
 }
@@ -30,17 +30,17 @@ impl LineageCommitment {
         // For genesis, we hash: (state_hash, 0, 0)
         // In practice, this would use Poseidon hash
         // For now, we use a placeholder
-        use sha2::{Sha256, Digest};
-        
+        use sha2::{Digest, Sha256};
+
         let mut hasher = Sha256::new();
-        hasher.update(&genesis_state_hash);
-        hasher.update(&[0u8; 8]); // origin = 0
-        hasher.update(&[0u8; 8]); // depth = 0
-        
+        hasher.update(genesis_state_hash);
+        hasher.update([0u8; 8]); // origin = 0
+        hasher.update([0u8; 8]); // depth = 0
+
         let result = hasher.finalize();
         let mut value = [0u8; 32];
         value.copy_from_slice(&result);
-        
+
         Self { value, depth: 0 }
     }
 
@@ -105,7 +105,7 @@ impl Default for LineageCommitment {
 pub struct CounterCommitment {
     /// The commitment value
     pub value: [u8; 32],
-    
+
     /// The epoch this counter is for
     pub epoch: u64,
 }
@@ -118,19 +118,19 @@ impl CounterCommitment {
 
     /// Create initial counter commitment for an epoch
     pub fn initial(epoch: u64) -> Self {
-        use sha2::{Sha256, Digest};
-        
+        use sha2::{Digest, Sha256};
+
         let mut hasher = Sha256::new();
-        hasher.update(&epoch.to_le_bytes());
+        hasher.update(epoch.to_le_bytes());
         // All counters start at 0
         for _ in 0..6 {
-            hasher.update(&0u32.to_le_bytes());
+            hasher.update(0u32.to_le_bytes());
         }
-        
+
         let result = hasher.finalize();
         let mut value = [0u8; 32];
         value.copy_from_slice(&result);
-        
+
         Self { value, epoch }
     }
 
@@ -160,7 +160,7 @@ impl Default for CounterCommitment {
 pub struct EpochCounters {
     /// Current epoch
     pub epoch: u64,
-    
+
     /// Counter for each origin class
     pub counts: [u32; 6],
 }
@@ -199,18 +199,18 @@ impl EpochCounters {
 
     /// Compute commitment for these counters
     pub fn compute_commitment(&self) -> CounterCommitment {
-        use sha2::{Sha256, Digest};
-        
+        use sha2::{Digest, Sha256};
+
         let mut hasher = Sha256::new();
-        hasher.update(&self.epoch.to_le_bytes());
+        hasher.update(self.epoch.to_le_bytes());
         for count in &self.counts {
-            hasher.update(&count.to_le_bytes());
+            hasher.update(count.to_le_bytes());
         }
-        
+
         let result = hasher.finalize();
         let mut value = [0u8; 32];
         value.copy_from_slice(&result);
-        
+
         CounterCommitment::new(value, self.epoch)
     }
 }
@@ -230,7 +230,7 @@ mod tests {
     fn test_lineage_commitment_genesis() {
         let state_hash = [1u8; 32];
         let commitment = LineageCommitment::genesis(state_hash);
-        
+
         assert!(commitment.is_genesis());
         assert_eq!(commitment.depth, 0);
     }
@@ -239,7 +239,7 @@ mod tests {
     fn test_lineage_commitment_hex() {
         let commitment = LineageCommitment::new([0xAB; 32], 5);
         let hex = commitment.to_hex();
-        
+
         assert_eq!(hex.len(), 64);
         assert!(hex.chars().all(|c| c.is_ascii_hexdigit()));
     }
@@ -247,13 +247,13 @@ mod tests {
     #[test]
     fn test_epoch_counters() {
         let mut counters = EpochCounters::new(42);
-        
+
         assert_eq!(counters.get(OriginClass::User), 0);
-        
+
         counters.increment(OriginClass::User);
         counters.increment(OriginClass::User);
         counters.increment(OriginClass::Admin);
-        
+
         assert_eq!(counters.get(OriginClass::User), 2);
         assert_eq!(counters.get(OriginClass::Admin), 1);
         assert_eq!(counters.get(OriginClass::Bridge), 0);
@@ -262,13 +262,13 @@ mod tests {
     #[test]
     fn test_rate_limit_check() {
         let mut counters = EpochCounters::new(0);
-        
+
         // Admin limit is 10
         for _ in 0..10 {
             assert!(!counters.would_exceed_limit(OriginClass::Admin, 10));
             counters.increment(OriginClass::Admin);
         }
-        
+
         // Now at limit
         assert!(counters.would_exceed_limit(OriginClass::Admin, 10));
     }
@@ -277,7 +277,7 @@ mod tests {
     fn test_counter_commitment_deterministic() {
         let counters1 = EpochCounters::new(42);
         let counters2 = EpochCounters::new(42);
-        
+
         assert_eq!(
             counters1.compute_commitment().value,
             counters2.compute_commitment().value

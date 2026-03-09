@@ -1,10 +1,5 @@
-use criterion::{criterion_group, criterion_main, Criterion, BenchmarkId};
-use zk_origin::{
-    LineageProver,
-    OriginClass,
-    Transition,
-    OriginPolicy,
-};
+use criterion::{criterion_group, criterion_main, BenchmarkId, Criterion};
+use zk_origin::{LineageProver, OriginClass, OriginPolicy, Transition};
 
 fn bench_single_transition(c: &mut Criterion) {
     let genesis_state = [0u8; 32];
@@ -14,13 +9,14 @@ fn bench_single_transition(c: &mut Criterion) {
             let policy = OriginPolicy::default();
             let mut prover = LineageProver::new(policy).unwrap();
 
-            prover.add_transition(Transition::new(
-                genesis_state,
-                [1u8; 32],
-                OriginClass::User,
-                1_000,
-            ))
-            .unwrap();
+            prover
+                .add_transition(Transition::new(
+                    genesis_state,
+                    [1u8; 32],
+                    OriginClass::User,
+                    1_000,
+                ))
+                .unwrap();
         });
     });
 }
@@ -32,20 +28,18 @@ fn bench_multiple_transitions(c: &mut Criterion) {
     let mut group = c.benchmark_group("transitions");
 
     for count in counts {
-        group.bench_with_input(
-            BenchmarkId::from_parameter(count),
-            &count,
-            |b, &count| {
-                b.iter(|| {
-                    let policy = OriginPolicy::default();
-                    let mut prover = LineageProver::new(policy).unwrap();
+        group.bench_with_input(BenchmarkId::from_parameter(count), &count, |b, &count| {
+            b.iter(|| {
+                let policy = OriginPolicy::default();
+                let mut prover = LineageProver::new(policy).unwrap();
 
-                    let mut prev_state = genesis_state;
+                let mut prev_state = genesis_state;
 
-                    for i in 0..count {
-                        let new_state = [(i + 1) as u8; 32];
+                for i in 0..count {
+                    let new_state = [(i + 1) as u8; 32];
 
-                        prover.add_transition(Transition::new(
+                    prover
+                        .add_transition(Transition::new(
                             prev_state,
                             new_state,
                             OriginClass::User,
@@ -53,11 +47,10 @@ fn bench_multiple_transitions(c: &mut Criterion) {
                         ))
                         .unwrap();
 
-                        prev_state = new_state;
-                    }
-                });
-            },
-        );
+                    prev_state = new_state;
+                }
+            });
+        });
     }
 
     group.finish();
@@ -74,13 +67,14 @@ fn bench_proof_generation(c: &mut Criterion) {
     for i in 0..10 {
         let new_state = [(i + 1) as u8; 32];
 
-        prover.add_transition(Transition::new(
-            prev_state,
-            new_state,
-            OriginClass::User,
-            (i + 1) as u64 * 1_000,
-        ))
-        .unwrap();
+        prover
+            .add_transition(Transition::new(
+                prev_state,
+                new_state,
+                OriginClass::User,
+                (i + 1) as u64 * 1_000,
+            ))
+            .unwrap();
 
         prev_state = new_state;
     }

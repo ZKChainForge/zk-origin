@@ -1,6 +1,6 @@
 //! Lineage proof types
 
-use crate::types::lineage::{LineageCommitment, CounterCommitment};
+use crate::types::lineage::{CounterCommitment, LineageCommitment};
 use serde::{Deserialize, Serialize};
 use std::fmt;
 
@@ -9,25 +9,25 @@ use std::fmt;
 pub struct LineageProof {
     /// The proof bytes (compressed SNARK or commitment hash)
     pub proof_bytes: Vec<u8>,
-    
+
     /// Final lineage commitment
     pub final_lineage: LineageCommitment,
-    
+
     /// Final counter commitment
     pub final_counters: CounterCommitment,
-    
+
     /// Genesis commitment (for verification)
     pub genesis_commitment: LineageCommitment,
-    
+
     /// Number of steps in the lineage
     pub num_steps: u64,
-    
+
     /// Policy hash used
     pub policy_hash: [u8; 32],
-    
+
     /// Proof metadata
     pub metadata: ProofMetadata,
-    
+
     /// Verifier key bytes (for Nova proofs)
     #[serde(default)]
     pub verifier_key: Option<Vec<u8>>,
@@ -100,7 +100,7 @@ impl LineageProof {
     }
 
     /// Basic verification (structure only)
-    /// 
+    ///
     /// For real cryptographic verification, use LineageVerifier
     pub fn verify(&self) -> crate::Result<bool> {
         // Basic structural checks
@@ -113,15 +113,15 @@ impl LineageProof {
         if self.final_lineage.depth != self.num_steps {
             return Err(crate::ZkOriginError::InvalidProof("Depth mismatch".into()));
         }
-        
+
         // For real ZK proofs, we'd need the public params to verify
         // This just does structural validation
         if self.is_real_zk() && self.verifier_key.is_none() {
             return Err(crate::ZkOriginError::InvalidProof(
-                "Real ZK proof requires verifier key".into()
+                "Real ZK proof requires verifier key".into(),
             ));
         }
-        
+
         Ok(true)
     }
 
@@ -167,16 +167,16 @@ impl fmt::Display for LineageProof {
 pub struct ProofMetadata {
     /// UNIX timestamp when generated
     pub generated_at: u64,
-    
+
     /// Proving time in milliseconds
     pub proving_time_ms: u64,
-    
+
     /// Prover version
     pub prover_version: String,
-    
+
     /// Curve used
     pub curve: String,
-    
+
     /// Optional notes
     pub notes: Option<String>,
 }
@@ -226,11 +226,19 @@ pub struct ProofSummary {
 impl fmt::Display for ProofSummary {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         writeln!(f, "Lineage Proof Summary:")?;
-        writeln!(f, "  Lineage:  {}...", &self.lineage_hash[..16.min(self.lineage_hash.len())])?;
+        writeln!(
+            f,
+            "  Lineage:  {}...",
+            &self.lineage_hash[..16.min(self.lineage_hash.len())]
+        )?;
         writeln!(f, "  Depth:    {}", self.depth)?;
         writeln!(f, "  Size:     {} bytes", self.proof_size)?;
         writeln!(f, "  Real ZK:  {}", self.is_real_zk)?;
-        writeln!(f, "  Genesis:  {}...", &self.genesis_hash[..16.min(self.genesis_hash.len())])
+        writeln!(
+            f,
+            "  Genesis:  {}...",
+            &self.genesis_hash[..16.min(self.genesis_hash.len())]
+        )
     }
 }
 

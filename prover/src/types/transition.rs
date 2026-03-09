@@ -12,16 +12,16 @@ use std::fmt;
 pub struct Transition {
     /// Hash of the previous state
     pub prev_state_hash: [u8; 32],
-    
+
     /// Hash of the new state
     pub new_state_hash: [u8; 32],
-    
+
     /// Origin class of this transition
     pub origin_class: OriginClass,
-    
+
     /// Timestamp of the transition (Unix seconds)
     pub timestamp: u64,
-    
+
     /// Optional metadata (not included in proofs)
     #[serde(skip_serializing_if = "Option::is_none")]
     pub metadata: Option<TransitionMetadata>,
@@ -73,14 +73,14 @@ impl Transition {
 
     /// Compute the transition hash (for lineage commitment)
     pub fn compute_hash(&self) -> [u8; 32] {
-        use sha2::{Sha256, Digest};
-        
+        use sha2::{Digest, Sha256};
+
         let mut hasher = Sha256::new();
-        hasher.update(&self.prev_state_hash);
-        hasher.update(&self.new_state_hash);
-        hasher.update(&[self.origin_class as u8]);
-        hasher.update(&self.timestamp.to_le_bytes());
-        
+        hasher.update(self.prev_state_hash);
+        hasher.update(self.new_state_hash);
+        hasher.update([self.origin_class as u8]);
+        hasher.update(self.timestamp.to_le_bytes());
+
         let result = hasher.finalize();
         let mut hash = [0u8; 32];
         hash.copy_from_slice(&result);
@@ -116,13 +116,13 @@ impl fmt::Display for Transition {
 pub struct TransitionMetadata {
     /// Human-readable description
     pub description: Option<String>,
-    
+
     /// Transaction hash (if applicable)
     pub tx_hash: Option<String>,
-    
+
     /// Block number (if applicable)
     pub block_number: Option<u64>,
-    
+
     /// Additional JSON data
     pub extra: Option<serde_json::Value>,
 }
@@ -239,7 +239,7 @@ mod tests {
         let prev = [1u8; 32];
         let new = [2u8; 32];
         let transition = Transition::new(prev, new, OriginClass::User, 1000);
-        
+
         assert_eq!(transition.prev_state_hash, prev);
         assert_eq!(transition.new_state_hash, new);
         assert_eq!(transition.origin_class, OriginClass::User);
@@ -249,7 +249,7 @@ mod tests {
     #[test]
     fn test_genesis_transition() {
         let genesis = Transition::genesis([42u8; 32], 0);
-        
+
         assert!(genesis.is_genesis());
         assert_eq!(genesis.prev_state_hash, [0u8; 32]);
         assert_eq!(genesis.origin_class, OriginClass::Genesis);
@@ -259,7 +259,7 @@ mod tests {
     fn test_transition_hash_deterministic() {
         let t1 = Transition::new([1u8; 32], [2u8; 32], OriginClass::User, 1000);
         let t2 = Transition::new([1u8; 32], [2u8; 32], OriginClass::User, 1000);
-        
+
         assert_eq!(t1.compute_hash(), t2.compute_hash());
     }
 
@@ -267,14 +267,14 @@ mod tests {
     fn test_transition_hash_differs() {
         let t1 = Transition::new([1u8; 32], [2u8; 32], OriginClass::User, 1000);
         let t2 = Transition::new([1u8; 32], [2u8; 32], OriginClass::Admin, 1000);
-        
+
         assert_ne!(t1.compute_hash(), t2.compute_hash());
     }
 
     #[test]
     fn test_epoch_calculation() {
         let transition = Transition::new([0u8; 32], [1u8; 32], OriginClass::User, 86400 * 3 + 100);
-        
+
         // With 1-day epochs
         assert_eq!(transition.epoch(86400), 3);
     }
@@ -282,28 +282,28 @@ mod tests {
     #[test]
     fn test_sequence_validation() {
         let mut seq = TransitionSequence::new();
-        
+
         let t1 = Transition::new([0u8; 32], [1u8; 32], OriginClass::Genesis, 0);
         let t2 = Transition::new([1u8; 32], [2u8; 32], OriginClass::User, 100);
         let t3 = Transition::new([2u8; 32], [3u8; 32], OriginClass::User, 200);
-        
+
         seq.push(t1);
         seq.push(t2);
         seq.push(t3);
-        
+
         assert!(seq.validate_chain());
     }
 
     #[test]
     fn test_sequence_invalid_chain() {
         let mut seq = TransitionSequence::new();
-        
+
         let t1 = Transition::new([0u8; 32], [1u8; 32], OriginClass::Genesis, 0);
         let t2 = Transition::new([99u8; 32], [2u8; 32], OriginClass::User, 100); // Wrong prev
-        
+
         seq.push(t1);
         seq.push(t2);
-        
+
         assert!(!seq.validate_chain());
     }
 
@@ -311,10 +311,10 @@ mod tests {
     fn test_serialization() {
         let transition = Transition::new([1u8; 32], [2u8; 32], OriginClass::Admin, 12345)
             .with_metadata(TransitionMetadata::new().with_description("Test"));
-        
+
         let json = serde_json::to_string(&transition).unwrap();
         let recovered: Transition = serde_json::from_str(&json).unwrap();
-        
+
         assert_eq!(transition.origin_class, recovered.origin_class);
         assert_eq!(transition.timestamp, recovered.timestamp);
     }

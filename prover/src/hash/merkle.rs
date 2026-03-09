@@ -8,10 +8,10 @@ use serde::{Deserialize, Serialize};
 pub struct MerkleTree {
     /// Depth of the tree
     depth: usize,
-    
+
     /// All nodes in the tree (level by level, bottom to top)
     nodes: Vec<Vec<[u8; 32]>>,
-    
+
     /// Leaves of the tree
     leaves: Vec<[u8; 32]>,
 }
@@ -30,7 +30,7 @@ impl MerkleTree {
         // Pad to power of 2
         let n = leaves.len().next_power_of_two();
         let depth = (n as f64).log2() as usize;
-        
+
         let mut padded_leaves = leaves.clone();
         while padded_leaves.len() < n {
             padded_leaves.push([0u8; 32]); // Pad with zeros
@@ -87,7 +87,7 @@ impl MerkleTree {
         let mut current_index = index;
 
         for level in 0..self.depth {
-            let sibling_index = if current_index % 2 == 0 {
+            let sibling_index = if current_index.is_multiple_of(2) {
                 current_index + 1
             } else {
                 current_index - 1
@@ -135,13 +135,13 @@ impl Default for MerkleTree {
 pub struct MerkleProof {
     /// The leaf being proven
     pub leaf: [u8; 32],
-    
+
     /// Sibling hashes along the path to root
     pub path: Vec<[u8; 32]>,
-    
+
     /// Path indices (true = leaf is right child, false = left)
     pub indices: Vec<bool>,
-    
+
     /// The expected root
     pub root: [u8; 32],
 }
@@ -183,21 +183,19 @@ impl MerkleProof {
 }
 
 /// Build a Merkle tree for origin policy
-pub fn build_policy_tree(
-    allowed_transitions: &[(u8, u8)],
-) -> (MerkleTree, Vec<(u8, u8, usize)>) {
+pub fn build_policy_tree(allowed_transitions: &[(u8, u8)]) -> (MerkleTree, Vec<(u8, u8, usize)>) {
     use super::poseidon::compute_policy_leaf;
-    
+
     // Compute leaves for all allowed transitions
     let mut leaves = Vec::new();
     let mut mapping = Vec::new();
-    
+
     for &(from, to) in allowed_transitions {
         let leaf = compute_policy_leaf(from, to);
         mapping.push((from, to, leaves.len()));
         leaves.push(leaf);
     }
-    
+
     let tree = MerkleTree::new(leaves);
     (tree, mapping)
 }
@@ -214,7 +212,7 @@ pub fn generate_policy_proof(
         .iter()
         .find(|(f, t, _)| *f == from && *t == to)
         .map(|(_, _, idx)| *idx)?;
-    
+
     tree.prove(index)
 }
 
@@ -233,7 +231,7 @@ mod tests {
             .collect();
 
         let tree = MerkleTree::new(leaves);
-        
+
         assert_eq!(tree.depth(), 2);
         assert_eq!(tree.num_leaves(), 4);
     }
@@ -249,7 +247,7 @@ mod tests {
             .collect();
 
         let tree = MerkleTree::new(leaves);
-        
+
         for i in 0..4 {
             let proof = tree.prove(i).unwrap();
             assert!(proof.verify());
@@ -269,26 +267,28 @@ mod tests {
 
         let tree = MerkleTree::new(leaves);
         let mut proof = tree.prove(0).unwrap();
-        
+
         // Tamper with the proof
         proof.leaf[0] = 99;
-        
+
         assert!(!proof.verify());
     }
 
     #[test]
     fn test_merkle_tree_root_deterministic() {
-        let leaves1: Vec<[u8; 32]> = (0..4).map(|i| {
-            let mut arr = [0u8; 32];
-            arr[0] = i;
-            arr
-        }).collect();
-        
+        let leaves1: Vec<[u8; 32]> = (0..4)
+            .map(|i| {
+                let mut arr = [0u8; 32];
+                arr[0] = i;
+                arr
+            })
+            .collect();
+
         let leaves2 = leaves1.clone();
-        
+
         let tree1 = MerkleTree::new(leaves1);
         let tree2 = MerkleTree::new(leaves2);
-        
+
         assert_eq!(tree1.root(), tree2.root());
     }
 
@@ -304,22 +304,22 @@ mod tests {
             .collect();
 
         let tree = MerkleTree::new(leaves);
-        
+
         assert_eq!(tree.depth(), 2); // log2(4) = 2
     }
 
     #[test]
     fn test_policy_tree() {
         use crate::types::OriginClass;
-        
+
         let allowed = vec![
             (OriginClass::Genesis as u8, OriginClass::User as u8),
             (OriginClass::User as u8, OriginClass::User as u8),
             (OriginClass::Admin as u8, OriginClass::User as u8),
         ];
-        
+
         let (tree, mapping) = build_policy_tree(&allowed);
-        
+
         // Should be able to prove allowed transitions
         let proof = generate_policy_proof(
             &tree,
@@ -329,7 +329,7 @@ mod tests {
         );
         assert!(proof.is_some());
         assert!(proof.unwrap().verify());
-        
+
         // Should not be able to prove disallowed transitions
         let proof = generate_policy_proof(
             &tree,
@@ -351,7 +351,7 @@ mod tests {
             .collect();
 
         let tree = MerkleTree::new(leaves.clone());
-        
+
         let proof = tree.prove_value(&leaves[2]).unwrap();
         assert!(proof.verify());
         assert_eq!(proof.leaf, leaves[2]);
@@ -360,7 +360,7 @@ mod tests {
     #[test]
     fn test_empty_tree() {
         let tree = MerkleTree::new(vec![]);
-        
+
         assert_eq!(tree.depth(), 0);
         assert_eq!(tree.num_leaves(), 0);
     }
@@ -369,7 +369,7 @@ mod tests {
     fn test_single_leaf() {
         let leaf = [42u8; 32];
         let tree = MerkleTree::new(vec![leaf]);
-        
+
         let proof = tree.prove(0).unwrap();
         assert!(proof.verify());
     }
@@ -386,10 +386,10 @@ mod tests {
 
         let tree = MerkleTree::new(leaves);
         let proof = tree.prove(0).unwrap();
-        
+
         let json = serde_json::to_string(&proof).unwrap();
         let recovered: MerkleProof = serde_json::from_str(&json).unwrap();
-        
+
         assert!(recovered.verify());
         assert_eq!(proof.root, recovered.root);
     }

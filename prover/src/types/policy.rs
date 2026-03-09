@@ -12,13 +12,13 @@ use std::collections::HashSet;
 pub struct OriginPolicy {
     /// Set of allowed (from, to) origin class pairs
     allowed_transitions: HashSet<(OriginClass, OriginClass)>,
-    
+
     /// Rate limits per origin class per epoch
     rate_limits: [u32; 6],
-    
+
     /// Epoch duration in seconds
     pub epoch_duration: u64,
-    
+
     /// Policy version for upgrades
     pub version: u32,
 }
@@ -37,58 +37,58 @@ impl OriginPolicy {
     /// Create the default permissive policy
     pub fn default_permissive() -> Self {
         let mut policy = Self::new_empty(86400); // 24 hour epochs
-        
+
         // Genesis can go to User or Admin
         policy.allow(OriginClass::Genesis, OriginClass::User);
         policy.allow(OriginClass::Genesis, OriginClass::Admin);
         policy.allow(OriginClass::Genesis, OriginClass::System);
-        
+
         // User can only go to User
         policy.allow(OriginClass::User, OriginClass::User);
-        
+
         // Admin can go to User, Admin, Bridge, or System
         policy.allow(OriginClass::Admin, OriginClass::User);
         policy.allow(OriginClass::Admin, OriginClass::Admin);
         policy.allow(OriginClass::Admin, OriginClass::Bridge);
         policy.allow(OriginClass::Admin, OriginClass::System);
-        
+
         // Bridge can only go to User
         policy.allow(OriginClass::Bridge, OriginClass::User);
-        
+
         // Governance can go anywhere
         for to in OriginClass::all() {
             if *to != OriginClass::Genesis {
                 policy.allow(OriginClass::Governance, *to);
             }
         }
-        
+
         // System can go to User or System
         policy.allow(OriginClass::System, OriginClass::User);
         policy.allow(OriginClass::System, OriginClass::System);
-        
+
         // Set default rate limits
         policy.rate_limits = [
-            1,         // Genesis: 1
-            u32::MAX,  // User: unlimited
-            10,        // Admin: 10 per epoch
-            100,       // Bridge: 100 per epoch
-            5,         // Governance: 5 per epoch
-            1000,      // System: 1000 per epoch
+            1,        // Genesis: 1
+            u32::MAX, // User: unlimited
+            10,       // Admin: 10 per epoch
+            100,      // Bridge: 100 per epoch
+            5,        // Governance: 5 per epoch
+            1000,     // System: 1000 per epoch
         ];
-        
+
         policy
     }
 
     /// Create a restrictive policy (for testing)
     pub fn restrictive() -> Self {
         let mut policy = Self::new_empty(86400);
-        
+
         // Only allow: Genesis → User → User
         policy.allow(OriginClass::Genesis, OriginClass::User);
         policy.allow(OriginClass::User, OriginClass::User);
-        
+
         policy.rate_limits = [1, 100, 0, 0, 0, 0];
-        
+
         policy
     }
 
@@ -137,25 +137,25 @@ impl OriginPolicy {
 
     /// Compute policy hash for verification
     pub fn compute_hash(&self) -> [u8; 32] {
-        use sha2::{Sha256, Digest};
-        
+        use sha2::{Digest, Sha256};
+
         let mut hasher = Sha256::new();
-        hasher.update(&self.version.to_le_bytes());
-        hasher.update(&self.epoch_duration.to_le_bytes());
-        
+        hasher.update(self.version.to_le_bytes());
+        hasher.update(self.epoch_duration.to_le_bytes());
+
         // Hash allowed transitions in deterministic order
         let mut transitions: Vec<_> = self.allowed_transitions.iter().collect();
         transitions.sort_by_key(|(f, t)| (*f as u8, *t as u8));
-        
+
         for (from, to) in transitions {
-            hasher.update(&[*from as u8, *to as u8]);
+            hasher.update([*from as u8, *to as u8]);
         }
-        
+
         // Hash rate limits
         for limit in &self.rate_limits {
-            hasher.update(&limit.to_le_bytes());
+            hasher.update(limit.to_le_bytes());
         }
-        
+
         let result = hasher.finalize();
         let mut hash = [0u8; 32];
         hash.copy_from_slice(&result);
@@ -192,7 +192,7 @@ impl OriginPolicy {
     /// Create from adjacency matrix
     pub fn from_adjacency_matrix(matrix: [[bool; 6]; 6], epoch_duration: u64) -> Self {
         let mut policy = Self::new_empty(epoch_duration);
-        
+
         for (from_idx, row) in matrix.iter().enumerate() {
             for (to_idx, &allowed) in row.iter().enumerate() {
                 if allowed {
@@ -205,7 +205,7 @@ impl OriginPolicy {
                 }
             }
         }
-        
+
         policy
     }
 }
@@ -272,12 +272,12 @@ mod tests {
     #[test]
     fn test_default_policy() {
         let policy = OriginPolicy::default();
-        
+
         // Check some expected transitions
         assert!(policy.is_allowed(OriginClass::Genesis, OriginClass::User));
         assert!(policy.is_allowed(OriginClass::User, OriginClass::User));
         assert!(policy.is_allowed(OriginClass::Admin, OriginClass::User));
-        
+
         // Check some forbidden transitions
         assert!(!policy.is_allowed(OriginClass::User, OriginClass::Admin));
         assert!(!policy.is_allowed(OriginClass::Bridge, OriginClass::Admin));
@@ -286,7 +286,7 @@ mod tests {
     #[test]
     fn test_restrictive_policy() {
         let policy = OriginPolicy::restrictive();
-        
+
         assert!(policy.is_allowed(OriginClass::Genesis, OriginClass::User));
         assert!(policy.is_allowed(OriginClass::User, OriginClass::User));
         assert!(!policy.is_allowed(OriginClass::User, OriginClass::Admin));
@@ -296,12 +296,12 @@ mod tests {
     #[test]
     fn test_policy_modification() {
         let mut policy = OriginPolicy::new_empty(3600);
-        
+
         assert!(!policy.is_allowed(OriginClass::User, OriginClass::Admin));
-        
+
         policy.allow(OriginClass::User, OriginClass::Admin);
         assert!(policy.is_allowed(OriginClass::User, OriginClass::Admin));
-        
+
         policy.disallow(OriginClass::User, OriginClass::Admin);
         assert!(!policy.is_allowed(OriginClass::User, OriginClass::Admin));
     }
@@ -309,7 +309,7 @@ mod tests {
     #[test]
     fn test_rate_limits() {
         let policy = OriginPolicy::default();
-        
+
         assert_eq!(policy.get_rate_limit(OriginClass::Genesis), 1);
         assert_eq!(policy.get_rate_limit(OriginClass::User), u32::MAX);
         assert_eq!(policy.get_rate_limit(OriginClass::Admin), 10);
@@ -319,7 +319,7 @@ mod tests {
     fn test_policy_hash_deterministic() {
         let policy1 = OriginPolicy::default();
         let policy2 = OriginPolicy::default();
-        
+
         assert_eq!(policy1.compute_hash(), policy2.compute_hash());
     }
 
@@ -327,9 +327,9 @@ mod tests {
     fn test_policy_hash_changes() {
         let mut policy1 = OriginPolicy::default();
         let policy2 = OriginPolicy::default();
-        
+
         policy1.allow(OriginClass::Bridge, OriginClass::Admin);
-        
+
         assert_ne!(policy1.compute_hash(), policy2.compute_hash());
     }
 
@@ -337,7 +337,7 @@ mod tests {
     fn test_adjacency_matrix() {
         let policy = OriginPolicy::restrictive();
         let matrix = policy.to_adjacency_matrix();
-        
+
         assert!(matrix[0][1]); // Genesis → User
         assert!(matrix[1][1]); // User → User
         assert!(!matrix[1][2]); // User → Admin (not allowed)
@@ -351,7 +351,7 @@ mod tests {
             .allow(OriginClass::User, OriginClass::User)
             .rate_limit(OriginClass::User, 1000)
             .build();
-        
+
         assert_eq!(policy.epoch_duration, 3600);
         assert!(policy.is_allowed(OriginClass::Genesis, OriginClass::User));
         assert_eq!(policy.get_rate_limit(OriginClass::User), 1000);
@@ -361,7 +361,7 @@ mod tests {
     fn test_transitions_from() {
         let policy = OriginPolicy::default();
         let from_admin = policy.transitions_from(OriginClass::Admin);
-        
+
         assert!(from_admin.contains(&OriginClass::User));
         assert!(from_admin.contains(&OriginClass::Admin));
         assert!(from_admin.contains(&OriginClass::Bridge));
@@ -372,7 +372,7 @@ mod tests {
         let policy = OriginPolicy::default();
         let json = serde_json::to_string(&policy).unwrap();
         let recovered: OriginPolicy = serde_json::from_str(&json).unwrap();
-        
+
         assert_eq!(policy.compute_hash(), recovered.compute_hash());
     }
 }
