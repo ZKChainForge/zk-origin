@@ -171,11 +171,11 @@ async function main() {
 
   console.log("\n╔════════════════════════════════════════════════════════════════╗");
   console.log("║                    DEPLOYMENT COMPLETE                           ║");
-  console.log("╠════════════════════════════════════════════════════════════════  ╣");
+  console.log("╠════════════════════════════════════════════════════════════════==╣");
   console.log(`║  Network:          ${network.padEnd(43)}                         ║`);
   console.log(`║  Groth16Verifier:  ${groth16Address}                             ║`);
   console.log(`║  LineageVerifier:  ${lineageAddress}                             ║`);
-  console.log("╚════════════════════════════════════════════════════════════════╝\n");
+  console.log("╚════════════════════════════════════════════════════════════════==╝\n");
 
   return deploymentInfo;
 }
