@@ -7,14 +7,20 @@ pragma solidity ^0.8.19;
  */
 interface ILineageVerifier {
     /// @notice Emitted when genesis state is set
-    event GenesisSet(bytes32 indexed stateHash, bytes32 lineageCommitment);
+    event GenesisSet(
+        bytes32 indexed stateHash, 
+        bytes32 indexed lineageCommitment,
+        address indexed setter
+    );
     
     /// @notice Emitted when a lineage proof is verified
     event LineageVerified(
         bytes32 indexed prevStateHash,
         bytes32 indexed newStateHash,
-        bytes32 newLineageCommitment,
-        uint256 depth
+        bytes32 lineageCommitment,
+        uint256 depth,
+        uint8 originClass,
+        address indexed creator
     );
     
     /// @notice Set the genesis state (can only be called once)
