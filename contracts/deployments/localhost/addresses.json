@@ -2,10 +2,10 @@
   "network": "localhost",
   "chainId": 31337,
   "deployer": "0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266",
-  "deployedAt": "2026-03-09T15:37:23.919Z",
+  "deployedAt": "2026-03-10T15:23:51.489Z",
   "contracts": {
-    "Groth16Verifier": "0xDc64a140Aa3E981100a9becA4E685f962f0cF6C9",
-    "LineageVerifier": "0x5FC8d32690cc91D4c39d9d3abcBD16989F875707"
+    "Groth16Verifier": "0x5FbDB2315678afecb367f032d93F642f64180aa3",
+    "LineageVerifier": "0xe7f1725E7734CE288F8367e1Bb143E90bb3F0512"
   },
   "config": {
     "genesisCommitment": "0x1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef",
@@ -13,7 +13,7 @@
     "allowDuplicates": false
   },
   "transactions": {
-    "Groth16Verifier": "0x97b44527717cf10c099f5c518bc85d6ee79b2d3ef5c604133519cd4efa2d52d9",
-    "LineageVerifier": "0x7040bb8a176fabeea70f4fda1bc8a481fd6704c23a44c3f85234a980914038f9"
+    "Groth16Verifier": "0x5464f3e89ffcc1cd7333528684e0731baacf46013cd7b9b85b337d7df5ca84bc",
+    "LineageVerifier": "0x2a8f745d3f4db0bc3098ea365a6e5e6eacae7915188297ce8724c56237d5ce96"
   }
 }

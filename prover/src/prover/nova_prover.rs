@@ -1,4 +1,4 @@
-//! src/prover/nova_prover.rs
+
 
 use crate::types::{LineageProof, StepWitness};
 use crate::{Result, ZkOriginError};
@@ -6,6 +6,8 @@ use crate::{Result, ZkOriginError};
 #[cfg(feature = "real-nova")]
 use {
     crate::prover::nova_circuit::LineageStepCircuit,
+    crate::types::lineage::{CounterCommitment, LineageCommitment},
+    crate::types::proof::ProofMetadata,
     ff::{Field, PrimeField},
     nova_snark::{
         traits::{circuit::TrivialCircuit, snark::RelaxedR1CSSNARKTrait},
