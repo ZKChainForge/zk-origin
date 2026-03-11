@@ -46,6 +46,7 @@ pub struct NovaParams {
 
 #[cfg(not(feature = "real-nova"))]
 #[derive(Clone)]
+/// Parameters used by the Nova prover.
 pub struct NovaParams {
     #[allow(dead_code)]
     policy_root: [u8; 32],
@@ -113,6 +114,7 @@ pub struct NovaLineageProver<'a> {
 }
 
 #[cfg(not(feature = "real-nova"))]
+/// Number of executed steps.
 pub struct NovaLineageProver<'a> {
     _params: &'a NovaParams,
     initialized: bool,
@@ -281,9 +283,11 @@ impl<'a> NovaLineageProver<'a> {
         self.initialized
     }
 }
-
 #[cfg(not(feature = "real-nova"))]
 impl<'a> NovaLineageProver<'a> {
+    /// Creates a new mock `NovaLineageProver`.
+    ///
+    /// This implementation is used when the `real-nova` feature is disabled.
     pub fn new(params: &'a NovaParams) -> Self {
         Self {
             _params: params,
@@ -291,11 +295,17 @@ impl<'a> NovaLineageProver<'a> {
             step_count: 0,
         }
     }
+
+    /// Initializes the prover with the given roots.
     pub fn initialize(&mut self, _: [u8; 32], _: [u8; 32]) -> Result<()> {
         self.initialized = true;
         self.step_count = 0;
         Ok(())
     }
+
+    /// Proves a single step of the lineage computation.
+    ///
+    /// Returns an error if the prover has not been initialized.
     pub fn prove_step(&mut self, _: &StepWitness) -> Result<()> {
         if !self.initialized {
             return Err(ZkOriginError::NotInitialized("".into()));
@@ -303,12 +313,19 @@ impl<'a> NovaLineageProver<'a> {
         self.step_count += 1;
         Ok(())
     }
+
+    /// Finalizes the proof generation.
+  
     pub fn finalize(&self) -> Result<LineageProof> {
         Err(ZkOriginError::InternalError("Nova not enabled".into()))
     }
+
+    /// Returns the number of steps proven so far.
     pub fn step_count(&self) -> usize {
         self.step_count
     }
+
+    /// Returns whether the prover has been initialized.
     pub fn is_initialized(&self) -> bool {
         self.initialized
     }
@@ -323,10 +340,15 @@ pub struct CompressedNovaProof {
     pub vk_bytes: Vec<u8>,
 }
 
+/// A compressed representation of a Nova proof.
 #[cfg(not(feature = "real-nova"))]
 #[derive(Clone, Debug)]
 pub struct CompressedNovaProof {
+
+     /// Serialized proof data.
     pub proof_bytes: Vec<u8>,
+
+    /// Number of steps included in the proof.
     pub num_steps: usize,
 }
 
