@@ -3,6 +3,7 @@
 pub mod commitment_prover;
 pub mod compress;
 pub mod lineage_prover;
+/// Nova prover implementation and  proof structures.
 pub mod nova_prover;
 pub mod recursive;
 pub mod witness_gen;
