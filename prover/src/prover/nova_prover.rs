@@ -87,9 +87,12 @@ impl NovaParams {
 
 #[cfg(not(feature = "real-nova"))]
 impl NovaParams {
+    /// Creates a new `NovaParams` instance with the given policy root.
     pub fn setup(policy_root: [u8; 32]) -> Result<Self> {
         Ok(Self { policy_root })
     }
+
+    /// Returns the policy root stored in the parameters.
     pub fn policy_root(&self) -> [u8; 32] {
         self.policy_root
     }
