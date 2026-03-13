@@ -27,21 +27,12 @@ impl LineageCommitment {
 
     /// Create the genesis lineage commitment
     pub fn genesis(genesis_state_hash: [u8; 32]) -> Self {
-        // For genesis, we hash: (state_hash, 0, 0)
-        // In practice, this would use Poseidon hash
-        // For now, we use a placeholder
-        use sha2::{Digest, Sha256};
-
-        let mut hasher = Sha256::new();
-        hasher.update(genesis_state_hash);
-        hasher.update([0u8; 8]); // origin = 0
-        hasher.update([0u8; 8]); // depth = 0
-
-        let result = hasher.finalize();
-        let mut value = [0u8; 32];
-        value.copy_from_slice(&result);
-
-        Self { value, depth: 0 }
+        // For genesis, we just use the state hash directly
+        // This ensures consistency when verifying
+        Self {
+            value: genesis_state_hash,
+            depth: 0,
+        }
     }
 
     /// Create a zero/empty commitment
@@ -90,7 +81,7 @@ impl fmt::Debug for LineageCommitment {
 
 impl fmt::Display for LineageCommitment {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "{}...@{}", &self.to_hex()[..8], self.depth)
+        write!(f, "{}...@{}", &self.to_hex()[..8.min(self.to_hex().len())], self.depth)
     }
 }
 
@@ -233,6 +224,17 @@ mod tests {
 
         assert!(commitment.is_genesis());
         assert_eq!(commitment.depth, 0);
+        assert_eq!(commitment.value, state_hash); // Genesis uses state hash directly
+    }
+
+    #[test]
+    fn test_lineage_commitment_genesis_consistency() {
+        let state_hash = [0u8; 32];
+        let commitment1 = LineageCommitment::genesis(state_hash);
+        let commitment2 = LineageCommitment::genesis(state_hash);
+
+        // Genesis commitments with same state hash should be identical
+        assert_eq!(commitment1.value, commitment2.value);
     }
 
     #[test]

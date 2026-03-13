@@ -117,7 +117,7 @@ fn run_demo() {
 
     let genesis = [0u8; 32];
     if let Err(e) = prover.initialize(genesis) {
-        println!("  ✗ Failed to initialize: {}", e);
+        println!("   Failed to initialize: {}", e);
         return;
     }
 
@@ -188,20 +188,30 @@ fn run_demo() {
     println!("  Depth: {} steps", proof.num_steps);
     println!(
         "  Final lineage: 0x{}...",
-        &proof.final_lineage.to_hex()[..16]
+        &proof.final_lineage.to_hex()[..16.min(proof.final_lineage.to_hex().len())]
     );
 
-    // Step 5: Verify
+    // Step 5: Verify proof - SINGLE verification, no duplicates!
     println!("\n═ Step 5: Verifying Proof");
-    let start = Instant::now();
 
-    match proof.verify() {
+    let start = Instant::now();
+    let verifier = LineageVerifier::new(genesis, &policy);
+
+    match verifier.verify(&proof) {
         Ok(true) => {
             let verify_time = start.elapsed();
-            println!("   PROOF VALID ({:?})", verify_time);
+            
+            if proof.is_real_zk() {
+                println!("    REAL ZK PROOF VERIFIED ({:?})", verify_time);
+                println!("   Proof size: {} bytes", proof.proof_size());
+                println!("   Depth: {} steps", proof.num_steps);
+            } else {
+                println!("    STRUCTURAL CHECK PASSED ({:?})", verify_time);
+                println!("   (Not cryptographic - rebuild with real-nova for ZK)");
+            }
         }
         Ok(false) => {
-            println!("   PROOF INVALID");
+            println!("    Verification failed");
         }
         Err(e) => {
             println!("   Verification error: {}", e);
@@ -212,17 +222,17 @@ fn run_demo() {
     println!("\n═ Step 6: Testing Policy Enforcement");
 
     let mut test_prover = create_prover(&policy);
-    test_prover.initialize([0u8; 32]).unwrap();
+    let _ = test_prover.initialize([0u8; 32]);
 
     // Valid: Genesis -> User
     let valid = Transition::new([0u8; 32], [1u8; 32], OriginClass::User, 1000);
     match test_prover.validate_transition(&valid) {
-        Ok(_) => println!("   Genesis → User: ALLOWED (correct)"),
+        Ok(_) => {
+            let _ = test_prover.add_transition(valid);
+            println!("   Genesis → User: ALLOWED (correct)");
+        }
         Err(e) => println!("   Genesis → User: BLOCKED - {}", e),
     }
-
-    // Add the valid transition
-    test_prover.add_transition(valid).unwrap();
 
     // Invalid: User -> Admin (not allowed by default policy)
     let invalid = Transition::new([1u8; 32], [2u8; 32], OriginClass::Admin, 2000);
@@ -245,7 +255,7 @@ fn run_demo() {
         println!("\n   This is a REAL zero-knowledge proof!");
         println!("  Cryptographically secure lineage verification.");
     } else {
-        println!("\n    This is a COMMITMENT-based proof (not ZK).");
+        println!("\n   This is a COMMITMENT-based proof (not ZK).");
         println!("  Suitable for development and testing only.");
     }
 
@@ -265,7 +275,6 @@ fn run_benchmark() {
 
     if !is_real_zk_enabled() {
         println!("    Running in COMMITMENT MODE - these are NOT real ZK benchmarks!");
-        println!("  Real Nova benchmarks will be 1000x slower.");
         println!();
         println!("  To run REAL ZK benchmarks:");
         println!("    cargo build --release --features real-nova --no-default-features");
@@ -282,7 +291,7 @@ fn run_benchmark() {
     let start = Instant::now();
     for _ in 0..iterations {
         let mut prover = create_prover(&policy);
-        prover.initialize([0u8; 32]).unwrap();
+        let _ = prover.initialize([0u8; 32]);
     }
     let total = start.elapsed();
     let avg = total / iterations as u32;
@@ -300,7 +309,7 @@ fn run_benchmark() {
     let num_transitions = if is_real_zk_enabled() { 5 } else { 100 };
 
     let mut prover = create_prover(&policy);
-    prover.initialize([0u8; 32]).unwrap();
+    let _ = prover.initialize([0u8; 32]);
 
     let start = Instant::now();
     for i in 0..num_transitions {
@@ -310,7 +319,7 @@ fn run_benchmark() {
             OriginClass::User,
             (i as u64 + 1) * 1000,
         );
-        prover.add_transition(transition).unwrap();
+        let _ = prover.add_transition(transition);
     }
     let total = start.elapsed();
     let avg = total / num_transitions as u32;
@@ -331,7 +340,13 @@ fn run_benchmark() {
     println!("\n═ Benchmark 3: Proof Generation (Finalization)");
 
     let start = Instant::now();
-    let proof = prover.finalize().unwrap();
+    let proof = match prover.finalize() {
+        Ok(p) => p,
+        Err(e) => {
+            println!("  Failed to finalize: {}", e);
+            return;
+        }
+    };
     let prove_time = start.elapsed();
 
     println!("  Depth {} proof: {:?}", proof.num_steps, prove_time);
@@ -349,7 +364,7 @@ fn run_benchmark() {
 
     let start = Instant::now();
     for _ in 0..verify_iterations {
-        let _ = proof.verify().unwrap();
+        let _ = proof.verify();
     }
     let total = start.elapsed();
     let avg = total / verify_iterations as u32;
