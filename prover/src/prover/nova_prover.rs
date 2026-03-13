@@ -1,5 +1,3 @@
-
-
 use crate::types::{LineageProof, StepWitness};
 use crate::{Result, ZkOriginError};
 
@@ -231,58 +229,85 @@ impl<'a> NovaLineageProver<'a> {
         if self.num_steps == 0 {
             return Err(ZkOriginError::InvalidLineage("No steps to prove".into()));
         }
+        
         let snark = self
             .recursive_snark
             .as_ref()
             .ok_or_else(|| ZkOriginError::InternalError("No SNARK".into()))?;
-        let verifiable_steps = self.num_steps.saturating_sub(1).max(1);
-        println!("Verifying recursive SNARK ({} steps)...", verifiable_steps);
+        
+        // Calculate the verifiable steps - this is what Nova actually proved
+        // Nova's RecursiveSNARK counts steps differently than our logical steps
+        let nova_verifiable_steps = self.num_steps.saturating_sub(1).max(1);
+        
+        println!("Verifying recursive SNARK ({} steps)...", nova_verifiable_steps);
         let verify_start = Instant::now();
+        
         snark
             .verify(
                 &self.params.pp,
-                verifiable_steps,
+                nova_verifiable_steps,
                 &self.z0_primary,
                 &[F2::ZERO],
             )
             .map_err(|e| ZkOriginError::proving(format!("verify: {:?}", e)))?;
         println!("  Verified in {:?}", verify_start.elapsed());
+        
         println!("Compressing proof...");
         let compress_start = Instant::now();
+        
         let (pk, vk) = CompressedSNARK::<G1, G2, C1, C2, S1, S2>::setup(&self.params.pp)
             .map_err(|e| ZkOriginError::proving(format!("setup: {:?}", e)))?;
+        
         let compressed = CompressedSNARK::prove(&self.params.pp, &pk, snark)
             .map_err(|e| ZkOriginError::proving(format!("compress: {:?}", e)))?;
+        
         println!("  Compressed in {:?}", compress_start.elapsed());
+        
         let proof_bytes = bincode::serialize(&compressed)?;
         let vk_bytes = bincode::serialize(&vk)?;
+        
         println!(
             "  Proof size: {} bytes ({:.2} KB)",
             proof_bytes.len(),
             proof_bytes.len() as f64 / 1024.0
         );
+        
         let proving_time_ms = self
             .proving_start
             .map(|s| s.elapsed().as_millis() as u64)
             .unwrap_or(0);
-        Ok(LineageProof {
+        
+        // Create proof with BOTH logical steps and Nova steps
+        let mut proof = LineageProof::new_with_nova_steps(
             proof_bytes,
-            final_lineage: LineageCommitment::new(self.final_lineage, self.num_steps as u64),
-            final_counters: CounterCommitment::new(self.final_counters, 0),
-            genesis_commitment: LineageCommitment::new(self.genesis_lineage, 0),
-            num_steps: self.num_steps as u64,
-            policy_hash: self.params.policy_root,
-            metadata: ProofMetadata::new().with_proving_time(proving_time_ms),
-            verifier_key: Some(vk_bytes),
-        })
+            LineageCommitment::new(self.final_lineage, self.num_steps as u64),
+            CounterCommitment::new(self.final_counters, 0),
+            LineageCommitment::new(self.genesis_lineage, 0),
+            self.num_steps as u64,           // logical steps (transitions added)
+            nova_verifiable_steps as u64,     // actual Nova IVC steps for verification
+            self.params.policy_root,
+        );
+        
+        proof.metadata = ProofMetadata::new().with_proving_time(proving_time_ms);
+        proof.verifier_key = Some(vk_bytes);
+        
+        println!(
+            "  Logical steps: {}, Nova verifiable steps: {}",
+            self.num_steps, nova_verifiable_steps
+        );
+        
+        Ok(proof)
     }
+    
     pub fn step_count(&self) -> usize {
         self.num_steps
     }
+    
     pub fn is_initialized(&self) -> bool {
         self.initialized
     }
 }
+
 #[cfg(not(feature = "real-nova"))]
 impl<'a> NovaLineageProver<'a> {
     /// Creates a new mock `NovaLineageProver`.
@@ -315,7 +340,6 @@ impl<'a> NovaLineageProver<'a> {
     }
 
     /// Finalizes the proof generation.
-  
     pub fn finalize(&self) -> Result<LineageProof> {
         Err(ZkOriginError::InternalError("Nova not enabled".into()))
     }
@@ -344,10 +368,8 @@ pub struct CompressedNovaProof {
 #[cfg(not(feature = "real-nova"))]
 #[derive(Clone, Debug)]
 pub struct CompressedNovaProof {
-
-     /// Serialized proof data.
+    /// Serialized proof data.
     pub proof_bytes: Vec<u8>,
-
     /// Number of steps included in the proof.
     pub num_steps: usize,
 }

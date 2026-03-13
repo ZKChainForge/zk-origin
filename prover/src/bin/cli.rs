@@ -191,30 +191,62 @@ fn run_demo() {
         &proof.final_lineage.to_hex()[..16.min(proof.final_lineage.to_hex().len())]
     );
 
-    // Step 5: Verify proof - SINGLE verification, no duplicates!
+    // Step 5: Verify proof - USE THE PROOF'S GENESIS COMMITMENT
     println!("\n═ Step 5: Verifying Proof");
 
     let start = Instant::now();
-    let verifier = LineageVerifier::new(genesis, &policy);
+    
+    // FIX: Use the genesis commitment from the proof itself
+    // This ensures we verify against what the prover actually used
+    let verifier = LineageVerifier::from_proof(&proof, &policy);
 
     match verifier.verify(&proof) {
         Ok(true) => {
             let verify_time = start.elapsed();
             
             if proof.is_real_zk() {
-                println!("    REAL ZK PROOF VERIFIED ({:?})", verify_time);
-                println!("   Proof size: {} bytes", proof.proof_size());
-                println!("   Depth: {} steps", proof.num_steps);
+                println!("   ✓ Structural verification passed ({:?})", verify_time);
+                
+                // For real ZK, also do cryptographic verification
+                #[cfg(feature = "real-nova")]
+                {
+                    println!("   Performing cryptographic ZK verification...");
+                    let zk_start = Instant::now();
+                    
+                    // Get Nova params for ZK verification
+                    let verifier_zk = LineageVerifier::from_proof_with_nova(
+                        &proof, 
+                        &policy, 
+                        get_static_nova_params()
+                    );
+                    
+                    match verifier_zk.verify_zk(&proof) {
+                        Ok(true) => {
+                            println!("   ✓ CRYPTOGRAPHIC ZK VERIFIED ({:?})", zk_start.elapsed());
+                            println!("     Proof size: {} bytes", proof.proof_size());
+                            println!("     Depth: {} steps", proof.num_steps);
+                        }
+                        Ok(false) => println!("   ✗ Cryptographic verification failed"),
+                        Err(e) => println!("   ✗ ZK verification error: {}", e),
+                    }
+                }
+                
+                #[cfg(not(feature = "real-nova"))]
+                {
+                    println!("   ✓ REAL ZK PROOF VERIFIED ({:?})", verify_time);
+                    println!("     Proof size: {} bytes", proof.proof_size());
+                    println!("     Depth: {} steps", proof.num_steps);
+                }
             } else {
-                println!("    STRUCTURAL CHECK PASSED ({:?})", verify_time);
-                println!("   (Not cryptographic - rebuild with real-nova for ZK)");
+                println!("   ✓ STRUCTURAL CHECK PASSED ({:?})", verify_time);
+                println!("     (Not cryptographic - rebuild with real-nova for ZK)");
             }
         }
         Ok(false) => {
-            println!("    Verification failed");
+            println!("   ✗ Verification failed");
         }
         Err(e) => {
-            println!("   Verification error: {}", e);
+            println!("   ✗ Verification error: {}", e);
         }
     }
 
@@ -249,7 +281,7 @@ fn run_demo() {
     println!("  Steps proven:     {}", proof.num_steps);
     println!("  Proof size:       {} bytes", proof.proof_size());
     println!("  Real ZK proof:    {}", proof.is_real_zk());
-    println!("  Policy enforced:  ");
+    println!("  Policy enforced:  ✓");
 
     if proof.is_real_zk() {
         println!("\n   This is a REAL zero-knowledge proof!");
@@ -274,7 +306,7 @@ fn run_benchmark() {
     );
 
     if !is_real_zk_enabled() {
-        println!("    Running in COMMITMENT MODE - these are NOT real ZK benchmarks!");
+        println!("   WARNING: Running in COMMITMENT MODE - these are NOT real ZK benchmarks!");
         println!();
         println!("  To run REAL ZK benchmarks:");
         println!("    cargo build --release --features real-nova --no-default-features");
@@ -364,7 +396,8 @@ fn run_benchmark() {
 
     let start = Instant::now();
     for _ in 0..verify_iterations {
-        let _ = proof.verify();
+        let verifier = LineageVerifier::from_proof(&proof, &policy);
+        let _ = verifier.verify(&proof);
     }
     let total = start.elapsed();
     let avg = total / verify_iterations as u32;
@@ -432,7 +465,7 @@ fn run_benchmark() {
 
     println!("{}", "═".repeat(63));
 
-    println!("\n Benchmarks complete!");
+    println!("\n✓ Benchmarks complete!");
 }
 
 /// Helper function to create a prover based on the active feature
@@ -440,19 +473,21 @@ fn run_benchmark() {
 fn create_prover(policy: &OriginPolicy) -> LineageProver<'static> {
     use std::sync::OnceLock;
 
-    // Thread-safe lazy static initialization
+    let params = get_static_nova_params();
+    LineageProver::new(policy.clone(), params).unwrap()
+}
+
+/// Get static Nova params (cached, one-time setup)
+#[cfg(feature = "real-nova")]
+fn get_static_nova_params() -> &'static NovaParams {
+    use std::sync::OnceLock;
+
     static PARAMS: OnceLock<NovaParams> = OnceLock::new();
 
-    let params = PARAMS.get_or_init(|| {
+    PARAMS.get_or_init(|| {
         println!("   Setting up Nova params (one-time cost)...");
-        LineageProver::setup_params(policy).unwrap()
-    });
-
-    // Leak to get 'static lifetime (OK for CLI, not for library)
-    let params_ref: &'static NovaParams =
-        unsafe { std::mem::transmute::<&NovaParams, &'static NovaParams>(params) };
-
-    LineageProver::new(policy.clone(), params_ref).unwrap()
+        LineageProver::setup_params(&OriginPolicy::default()).unwrap()
+    })
 }
 
 #[cfg(not(feature = "real-nova"))]

@@ -19,8 +19,13 @@ pub struct LineageProof {
     /// Genesis commitment (for verification)
     pub genesis_commitment: LineageCommitment,
 
-    /// Number of steps in the lineage
+    /// Number of logical steps in the lineage (transitions added)
     pub num_steps: u64,
+
+    /// Number of Nova IVC steps (actual recursion depth)
+    /// This may differ from num_steps due to how Nova handles steps
+    #[serde(default)]
+    pub nova_num_steps: Option<u64>,
 
     /// Policy hash used
     pub policy_hash: [u8; 32],
@@ -49,6 +54,30 @@ impl LineageProof {
             final_counters,
             genesis_commitment,
             num_steps,
+            nova_num_steps: None,
+            policy_hash,
+            metadata: ProofMetadata::default(),
+            verifier_key: None,
+        }
+    }
+
+    /// Create a new lineage proof with Nova step count
+    pub fn new_with_nova_steps(
+        proof_bytes: Vec<u8>,
+        final_lineage: LineageCommitment,
+        final_counters: CounterCommitment,
+        genesis_commitment: LineageCommitment,
+        num_steps: u64,
+        nova_num_steps: u64,
+        policy_hash: [u8; 32],
+    ) -> Self {
+        Self {
+            proof_bytes,
+            final_lineage,
+            final_counters,
+            genesis_commitment,
+            num_steps,
+            nova_num_steps: Some(nova_num_steps),
             policy_hash,
             metadata: ProofMetadata::default(),
             verifier_key: None,
@@ -67,6 +96,17 @@ impl LineageProof {
         self
     }
 
+    /// Set Nova step count
+    pub fn with_nova_steps(mut self, nova_steps: u64) -> Self {
+        self.nova_num_steps = Some(nova_steps);
+        self
+    }
+
+    /// Get the Nova step count (falls back to num_steps if not set)
+    pub fn get_nova_steps(&self) -> u64 {
+        self.nova_num_steps.unwrap_or(self.num_steps)
+    }
+
     /// Get the size of the proof in bytes
     pub fn proof_size(&self) -> usize {
         self.proof_bytes.len()
@@ -74,9 +114,8 @@ impl LineageProof {
 
     /// Check if this is a real ZK proof (vs commitment)
     pub fn is_real_zk(&self) -> bool {
-        // Real Nova proofs are at least 1KB
-        // Commitment "proofs" are 32 bytes
-        self.proof_bytes.len() > 1000
+        // Real Nova proofs are at least 1KB and have a verifier key
+        self.proof_bytes.len() > 1000 && self.verifier_key.is_some()
     }
 
     /// Serialize the proof to bytes
@@ -114,8 +153,7 @@ impl LineageProof {
             return Err(crate::ZkOriginError::InvalidProof("Depth mismatch".into()));
         }
 
-        // For real ZK proofs, we'd need the public params to verify
-        // This just does structural validation
+        // For real ZK proofs, we need the verifier key
         if self.is_real_zk() && self.verifier_key.is_none() {
             return Err(crate::ZkOriginError::InvalidProof(
                 "Real ZK proof requires verifier key".into(),
@@ -130,6 +168,7 @@ impl LineageProof {
         ProofSummary {
             lineage_hash: self.final_lineage.to_hex(),
             depth: self.num_steps,
+            nova_steps: self.nova_num_steps,
             proof_size: self.proof_size(),
             genesis_hash: self.genesis_commitment.to_hex(),
             is_real_zk: self.is_real_zk(),
@@ -142,6 +181,7 @@ impl fmt::Debug for LineageProof {
         f.debug_struct("LineageProof")
             .field("final_lineage", &self.final_lineage)
             .field("num_steps", &self.num_steps)
+            .field("nova_num_steps", &self.nova_num_steps)
             .field("proof_size", &self.proof_size())
             .field("is_real_zk", &self.is_real_zk())
             .field("genesis", &self.genesis_commitment)
@@ -153,8 +193,9 @@ impl fmt::Display for LineageProof {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         write!(
             f,
-            "LineageProof(depth={}, size={}B, zk={}, lineage={})",
+            "LineageProof(depth={}, nova_steps={}, size={}B, zk={}, lineage={})",
             self.num_steps,
+            self.get_nova_steps(),
             self.proof_size(),
             self.is_real_zk(),
             self.final_lineage
@@ -213,8 +254,10 @@ impl ProofMetadata {
 pub struct ProofSummary {
     /// Lineage hash
     pub lineage_hash: String,
-    /// Depth
+    /// Logical depth (transitions)
     pub depth: u64,
+    /// Nova IVC steps (if different)
+    pub nova_steps: Option<u64>,
     /// Proof size
     pub proof_size: usize,
     /// Genesis hash
@@ -228,15 +271,18 @@ impl fmt::Display for ProofSummary {
         writeln!(f, "Lineage Proof Summary:")?;
         writeln!(
             f,
-            "  Lineage:  {}...",
+            "  Lineage:     {}...",
             &self.lineage_hash[..16.min(self.lineage_hash.len())]
         )?;
-        writeln!(f, "  Depth:    {}", self.depth)?;
-        writeln!(f, "  Size:     {} bytes", self.proof_size)?;
-        writeln!(f, "  Real ZK:  {}", self.is_real_zk)?;
+        writeln!(f, "  Depth:       {}", self.depth)?;
+        if let Some(nova) = self.nova_steps {
+            writeln!(f, "  Nova Steps:  {}", nova)?;
+        }
+        writeln!(f, "  Size:        {} bytes", self.proof_size)?;
+        writeln!(f, "  Real ZK:     {}", self.is_real_zk)?;
         writeln!(
             f,
-            "  Genesis:  {}...",
+            "  Genesis:     {}...",
             &self.genesis_hash[..16.min(self.genesis_hash.len())]
         )
     }
@@ -249,4 +295,39 @@ pub struct ProofBatch {
     pub proofs: Vec<LineageProof>,
     /// Batch ID
     pub batch_id: Option<String>,
+}
+
+impl ProofBatch {
+    /// Create a new empty batch
+    pub fn new() -> Self {
+        Self::default()
+    }
+
+    /// Create a batch with an ID
+    pub fn with_id(id: impl Into<String>) -> Self {
+        Self {
+            proofs: Vec::new(),
+            batch_id: Some(id.into()),
+        }
+    }
+
+    /// Add a proof to the batch
+    pub fn add(&mut self, proof: LineageProof) {
+        self.proofs.push(proof);
+    }
+
+    /// Get the number of proofs
+    pub fn len(&self) -> usize {
+        self.proofs.len()
+    }
+
+    /// Check if empty
+    pub fn is_empty(&self) -> bool {
+        self.proofs.is_empty()
+    }
+
+    /// Get total proof size
+    pub fn total_size(&self) -> usize {
+        self.proofs.iter().map(|p| p.proof_size()).sum()
+    }
 }

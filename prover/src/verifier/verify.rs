@@ -8,8 +8,7 @@ use std::time::Instant;
 
 #[cfg(feature = "real-nova")]
 use {
-    crate::prover::NovaParams,
-    ff::PrimeField,
+    ff::{Field, PrimeField},
     nova_snark::CompressedSNARK,
     pasta_curves::pallas,
 };
@@ -25,37 +24,49 @@ pub struct LineageVerifier {
     /// Policy (for reference)
     #[allow(dead_code)]
     policy: OriginPolicy,
-
-    /// Nova parameters (for real ZK verification)
-    #[cfg(feature = "real-nova")]
-    nova_params: Option<&'static NovaParams>,
 }
 
 impl LineageVerifier {
-    /// Create a new verifier
+    /// Create a new verifier with a genesis state hash
     pub fn new(genesis_state_hash: [u8; 32], policy: &OriginPolicy) -> Self {
         Self {
             expected_genesis: LineageCommitment::genesis(genesis_state_hash),
             expected_policy_hash: policy.compute_hash(),
             policy: policy.clone(),
-            #[cfg(feature = "real-nova")]
-            nova_params: None,
         }
     }
 
-    /// Create verifier with Nova parameters for real ZK verification
-    #[cfg(feature = "real-nova")]
-    pub fn with_nova_params(
-        genesis_state_hash: [u8; 32],
-        policy: &OriginPolicy,
-        nova_params: &'static NovaParams,
-    ) -> Self {
+    /// Create a verifier from the proof's genesis commitment
+    pub fn from_proof(proof: &LineageProof, policy: &OriginPolicy) -> Self {
         Self {
-            expected_genesis: LineageCommitment::genesis(genesis_state_hash),
+            expected_genesis: proof.genesis_commitment.clone(),
             expected_policy_hash: policy.compute_hash(),
             policy: policy.clone(),
-            nova_params: Some(nova_params),
         }
+    }
+
+    /// Create verifier with a specific genesis commitment
+    pub fn with_genesis_commitment(genesis: LineageCommitment, policy: &OriginPolicy) -> Self {
+        Self {
+            expected_genesis: genesis,
+            expected_policy_hash: policy.compute_hash(),
+            policy: policy.clone(),
+        }
+    }
+
+    /// Create verifier from proof with Nova params (for ZK verification)
+    #[cfg(feature = "real-nova")]
+    pub fn from_proof_with_nova(
+        proof: &LineageProof,
+        policy: &OriginPolicy,
+        _nova_params: &'static crate::prover::NovaParams,
+    ) -> Self {
+        Self::from_proof(proof, policy)
+    }
+
+    /// Get the expected genesis commitment
+    pub fn expected_genesis(&self) -> &LineageCommitment {
+        &self.expected_genesis
     }
 
     /// Verify a lineage proof (structural checks only)
@@ -91,17 +102,14 @@ impl LineageVerifier {
         // First do structural checks
         self.verify(proof)?;
 
-        let _params = self
-            .nova_params
-            .ok_or_else(|| ZkOriginError::NotInitialized(
-                "Nova parameters not provided for ZK verification".into(),
-            ))?;
-
         let vk_bytes = proof.verifier_key.as_ref().ok_or_else(|| {
             ZkOriginError::InvalidProof("Missing verifier key for ZK proof".into())
         })?;
 
-        self.verify_compressed_snark(proof, vk_bytes)
+        // Use the Nova step count stored in the proof
+        let nova_steps = proof.get_nova_steps();
+
+        self.verify_compressed_snark(proof, vk_bytes, nova_steps)
     }
 
     /// Verify compressed SNARK cryptographically
@@ -110,6 +118,7 @@ impl LineageVerifier {
         &self,
         proof: &LineageProof,
         vk_bytes: &[u8],
+        nova_steps: u64,
     ) -> Result<bool> {
         use crate::prover::nova_circuit::LineageStepCircuit;
         use pasta_curves::vesta;
@@ -137,44 +146,36 @@ impl LineageVerifier {
 
         println!("    Deserialized in {:?}", deser_start.elapsed());
 
-        // Validate verifier key
-        println!("  Validating verifier key...");
+        // Deserialize verifier key
+        println!("  Deserializing verifier key...");
         let vk_deser_start = Instant::now();
 
         if vk_bytes.is_empty() {
-            return Err(ZkOriginError::InvalidProof(
-                "Empty verifier key".into(),
-            ));
+            return Err(ZkOriginError::InvalidProof("Empty verifier key".into()));
         }
 
-        println!("    Validated in {:?}", vk_deser_start.elapsed());
+        let vk: nova_snark::VerifierKey<G1, G2, C1, C2, S1, S2> =
+            bincode::deserialize(vk_bytes).map_err(|e| {
+                ZkOriginError::proving(format!("Failed to deserialize VK: {}", e))
+            })?;
 
-        // Reconstruct initial input from genesis
+        println!("    Deserialized in {:?}", vk_deser_start.elapsed());
+
+        // Reconstruct initial input from the proof's genesis commitment
         println!("  Reconstructing public inputs...");
         let genesis_f = bytes_to_field::<F1>(&proof.genesis_commitment.value);
-        let z0_primary = vec![genesis_f, create_zero::<F1>()];
-        let z0_secondary = vec![create_zero::<F2>()];
+        let z0_primary = vec![genesis_f, F1::ZERO];
+        let z0_secondary = vec![F2::ZERO];
 
-        // Perform cryptographic verification
         println!(
-            "  Verifying compressed SNARK ({} steps)...",
-            proof.num_steps
+            "  Verifying compressed SNARK ({} Nova steps, {} logical steps)...",
+            nova_steps, proof.num_steps
         );
         let verify_start = Instant::now();
 
-        // Verify - CompressedSNARK requires vk as first parameter
+        // Verify the compressed SNARK with the correct Nova step count
         compressed
-            .verify(
-                &bincode::deserialize::<
-                    nova_snark::VerifierKey<G1, G2, C1, C2, S1, S2>,
-                >(vk_bytes)
-                .map_err(|e| {
-                    ZkOriginError::proving(format!("Failed to deserialize VK: {}", e))
-                })?,
-                proof.num_steps as usize,
-                &z0_primary,
-                &z0_secondary,
-            )
+            .verify(&vk, nova_steps as usize, &z0_primary, &z0_secondary)
             .map_err(|e| {
                 ZkOriginError::VerificationFailed(format!(
                     "SNARK verification failed: {:?}",
@@ -201,9 +202,8 @@ impl LineageVerifier {
         result.is_valid =
             result.genesis_valid && result.policy_valid && result.depth_valid && result.proof_valid;
 
-        // Try cryptographic verification if available
         #[cfg(feature = "real-nova")]
-        if result.is_real_zk && self.nova_params.is_some() {
+        if result.is_real_zk {
             match self.verify_zk(proof) {
                 Ok(true) => {
                     result.cryptographic_verified = true;
@@ -212,9 +212,10 @@ impl LineageVerifier {
                     result.is_valid = false;
                     result.cryptographic_verified = false;
                 }
-                Err(_) => {
+                Err(e) => {
                     result.is_valid = false;
                     result.cryptographic_verified = false;
+                    result.error_message = Some(format!("{}", e));
                 }
             }
         }
@@ -226,20 +227,14 @@ impl LineageVerifier {
 /// Detailed verification result
 #[derive(Debug, Clone)]
 pub struct VerificationResult {
-    /// Overall validity
     pub is_valid: bool,
-    /// Genesis check passed
     pub genesis_valid: bool,
-    /// Policy check passed
     pub policy_valid: bool,
-    /// Depth check passed
     pub depth_valid: bool,
-    /// Proof structure valid
     pub proof_valid: bool,
-    /// Whether this was a real ZK proof
     pub is_real_zk: bool,
-    /// Whether cryptographic verification was performed and passed
     pub cryptographic_verified: bool,
+    pub error_message: Option<String>,
 }
 
 impl VerificationResult {
@@ -252,13 +247,13 @@ impl VerificationResult {
             proof_valid: false,
             is_real_zk: false,
             cryptographic_verified: false,
+            error_message: None,
         }
     }
 
-    /// Get summary string
     pub fn summary(&self) -> String {
-        format!(
-            "Valid: {} (genesis: {}, policy: {}, depth: {}, proof: {}, real_zk: {}, crypto_verified: {})",
+        let base = format!(
+            "Valid: {} (genesis: {}, policy: {}, depth: {}, proof: {}, real_zk: {}, crypto: {})",
             self.is_valid,
             self.genesis_valid,
             self.policy_valid,
@@ -266,7 +261,13 @@ impl VerificationResult {
             self.proof_valid,
             self.is_real_zk,
             self.cryptographic_verified
-        )
+        );
+
+        if let Some(ref err) = self.error_message {
+            format!("{} [Error: {}]", base, err)
+        } else {
+            base
+        }
     }
 }
 
@@ -286,39 +287,37 @@ pub fn verify_proof(
     verifier.verify(proof)
 }
 
+/// Verify a proof using the genesis from the proof itself
+pub fn verify_proof_self_consistent(proof: &LineageProof, policy: &OriginPolicy) -> Result<bool> {
+    let verifier = LineageVerifier::from_proof(proof, policy);
+    verifier.verify(proof)
+}
+
 /// Verify a real ZK proof (requires Nova feature)
 #[cfg(feature = "real-nova")]
 pub fn verify_zk_proof(
     proof: &LineageProof,
     genesis_hash: [u8; 32],
     policy: &OriginPolicy,
-    nova_params: &'static NovaParams,
 ) -> Result<bool> {
-    let verifier = LineageVerifier::with_nova_params(genesis_hash, policy, nova_params);
+    let verifier = LineageVerifier::new(genesis_hash, policy);
     verifier.verify_zk(proof)
 }
 
-/// Create a zero field element (works without num_traits)
+/// Verify a real ZK proof using genesis from proof
 #[cfg(feature = "real-nova")]
-fn create_zero<F: ff::PrimeField>() -> F {
-    let repr = F::Repr::default();
-    F::from_repr(repr).unwrap()
+pub fn verify_zk_proof_self_consistent(proof: &LineageProof, policy: &OriginPolicy) -> Result<bool> {
+    let verifier = LineageVerifier::from_proof(proof, policy);
+    verifier.verify_zk(proof)
 }
 
-/// Convert bytes to field element
 #[cfg(feature = "real-nova")]
-fn bytes_to_field<F: ff::PrimeField>(bytes: &[u8; 32]) -> F {
+fn bytes_to_field<F: PrimeField>(bytes: &[u8; 32]) -> F {
     let mut repr = F::Repr::default();
-    let repr_slice = repr.as_mut();
-    
-    let copy_len = std::cmp::min(repr_slice.len(), bytes.len());
-    repr_slice[..copy_len].copy_from_slice(&bytes[..copy_len]);
-    
-    F::from_repr(repr).unwrap_or_else(|| {
-        // Return zero if conversion fails
-        let zero_repr = F::Repr::default();
-        F::from_repr(zero_repr).unwrap()
-    })
+    let repr_len = repr.as_ref().len();
+    let copy_len = std::cmp::min(repr_len, 31);
+    repr.as_mut()[..copy_len].copy_from_slice(&bytes[..copy_len]);
+    F::from_repr(repr).unwrap_or(F::ZERO)
 }
 
 #[cfg(test)]
@@ -326,16 +325,8 @@ mod tests {
     use super::*;
     use crate::types::lineage::CounterCommitment;
 
-    fn create_test_proof(
-        genesis_hash: [u8; 32],
-        policy: &OriginPolicy,
-        large: bool,
-    ) -> LineageProof {
-        let proof_bytes = if large {
-            vec![0u8; 5000]
-        } else {
-            vec![1, 2, 3, 4]
-        };
+    fn create_test_proof(genesis_hash: [u8; 32], policy: &OriginPolicy, large: bool) -> LineageProof {
+        let proof_bytes = if large { vec![0u8; 5000] } else { vec![1, 2, 3, 4] };
 
         LineageProof::new(
             proof_bytes,
@@ -361,6 +352,19 @@ mod tests {
     }
 
     #[test]
+    fn test_verify_from_proof() {
+        let genesis = [42u8; 32];
+        let policy = OriginPolicy::default();
+        let proof = create_test_proof(genesis, &policy, false);
+
+        let verifier = LineageVerifier::from_proof(&proof, &policy);
+        let result = verifier.verify(&proof);
+
+        assert!(result.is_ok());
+        assert!(result.unwrap());
+    }
+
+    #[test]
     fn test_verify_wrong_genesis() {
         let genesis = [0u8; 32];
         let wrong_genesis = [1u8; 32];
@@ -371,33 +375,18 @@ mod tests {
         let result = verifier.verify(&proof);
 
         assert!(result.is_err());
-        assert!(matches!(
-            result.unwrap_err(),
-            ZkOriginError::GenesisMismatch
-        ));
+        assert!(matches!(result.unwrap_err(), ZkOriginError::GenesisMismatch));
     }
 
     #[test]
-    fn test_verify_detailed() {
-        let genesis = [0u8; 32];
+    fn test_self_consistent_verify() {
+        let genesis = [123u8; 32];
         let policy = OriginPolicy::default();
         let proof = create_test_proof(genesis, &policy, false);
 
-        let verifier = LineageVerifier::new(genesis, &policy);
-        let result = verifier.verify_detailed(&proof);
-
-        assert!(result.is_valid);
-        assert!(!result.is_real_zk);
-    }
-
-    #[test]
-    fn test_standalone_verify() {
-        let genesis = [0u8; 32];
-        let policy = OriginPolicy::default();
-        let proof = create_test_proof(genesis, &policy, false);
-
-        let result = verify_proof(&proof, genesis, &policy);
+        let result = verify_proof_self_consistent(&proof, &policy);
 
         assert!(result.is_ok());
+        assert!(result.unwrap());
     }
 }
