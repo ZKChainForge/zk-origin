@@ -36,6 +36,8 @@ pub use prover::{CompressedNovaProof, NovaLineageProver, NovaParams};
 #[cfg(feature = "commitment-mode")]
 pub use prover::{CommitmentParams, CommitmentProver};
 
+
+
 // Re-export verifier
 pub use verifier::LineageVerifier;
 
