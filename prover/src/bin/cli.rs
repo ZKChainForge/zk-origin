@@ -205,7 +205,7 @@ fn run_demo() {
             let verify_time = start.elapsed();
             
             if proof.is_real_zk() {
-                println!("   ✓ Structural verification passed ({:?})", verify_time);
+                println!("    Structural verification passed ({:?})", verify_time);
                 
                 // For real ZK, also do cryptographic verification
                 #[cfg(feature = "real-nova")]
@@ -222,31 +222,31 @@ fn run_demo() {
                     
                     match verifier_zk.verify_zk(&proof) {
                         Ok(true) => {
-                            println!("   ✓ CRYPTOGRAPHIC ZK VERIFIED ({:?})", zk_start.elapsed());
+                            println!("    CRYPTOGRAPHIC ZK VERIFIED ({:?})", zk_start.elapsed());
                             println!("     Proof size: {} bytes", proof.proof_size());
                             println!("     Depth: {} steps", proof.num_steps);
                         }
-                        Ok(false) => println!("   ✗ Cryptographic verification failed"),
-                        Err(e) => println!("   ✗ ZK verification error: {}", e),
+                        Ok(false) => println!("    Cryptographic verification failed"),
+                        Err(e) => println!("    ZK verification error: {}", e),
                     }
                 }
                 
                 #[cfg(not(feature = "real-nova"))]
                 {
-                    println!("   ✓ REAL ZK PROOF VERIFIED ({:?})", verify_time);
+                    println!("    REAL ZK PROOF VERIFIED ({:?})", verify_time);
                     println!("     Proof size: {} bytes", proof.proof_size());
                     println!("     Depth: {} steps", proof.num_steps);
                 }
             } else {
-                println!("   ✓ STRUCTURAL CHECK PASSED ({:?})", verify_time);
+                println!("    STRUCTURAL CHECK PASSED ({:?})", verify_time);
                 println!("     (Not cryptographic - rebuild with real-nova for ZK)");
             }
         }
         Ok(false) => {
-            println!("   ✗ Verification failed");
+            println!("    Verification failed");
         }
         Err(e) => {
-            println!("   ✗ Verification error: {}", e);
+            println!("    Verification error: {}", e);
         }
     }
 
