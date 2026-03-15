@@ -82,7 +82,7 @@ fn run_demo() {
         r#"
 ╔═══════════════════════════════════════════════════════════════╗
 ║                    ZK-ORIGIN DEMO                             ║
-║               Mode: {:40}║
+║               Mode: {:40}                                     ║
 ╚═══════════════════════════════════════════════════════════════╝
 "#,
         proving_mode()
@@ -191,49 +191,43 @@ fn run_demo() {
         &proof.final_lineage.to_hex()[..16.min(proof.final_lineage.to_hex().len())]
     );
 
-    // Step 5: Verify proof - USE THE PROOF'S GENESIS COMMITMENT
+    // Step 5: Verify proof
     println!("\n═ Step 5: Verifying Proof");
 
     let start = Instant::now();
-    
-    // FIX: Use the genesis commitment from the proof itself
-    // This ensures we verify against what the prover actually used
+
+    // Use the genesis commitment from the proof itself for consistency
     let verifier = LineageVerifier::from_proof(&proof, &policy);
 
     match verifier.verify(&proof) {
         Ok(true) => {
             let verify_time = start.elapsed();
-            
+            println!("    Structural verification passed ({:?})", verify_time);
+
             if proof.is_real_zk() {
-                println!("    Structural verification passed ({:?})", verify_time);
-                
                 // For real ZK, also do cryptographic verification
                 #[cfg(feature = "real-nova")]
                 {
                     println!("   Performing cryptographic ZK verification...");
                     let zk_start = Instant::now();
-                    
-                    // Get Nova params for ZK verification
-                    let verifier_zk = LineageVerifier::from_proof_with_nova(
-                        &proof, 
-                        &policy, 
-                        get_static_nova_params()
-                    );
-                    
-                    match verifier_zk.verify_zk(&proof) {
+
+                    match verifier.verify_zk(&proof) {
                         Ok(true) => {
-                            println!("    CRYPTOGRAPHIC ZK VERIFIED ({:?})", zk_start.elapsed());
+                            println!(
+                                "    CRYPTOGRAPHIC ZK VERIFIED ({:?})",
+                                zk_start.elapsed()
+                            );
                             println!("     Proof size: {} bytes", proof.proof_size());
                             println!("     Depth: {} steps", proof.num_steps);
                         }
-                        Ok(false) => println!("    Cryptographic verification failed"),
+                        Ok(false) => println!("    Cryptographic verification returned false"),
                         Err(e) => println!("    ZK verification error: {}", e),
                     }
                 }
-                
+
                 #[cfg(not(feature = "real-nova"))]
                 {
-                    println!("    REAL ZK PROOF VERIFIED ({:?})", verify_time);
+                    println!("    VERIFIED ({:?})", verify_time);
                     println!("     Proof size: {} bytes", proof.proof_size());
                     println!("     Depth: {} steps", proof.num_steps);
                 }
@@ -281,7 +275,7 @@ fn run_demo() {
     println!("  Steps proven:     {}", proof.num_steps);
     println!("  Proof size:       {} bytes", proof.proof_size());
     println!("  Real ZK proof:    {}", proof.is_real_zk());
-    println!("  Policy enforced:  ✓");
+    println!("  Policy enforced:  ");
 
     if proof.is_real_zk() {
         println!("\n   This is a REAL zero-knowledge proof!");
@@ -299,7 +293,7 @@ fn run_benchmark() {
         r#"
 ╔═══════════════════════════════════════════════════════════════╗
 ║                 ZK-ORIGIN BENCHMARKS                          ║
-║               Mode: {:40}║
+║               Mode: {:40}                                     ║
 ╚═══════════════════════════════════════════════════════════════╝
 "#,
         proving_mode()
@@ -405,6 +399,23 @@ fn run_benchmark() {
     println!("  {} verifications: {:?}", verify_iterations, total);
     println!("  Average: {:?}", avg);
 
+    // ZK Verification benchmark (if real-nova)
+    #[cfg(feature = "real-nova")]
+    if proof.is_real_zk() {
+        println!("\n═ Benchmark 5: ZK Verification");
+
+        let verifier = LineageVerifier::from_proof(&proof, &policy);
+        let start = Instant::now();
+        match verifier.verify_zk(&proof) {
+            Ok(true) => {
+                let zk_time = start.elapsed();
+                println!("  ZK verification: {:?}", zk_time);
+            }
+            Ok(false) => println!("  ZK verification returned false"),
+            Err(e) => println!("  ZK verification error: {}", e),
+        }
+    }
+
     // Summary table
     println!("\n{}", "═".repeat(63));
     println!("                    BENCHMARK SUMMARY");
@@ -465,14 +476,12 @@ fn run_benchmark() {
 
     println!("{}", "═".repeat(63));
 
-    println!("\n✓ Benchmarks complete!");
+   
 }
 
 /// Helper function to create a prover based on the active feature
 #[cfg(feature = "real-nova")]
 fn create_prover(policy: &OriginPolicy) -> LineageProver<'static> {
-    use std::sync::OnceLock;
-
     let params = get_static_nova_params();
     LineageProver::new(policy.clone(), params).unwrap()
 }
