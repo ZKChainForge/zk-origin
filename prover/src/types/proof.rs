@@ -23,7 +23,6 @@ pub struct LineageProof {
     pub num_steps: u64,
 
     /// Number of Nova IVC steps (actual recursion depth)
-    /// This may differ from num_steps due to how Nova handles steps
     #[serde(default)]
     pub nova_num_steps: Option<u64>,
 
@@ -36,6 +35,10 @@ pub struct LineageProof {
     /// Verifier key bytes (for Nova proofs)
     #[serde(default)]
     pub verifier_key: Option<Vec<u8>>,
+
+    /// Initial counter commitment (needed for verification)
+    #[serde(default)]
+    pub initial_counter_commitment: [u8; 32],
 }
 
 impl LineageProof {
@@ -58,6 +61,7 @@ impl LineageProof {
             policy_hash,
             metadata: ProofMetadata::default(),
             verifier_key: None,
+            initial_counter_commitment: [0u8; 32],
         }
     }
 
@@ -81,6 +85,32 @@ impl LineageProof {
             policy_hash,
             metadata: ProofMetadata::default(),
             verifier_key: None,
+            initial_counter_commitment: [0u8; 32],
+        }
+    }
+
+    /// Create a new lineage proof with all initial state
+    pub fn new_with_initial_state(
+        proof_bytes: Vec<u8>,
+        final_lineage: LineageCommitment,
+        final_counters: CounterCommitment,
+        genesis_commitment: LineageCommitment,
+        num_steps: u64,
+        nova_num_steps: u64,
+        policy_hash: [u8; 32],
+        initial_counter_commitment: [u8; 32],
+    ) -> Self {
+        Self {
+            proof_bytes,
+            final_lineage,
+            final_counters,
+            genesis_commitment,
+            num_steps,
+            nova_num_steps: Some(nova_num_steps),
+            policy_hash,
+            metadata: ProofMetadata::default(),
+            verifier_key: None,
+            initial_counter_commitment,
         }
     }
 
@@ -102,6 +132,12 @@ impl LineageProof {
         self
     }
 
+    /// Set initial counter commitment
+    pub fn with_initial_counters(mut self, counters: [u8; 32]) -> Self {
+        self.initial_counter_commitment = counters;
+        self
+    }
+
     /// Get the Nova step count (falls back to num_steps if not set)
     pub fn get_nova_steps(&self) -> u64 {
         self.nova_num_steps.unwrap_or(self.num_steps)
@@ -114,7 +150,6 @@ impl LineageProof {
 
     /// Check if this is a real ZK proof (vs commitment)
     pub fn is_real_zk(&self) -> bool {
-        // Real Nova proofs are at least 1KB and have a verifier key
         self.proof_bytes.len() > 1000 && self.verifier_key.is_some()
     }
 
@@ -139,10 +174,7 @@ impl LineageProof {
     }
 
     /// Basic verification (structure only)
-    ///
-    /// For real cryptographic verification, use LineageVerifier
     pub fn verify(&self) -> crate::Result<bool> {
-        // Basic structural checks
         if self.proof_bytes.is_empty() {
             return Err(crate::ZkOriginError::InvalidProof("Empty proof".into()));
         }
@@ -152,14 +184,11 @@ impl LineageProof {
         if self.final_lineage.depth != self.num_steps {
             return Err(crate::ZkOriginError::InvalidProof("Depth mismatch".into()));
         }
-
-        // For real ZK proofs, we need the verifier key
         if self.is_real_zk() && self.verifier_key.is_none() {
             return Err(crate::ZkOriginError::InvalidProof(
                 "Real ZK proof requires verifier key".into(),
             ));
         }
-
         Ok(true)
     }
 
@@ -208,16 +237,12 @@ impl fmt::Display for LineageProof {
 pub struct ProofMetadata {
     /// UNIX timestamp when generated
     pub generated_at: u64,
-
     /// Proving time in milliseconds
     pub proving_time_ms: u64,
-
     /// Prover version
     pub prover_version: String,
-
     /// Curve used
     pub curve: String,
-
     /// Optional notes
     pub notes: Option<String>,
 }
