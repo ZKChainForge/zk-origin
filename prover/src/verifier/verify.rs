@@ -4,6 +4,7 @@ use crate::types::lineage::LineageCommitment;
 use crate::types::proof::LineageProof;
 use crate::types::OriginPolicy;
 use crate::{Result, ZkOriginError};
+#[allow(unused_imports)]
 use std::time::Instant;
 
 #[cfg(feature = "real-nova")]
