@@ -267,25 +267,7 @@ fn run_demo() {
         Err(_) => println!("   User → Admin: BLOCKED (correct - policy enforced)"),
     }
 
-    // Summary
-    println!("\n{}", "═".repeat(63));
-    println!("                         SUMMARY");
-    println!("{}", "═".repeat(63));
-    println!("  Proving mode:     {}", proving_mode());
-    println!("  Steps proven:     {}", proof.num_steps);
-    println!("  Proof size:       {} bytes", proof.proof_size());
-    println!("  Real ZK proof:    {}", proof.is_real_zk());
-    println!("  Policy enforced:  ");
-
-    if proof.is_real_zk() {
-        println!("\n   This is a REAL zero-knowledge proof!");
-        println!("  Cryptographically secure lineage verification.");
-    } else {
-        println!("\n   This is a COMMITMENT-based proof (not ZK).");
-        println!("  Suitable for development and testing only.");
-    }
-
-    println!("{}", "═".repeat(63));
+    
 }
 
 fn run_benchmark() {
@@ -416,65 +398,7 @@ fn run_benchmark() {
         }
     }
 
-    // Summary table
-    println!("\n{}", "═".repeat(63));
-    println!("                    BENCHMARK SUMMARY");
-    println!("{}", "═".repeat(63));
-    println!("  {:30} {:>15} {:>12}", "Operation", "Time", "Notes");
-    println!("{}", "─".repeat(63));
-
-    if is_real_zk_enabled() {
-        println!(
-            "  {:30} {:>15} {:>12}",
-            "Nova Setup",
-            format!("{:?}", avg),
-            "one-time"
-        );
-        println!(
-            "  {:30} {:>15} {:>12}",
-            "Per Step",
-            format!("{:?}", total / num_transitions as u32),
-            "real ZK"
-        );
-        println!(
-            "  {:30} {:>15} {:>12}",
-            "Compression",
-            format!("{:?}", prove_time),
-            "real ZK"
-        );
-    } else {
-        println!(
-            "  {:30} {:>15} {:>12}",
-            "Initialization",
-            format!("{:?}", avg),
-            "fast"
-        );
-        println!(
-            "  {:30} {:>15} {:>12}",
-            "Per Transition",
-            format!("{:?}", total / num_transitions as u32),
-            "NOT ZK"
-        );
-        println!(
-            "  {:30} {:>15} {:>12}",
-            "Finalization",
-            format!("{:?}", prove_time),
-            "NOT ZK"
-        );
-    }
-
-    println!(
-        "  {:30} {:>15} {:>12}",
-        "Proof Size",
-        format!("{} B", proof.proof_size()),
-        if proof.is_real_zk() {
-            "real ZK"
-        } else {
-            "hash only"
-        }
-    );
-
-    println!("{}", "═".repeat(63));
+    
 
    
 }
