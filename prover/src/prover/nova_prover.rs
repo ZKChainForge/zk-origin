@@ -202,13 +202,7 @@ impl<'a> NovaLineageProver<'a> {
         });
 
         // Build circuit
-        let circuit = LineageStepCircuit::new(
-            prev_state,
-            new_state,
-            origin,
-            timestamp,
-            epoch_id,
-        );
+        let circuit = LineageStepCircuit::new(prev_state, new_state, origin, timestamp, epoch_id);
         let secondary_circuit = TrivialCircuit::<F2>::default();
 
         if self.recursive_snark.is_none() {
@@ -255,22 +249,24 @@ impl<'a> NovaLineageProver<'a> {
 
     /// Find the correct Nova step count for verification
     fn find_verified_step_count(&self) -> Result<usize> {
-        let snark = self.recursive_snark.as_ref()
+        let snark = self
+            .recursive_snark
+            .as_ref()
             .ok_or_else(|| ZkOriginError::InternalError("No SNARK".into()))?;
 
         // Try step counts to find one that works
         for test_steps in 1..=self.num_steps + 2 {
-            if snark.verify(
-                &self.params.pp,
-                test_steps,
-                &self.z0_primary,
-                &[F2::ZERO],
-            ).is_ok() {
+            if snark
+                .verify(&self.params.pp, test_steps, &self.z0_primary, &[F2::ZERO])
+                .is_ok()
+            {
                 return Ok(test_steps);
             }
         }
 
-        Err(ZkOriginError::proving("No valid step count found for verification".to_string()))
+        Err(ZkOriginError::proving(
+            "No valid step count found for verification".to_string(),
+        ))
     }
 
     /// Finalize and generate compressed proof
@@ -290,7 +286,7 @@ impl<'a> NovaLineageProver<'a> {
         // Find correct step count and verify
         println!("Verifying recursive SNARK ({} steps)...", self.num_steps);
         let verify_start = Instant::now();
-        
+
         let verified_steps = self.find_verified_step_count()?;
         println!("  Verified in {:?}", verify_start.elapsed());
 
@@ -341,7 +337,8 @@ impl<'a> NovaLineageProver<'a> {
 
         println!(
             "  Logical steps: {}, Nova verified steps: {}",
-            self.pending_witnesses.len(), verified_steps
+            self.pending_witnesses.len(),
+            verified_steps
         );
 
         Ok(proof)

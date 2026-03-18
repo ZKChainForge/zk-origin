@@ -81,7 +81,12 @@ impl fmt::Debug for LineageCommitment {
 
 impl fmt::Display for LineageCommitment {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "{}...@{}", &self.to_hex()[..8.min(self.to_hex().len())], self.depth)
+        write!(
+            f,
+            "{}...@{}",
+            &self.to_hex()[..8.min(self.to_hex().len())],
+            self.depth
+        )
     }
 }
 
