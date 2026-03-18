@@ -132,13 +132,24 @@ impl<'a> LineageProver<'a> {
         #[cfg(feature = "real-nova")]
         {
             println!("    [LineageProver] Adding transition:");
-            println!("      prev_state: {:02x}{:02x}{:02x}{:02x}...", 
-                transition.prev_state_hash[0], transition.prev_state_hash[1],
-                transition.prev_state_hash[2], transition.prev_state_hash[3]);
-            println!("      new_state:  {:02x}{:02x}{:02x}{:02x}...", 
-                transition.new_state_hash[0], transition.new_state_hash[1],
-                transition.new_state_hash[2], transition.new_state_hash[3]);
-            println!("      origin: {:?}, timestamp: {}", transition.origin_class, transition.timestamp);
+            println!(
+                "      prev_state: {:02x}{:02x}{:02x}{:02x}...",
+                transition.prev_state_hash[0],
+                transition.prev_state_hash[1],
+                transition.prev_state_hash[2],
+                transition.prev_state_hash[3]
+            );
+            println!(
+                "      new_state:  {:02x}{:02x}{:02x}{:02x}...",
+                transition.new_state_hash[0],
+                transition.new_state_hash[1],
+                transition.new_state_hash[2],
+                transition.new_state_hash[3]
+            );
+            println!(
+                "      origin: {:?}, timestamp: {}",
+                transition.origin_class, transition.timestamp
+            );
         }
 
         // Generate witness (validates transition)
@@ -170,9 +181,11 @@ impl<'a> LineageProver<'a> {
 
         #[cfg(feature = "real-nova")]
         {
-            println!("    [LineageProver] Transition {} complete, Nova step_count: {}", 
-                self.num_transitions, 
-                self.backend.as_ref().map(|b| b.step_count()).unwrap_or(0));
+            println!(
+                "    [LineageProver] Transition {} complete, Nova step_count: {}",
+                self.num_transitions,
+                self.backend.as_ref().map(|b| b.step_count()).unwrap_or(0)
+            );
         }
 
         Ok(())
@@ -216,10 +229,13 @@ impl<'a> LineageProver<'a> {
             let backend = self.backend.as_ref().ok_or(ZkOriginError::NotInitialized(
                 "Backend not initialized".into(),
             ))?;
-            
-            println!("[LineageProver] Finalizing with {} transitions, Nova step_count: {}", 
-                self.num_transitions, backend.step_count());
-            
+
+            println!(
+                "[LineageProver] Finalizing with {} transitions, Nova step_count: {}",
+                self.num_transitions,
+                backend.step_count()
+            );
+
             return backend.finalize();
         }
 

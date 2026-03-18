@@ -1,4 +1,3 @@
-
 //! Nova circuit for lineage step verification
 
 #[cfg(feature = "real-nova")]
@@ -76,25 +75,18 @@ impl<F: PrimeField> StepCircuit<F> for LineageStepCircuit<F> {
         let prev_counters = &z[1];
 
         // === Allocate witness variables (using stored values, not Option) ===
-        let prev_state = AllocatedNum::alloc(cs.namespace(|| "prev_state"), || {
-            Ok(self.prev_state_hash)
-        })?;
+        let prev_state =
+            AllocatedNum::alloc(cs.namespace(|| "prev_state"), || Ok(self.prev_state_hash))?;
 
-        let new_state = AllocatedNum::alloc(cs.namespace(|| "new_state"), || {
-            Ok(self.new_state_hash)
-        })?;
+        let new_state =
+            AllocatedNum::alloc(cs.namespace(|| "new_state"), || Ok(self.new_state_hash))?;
 
-        let origin = AllocatedNum::alloc(cs.namespace(|| "origin_class"), || {
-            Ok(self.origin_class)
-        })?;
+        let origin =
+            AllocatedNum::alloc(cs.namespace(|| "origin_class"), || Ok(self.origin_class))?;
 
-        let timestamp = AllocatedNum::alloc(cs.namespace(|| "timestamp"), || {
-            Ok(self.timestamp)
-        })?;
+        let timestamp = AllocatedNum::alloc(cs.namespace(|| "timestamp"), || Ok(self.timestamp))?;
 
-        let epoch_id = AllocatedNum::alloc(cs.namespace(|| "epoch_id"), || {
-            Ok(self.epoch_id)
-        })?;
+        let epoch_id = AllocatedNum::alloc(cs.namespace(|| "epoch_id"), || Ok(self.epoch_id))?;
 
         // === Constraint 1: Compute state_product = prev_state * new_state ===
         let state_product = AllocatedNum::alloc(cs.namespace(|| "state_product"), || {
@@ -109,24 +101,27 @@ impl<F: PrimeField> StepCircuit<F> for LineageStepCircuit<F> {
         );
 
         // === Constraint 2: Compute transition_hash = state_product + origin + timestamp ===
-        let transition_hash_val = self.prev_state_hash * self.new_state_hash 
-            + self.origin_class 
-            + self.timestamp;
-        
+        let transition_hash_val =
+            self.prev_state_hash * self.new_state_hash + self.origin_class + self.timestamp;
+
         let transition_hash = AllocatedNum::alloc(cs.namespace(|| "transition_hash"), || {
             Ok(transition_hash_val)
         })?;
 
         cs.enforce(
             || "transition_hash = state_product + origin + timestamp",
-            |lc| lc + state_product.get_variable() + origin.get_variable() + timestamp.get_variable(),
+            |lc| {
+                lc + state_product.get_variable() + origin.get_variable() + timestamp.get_variable()
+            },
             |lc| lc + CS::one(),
             |lc| lc + transition_hash.get_variable(),
         );
 
         // === Constraint 3: Compute lineage_product = prev_lineage * transition_hash ===
         let lineage_product = AllocatedNum::alloc(cs.namespace(|| "lineage_product"), || {
-            let pl = prev_lineage.get_value().ok_or(SynthesisError::AssignmentMissing)?;
+            let pl = prev_lineage
+                .get_value()
+                .ok_or(SynthesisError::AssignmentMissing)?;
             Ok(pl * transition_hash_val)
         })?;
 
@@ -139,27 +134,39 @@ impl<F: PrimeField> StepCircuit<F> for LineageStepCircuit<F> {
 
         // === Constraint 4: Compute new_lineage = lineage_product + prev_lineage + transition_hash ===
         let new_lineage = AllocatedNum::alloc(cs.namespace(|| "new_lineage"), || {
-            let lp = lineage_product.get_value().ok_or(SynthesisError::AssignmentMissing)?;
-            let pl = prev_lineage.get_value().ok_or(SynthesisError::AssignmentMissing)?;
+            let lp = lineage_product
+                .get_value()
+                .ok_or(SynthesisError::AssignmentMissing)?;
+            let pl = prev_lineage
+                .get_value()
+                .ok_or(SynthesisError::AssignmentMissing)?;
             Ok(lp + pl + transition_hash_val)
         })?;
 
         cs.enforce(
             || "new_lineage = lineage_product + prev_lineage + transition_hash",
-            |lc| lc + lineage_product.get_variable() + prev_lineage.get_variable() + transition_hash.get_variable(),
+            |lc| {
+                lc + lineage_product.get_variable()
+                    + prev_lineage.get_variable()
+                    + transition_hash.get_variable()
+            },
             |lc| lc + CS::one(),
             |lc| lc + new_lineage.get_variable(),
         );
 
         // === Constraint 5: Compute new_counters = prev_counters + origin + epoch_id ===
         let new_counters = AllocatedNum::alloc(cs.namespace(|| "new_counters"), || {
-            let pc = prev_counters.get_value().ok_or(SynthesisError::AssignmentMissing)?;
+            let pc = prev_counters
+                .get_value()
+                .ok_or(SynthesisError::AssignmentMissing)?;
             Ok(pc + self.origin_class + self.epoch_id)
         })?;
 
         cs.enforce(
             || "new_counters = prev_counters + origin + epoch_id",
-            |lc| lc + prev_counters.get_variable() + origin.get_variable() + epoch_id.get_variable(),
+            |lc| {
+                lc + prev_counters.get_variable() + origin.get_variable() + epoch_id.get_variable()
+            },
             |lc| lc + CS::one(),
             |lc| lc + new_counters.get_variable(),
         );

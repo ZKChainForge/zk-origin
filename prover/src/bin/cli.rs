@@ -213,10 +213,7 @@ fn run_demo() {
 
                     match verifier.verify_zk(&proof) {
                         Ok(true) => {
-                            println!(
-                                "    CRYPTOGRAPHIC ZK VERIFIED ({:?})",
-                                zk_start.elapsed()
-                            );
+                            println!("    CRYPTOGRAPHIC ZK VERIFIED ({:?})", zk_start.elapsed());
                             println!("     Proof size: {} bytes", proof.proof_size());
                             println!("     Depth: {} steps", proof.num_steps);
                         }
@@ -266,8 +263,6 @@ fn run_demo() {
         Ok(_) => println!("   User → Admin: ALLOWED (unexpected!)"),
         Err(_) => println!("   User → Admin: BLOCKED (correct - policy enforced)"),
     }
-
-    
 }
 
 fn run_benchmark() {
@@ -397,10 +392,6 @@ fn run_benchmark() {
             Err(e) => println!("  ZK verification error: {}", e),
         }
     }
-
-    
-
-   
 }
 
 /// Helper function to create a prover based on the active feature

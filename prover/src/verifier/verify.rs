@@ -8,11 +8,7 @@ use crate::{Result, ZkOriginError};
 use std::time::Instant;
 
 #[cfg(feature = "real-nova")]
-use {
-    ff::PrimeField,
-    nova_snark::CompressedSNARK,
-    pasta_curves::pallas,
-};
+use {ff::PrimeField, nova_snark::CompressedSNARK, pasta_curves::pallas};
 
 /// Verifier for lineage proofs
 pub struct LineageVerifier {
@@ -131,10 +127,8 @@ impl LineageVerifier {
             return Err(ZkOriginError::InvalidProof("Empty verifier key".into()));
         }
 
-        let vk: nova_snark::VerifierKey<G1, G2, C1, C2, S1, S2> =
-            bincode::deserialize(vk_bytes).map_err(|e| {
-                ZkOriginError::proving(format!("Failed to deserialize VK: {}", e))
-            })?;
+        let vk: nova_snark::VerifierKey<G1, G2, C1, C2, S1, S2> = bincode::deserialize(vk_bytes)
+            .map_err(|e| ZkOriginError::proving(format!("Failed to deserialize VK: {}", e)))?;
 
         println!("    Deserialized in {:?}", vk_deser_start.elapsed());
 
@@ -379,7 +373,10 @@ mod tests {
         let result = verifier.verify(&proof);
 
         assert!(result.is_err());
-        assert!(matches!(result.unwrap_err(), ZkOriginError::GenesisMismatch));
+        assert!(matches!(
+            result.unwrap_err(),
+            ZkOriginError::GenesisMismatch
+        ));
     }
 
     #[test]
