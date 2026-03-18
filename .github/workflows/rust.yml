@@ -36,3 +36,6 @@ jobs:
 
       - name: Run tests
         run: cargo test --verbose
+
+        run: cargo build --features real-nova
+        run: cargo test --features real-nova
