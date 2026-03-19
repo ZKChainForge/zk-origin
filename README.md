@@ -1,395 +1,190 @@
 
-#  ZK-ORIGIN: Zero-Knowledge State Lineage Protocol
+**Zero-Knowledge State Lineage Protocol**  
+*Prove where your state came from, not just that it's valid — with real Nova recursion.*
 
-<div align="center">
-
-![ZK-ORIGIN Banner](https://via.placeholder.com/1200x400/0A66C2/FFFFFF?text=ZK-ORIGIN)
-
-[![Rust](https://img.shields.io/badge/Rust-1.70%2B-orange.svg)](https://www.rust-lang.org)
-[![Nova](https://img.shields.io/badge/Nova-IVC-blueviolet.svg)](https://github.com/microsoft/Nova)
-[![Circom](https://img.shields.io/badge/Circom-2.1%2B-blue.svg)](https://docs.circom.io)
-[![License](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
-[![Twitter](https://img.shields.io/twitter/follow/zkorigin?style=social)](https://x.com/zkchain_z41420)
-[![LinkedIn](https://img.shields.io/badge/LinkedIn-Connect-blue)](https://linkedin.com/in/vikram-a-a6a252395)
-
-**Prove where your state came from, not just that it's valid — with REAL Nova recursion!**
-
-[Getting Started](#-quick-start) •
-[Architecture](#-architecture) •
-[Benchmarks](#-benchmarks) •
-[Installation](#-installation) •
-[Usage](#-usage)
-
-</div>
+![GitHub](https://img.shields.io/badge/Rust-1.70%2B-orange) ![GitHub](https://img.shields.io/badge/Nova-IVC-blueviolet) ![GitHub](https://img.shields.io/badge/license-MIT-green)
 
 ---
 
-##  **Table of Contents**
+##  **Why I Built This**
 
-- [Why ZK-ORIGIN?](#-why-zk-origin)
-- [Features](#-features)
-- [Architecture](#-architecture)
-- [Real Nova Implementation](#-real-nova-implementation)
-- [Benchmarks](#-benchmarks)
-- [Installation](#-installation)
-- [Quick Start](#-quick-start)
-- [Usage Guide](#-usage-guide)
-- [Project Structure](#-project-structure)
-- [Contributing](#-contributing)
-- [License](#-license)
-- [Acknowledgments](#-acknowledgments)
+Every ZK system today answers one question: *"Is this state valid?"*
+
+But none can answer: *"Where did this state come from?"*
+
+This gap has caused:
+- **$2B+** in bridge exploits
+- **$500M+** in governance attacks
+- **$1B+** in admin key compromises
+
+I built ZK-ORIGIN to solve this — proving state lineage using real Nova recursive proofs.
 
 ---
 
-##  **Why ZK-ORIGIN?**
+##  **What It Does**
 
-```
-┌─────────────────────────────────────────────────────────────────┐
-│                    THE SILENT CRISIS                            │
-├─────────────────────────────────────────────────────────────────┤
-│                                                                 │
-│  Every ZK system today answers:                                 │
-│   "Is this state valid?"                                        │
-│                                                                 │
-│  But NONE can answer:                                           │
-│   "Where did this state come from?"                             │
-│                                                                 │
-│  This gap has caused:                                           │
-│  • $2B+ in bridge exploits                                      │
-│  • $500M+ in governance attacks                                 │
-│  • $1B+ in admin key compromises                                │
-│                                                                 │
-│  ZK-ORIGIN solves this by proving STATE LINEAGE                 │
-│  using REAL Nova recursive proofs.                              │
-│                                                                 │
-└─────────────────────────────────────────────────────────────────┘
-```
+- **Origin Classes** — Tag every transition as User, Admin, Bridge, or Governance  
+- **Policy Enforcement** — User→User allowed, User→Admin blocked (in-circuit)  
+- **Real Nova Recursion** — Microsoft's folding scheme, implemented from scratch  
+- **Lineage Commitments** — Each state carries its entire ancestry in one hash  
+- **Two Modes** — Fast dev mode + real ZK mode for production  
 
 ---
 
-##  **Features**
+##  **How It Works**
 
 ```
-┌─────────────────────────────────────────────────────────────────┐
-│                    CORE FEATURES                                │
-├─────────────────────────────────────────────────────────────────┤
-│                                                                 │
-│    ORIGIN CLASSES                                               │
-│  ├── User: Normal transactions                                  │
-│  ├── Admin: Privileged operations                               │
-│  ├── Bridge: Cross-chain imports                                │
-│  └── Governance: DAO actions                                    │
-│                                                                 │
-│   POLICY ENFORCEMENT                                            │
-│  ├── Allowed transition matrix (User→User ✓, User→Admin ✗)      │
-│  ├── Rate limits per class                                      │
-│  └── Merkle tree verification in-circuit                        │ 
-│                                                                 │
-│   REAL NOVA RECURSION                                           │
-│  ├── Microsoft Nova folding scheme                              │
-│  ├── Primary circuit: ~9,831 constraints                        │
-│  ├── Secondary circuit: ~10,357 constraints                     │
-│  ├── Proof size: ~10KB (constant)                               │
-│  └── Real ZK proofs, not simulations!                           │
-│                                                                 │
-│    LINEAGE COMMITMENTS                                          │
-│  ├── Recursive hash chain                                       │
-│  ├── Binding to genesis                                         │
-│  └── Tamper-proof history                                       │
-│                                                                 │
-└─────────────────────────────────────────────────────────────────┘
-```
+Layer 1: Origin Classes
+├── User
+├── Admin
+├── Bridge
+└── Governance
 
----
+Layer 2: Policy Matrix (Merkle tree enforced)
+├── User → User: ✓
+├── User → Admin: ✗
+└── Admin → Bridge: ✓
 
-##  **Architecture**
+Layer 3: Recursive Commitments
+├── C₀ = Hash(genesis)
+└── Cₙ = Hash(Cₙ₋₁, transition, depth)
 
-```
-┌─────────────────────────────────────────────────────────────────┐
-│                    SYSTEM ARCHITECTURE                          │
-├─────────────────────────────────────────────────────────────────┤
-│                                                                 │
-│  ┌─────────────────────────────────────────────────────────┐    │
-│  │                    LAYER 1: ORIGIN                       │   │
-│  │                    Classification                        │   │
-│  │  ┌──────────┐  ┌──────────┐  ┌──────────┐                │   │
-│  │  │  User    │  │  Admin   │  │  Bridge  │                │   |
-│  │  └────┬─────┘  └────┬─────┘  └────┬─────┘                │   │
-│  └───────┼─────────────┼──────────────┼─────────────────────┘   │
-│          │             │              │                         │
-│          ▼             ▼              ▼                         │
-│  ┌─────────────────────────────────────────────────────────┐    │
-│  │              LAYER 2: POLICY ENGINE                     │    │
-│  │  ┌─────────────────────────────────────────────────────┐│    │
-│  │  │  Allowed Transitions:                               ││    │
-│  │  │  • User → User: Accept                              ││    │
-│  │  │  • User → Admin: Block                              ││    │
-│  │  │  • Admin → Bridge: Accept                           │|    │
-│  │  └─────────────────────────────────────────────────────┘│    │
-│  └─────────────────────────────────────────────────────────┘    │
-│                          │                                      │
-│                          ▼                                      │
-│  ┌─────────────────────────────────────────────────────────┐    │
-│  │              LAYER 3: REAL NOVA RECURSION               │    │
-│  │  ┌─────────────────────────────────────────────────────┐│    │
-│  │  │  Step 1 → RecursiveSNARK::new() (148ms)             ││    │
-│  │  │  Step 2 → prove_step() (344ns - cached)             ││    │
-│  │  │  Step 3 → prove_step() (67ms)                       ││    │
-│  │  │  Final → Compression (2.0s) → ~10KB proof           ││    │
-│  │  └─────────────────────────────────────────────────────┘│    │
-│  │  Primary circuit: ~9,831 constraints                    │    │
-│  │  Secondary circuit: ~10,357 constraints                 │    │
-│  └─────────────────────────────────────────────────────────┘    │
-│                          │                                      │
-│                          ▼                                      │
-│  ┌─────────────────────────────────────────────────────────┐    │
-│  │              LAYER 4: RUST PROVER                       │    │
-│  │  • Real Nova IVC implementation                         │    │
-│  │  • Complete witness generation                          │    │
-│  │  • Policy enforcement in-circuit                        │    │
-│  │  • Origin class validation                              │    │
-│  └─────────────────────────────────────────────────────────┘    │
-│                                                                 │
-└─────────────────────────────────────────────────────────────────┘
-```
-
----
-
-##   **Real Nova Implementation**
-
-```
-┌─────────────────────────────────────────────────────────────────┐
-│                    NOVA IVC DETAILS                             │
-├─────────────────────────────────────────────────────────────────┤
-│                                                                 │
-│  ┌─────────────────────────────────────────────────────────┐    │
-│  │  SETUP PHASE (One-time cost)                            │    │
-│  │  ├── Nova parameter generation: 1.45s                   │    │
-│  │  ├── Primary circuit constraints: ~9,831                │    │
-│  │  ├── Secondary circuit constraints: ~10,357             │    │
-│  │  └── Total setup time: 1.54s                            │    │
-│  └─────────────────────────────────────────────────────────┘    │
-│                                                                 │
-│  ┌─────────────────────────────────────────────────────────┐    │
-│  │  PROVING PHASE                                          │    │
-│  │  ├── Step 1 (Genesis→User): 148ms                       │    │
-│  │  │   • RecursiveSNARK::new() creates first proof        │    │
-│  │  │   • Full constraint satisfaction                     │    │
-│  │  │                                                      │    │
-│  │  ├── Step 2 (User→User): 47µs                           │    │
-│  │  │   • prove_step() leverages existing accumulator      │    │
-│  │  │   • Minimal overhead for simple transitions          │    │
-│  │  │                                                      │    │
-│  │  ├── Step 3 (User→User): 67ms                           │    │
-│  │  │   • Full folding operation                           │    │
-│  │  │   • Accumulator updated                              │    │
-│  │  │                                                      │    │
-│  │  └── Proof Compression: 2.0s                            │    │
-│  │      • Final proof size: ~10KB                          │    │
-│  │      • Constant size regardless of steps                │    │
-│  └─────────────────────────────────────────────────────────┘    │
-│                                                                 │
-│  ┌─────────────────────────────────────────────────────────┐    │
-│  │  VERIFICATION PHASE                                     │    │
-│  │  ├── Single verification call: 277ns                    │    │
-│  │  ├── Cryptographically secure                           │    │
-│  │  └── Returns true/false                                 │    │
-│  └─────────────────────────────────────────────────────────┘    │
-│                                                                 │
-└─────────────────────────────────────────────────────────────────┘
+Layer 4: Nova Folding
+├── Step 1 → RecursiveSNARK::new()
+├── Step 2 → prove_step() (cached)
+├── Step 3 → prove_step()
+└── Final → compressed proof (constant size)
 ```
 
 ---
 
 ##  **Benchmarks**
 
-### ** Actual Results (Real Nova)**
+These are real numbers from my laptop, running actual Nova proofs:
 
 ```
-┌─────────────────────────────────────────────────────────────────┐
-│                    RAW BENCHMARK DATA                           │
-├─────────────────────────────────────────────────────────────────┤
-│                                                                 │
-│  $ ./target/release/zk-origin-cli demo                          │
-│                                                                 │
-│  ┌─────────────────────────────────────────────────────────┐    │
-│  │  Setup Phase                                            │    │
-│  │  ├── Nova parameter generation: 1.45s                   │    │
-│  │  ├── Primary circuit: ~9,831 constraints                │    │
-│  │  ├── Secondary circuit: ~10,357 constraints             │    │
-│  │  └── Total initialization: 1.54s                        │    │
-│  └─────────────────────────────────────────────────────────┘    │
-│                                                                 │
-│  ┌─────────────────────────────────────────────────────────┐    │
-│  │  Proving Phase                                          │    │
-│  │  ├── Step 1: 148ms (Genesis → User)                     │    │
-│  │  ├── Step 2: 47µs (User → User)                         │    │
-│  │  ├── Step 3: 67ms (User → User)                         │    │
-│  │  └── Final compression: 2.0s → 10,072 bytes             │    │
-│  └─────────────────────────────────────────────────────────┘    │
-│                                                                 │
-│  ┌─────────────────────────────────────────────────────────┐    │
-│  │  Verification                                           │    │
-│  │  └── 277ns (real ZK proof verification)                 │    │
-│  └─────────────────────────────────────────────────────────┘    │
-│                                                                 │
-│  ┌─────────────────────────────────────────────────────────┐    │
-│  │  Policy Enforcement                                     │    │
-│  │  ├── Genesis → User:  ALLOWED (148ms)                   │    │
-│  │  └── User → Admin:  BLOCKED (policy circuit)            │    │
-│  └─────────────────────────────────────────────────────────┘    │
-│                                                                 │
-└─────────────────────────────────────────────────────────────────┘
+Nova Setup (one-time)
+├── Parameter generation: 1.26s
+├── Primary circuit: ~9,831 constraints
+└── Secondary circuit: ~10,357 constraints
+
+Proving Performance
+├── Step 1 (Genesis→User): 123.9ms
+├── Step 2 (User→User): 437ns (cached!)
+├── Step 3 (User→User): 68.5ms
+├── Step 4 (User→User): 76.3ms
+└── Step 5 (User→User): 81.4ms
+
+Proof Generation
+├── Compression time: 1.87–1.98s
+└── Final proof size: 10,072 bytes (constant)
+
+Verification
+├── Structural: 2.8µs
+├── Full ZK verification: 108–124ms
+└── Total with deserialization: ~500ms
+
+Throughput
+└── ~14 transitions/second (real ZK mode)
 ```
+
+**Key takeaway:** Proof size stays the same no matter how many steps. That's the magic of recursion.
 
 ---
 
-##  **Installation**
+##  **Tech Stack**
 
-### **Prerequisites**
-
-```bash
-# Install Rust
-curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh
-
-# Verify installation
-rustc --version  # Should show 1.70+
-cargo --version
-```
-
-### **Step 1: Clone Repository**
-
-```bash
-git clone https://github.com/ZKChainForge/zk-origin.git
-cd zk-origin
-```
-
-### **Step 2: Build the Prover**
-
-```bash
-cd prover
-cargo build --release
-```
-
-**Expected Output:**
-```
-Compiling zk-origin-prover v0.1.0
-Finished release profile [optimized] target(s) in 2m 30s
-```
-
-### **Step 3: Verify Installation**
-
-```bash
-./target/release/zk-origin-cli --help
-```
+- **Rust** — High-performance prover  
+- **Nova** — Microsoft Research folding scheme  
+- **Circom** — Circuit compiler (1.4k constraints for policy)  
+- **Solidity** — On-chain verifiers  
+- **Hardhat** — Local deployment  
 
 ---
 
 ##  **Quick Start**
 
-### **Run the Demo (Real Nova)**
-
 ```bash
+# Clone the repo
+git clone https://github.com/ZKChainForge/zk-origin.git
+cd zk-origin/prover
+
+# Build (release mode for real performance)
+cargo build --release
+
+# Run the demo
 ./target/release/zk-origin-cli demo
-```
 
-**Expected Output:**
-```
-╔═══════════════════════════════════════════════════════════════╗
-║                    ZK-ORIGIN DEMO                             ║
-║               Mode: Nova IVC (Real ZK)                        ║
-╚═══════════════════════════════════════════════════════════════╝
-
-═ Step 1: Creating Origin Policy
-   Policy created with 16 allowed transitions
-
-═ Step 2: Initializing Lineage Prover
-   Setting up Nova parameters (this takes 30-120 seconds)...
-  Nova setup complete in 1.453593484s
-   Prover initialized in 1.541174888s
-
-═ Step 3: Adding Transitions
-  Step 1: Genesis → User (147.979685ms)
-  Step 2: User → User (54.331µs)
-  Step 3: User → User (67.730961ms)
-  Current depth: 3
-
-═ Step 4: Generating Proof
-   Compressing proof (this takes 10-60 seconds)...
-  Proof generated in 2.20228036s
-  Proof size: 10072 bytes (9.84 KB)
-  Is real ZK: true
-
-═ Step 5: Verifying Proof
-   PROOF VALID (277ns)
-
-═ Step 6: Testing Policy Enforcement
-  Genesis → User:  ALLOWED
-  User → Admin:  BLOCKED (correct - policy enforced)
-```
-
----
-
-##  **Usage Guide**
-
-### **Generate a Proof**
-
-```bash
-./target/release/zk-origin-cli prove --steps 10
-```
-
-### **Verify a Proof**
-
-```bash
-./target/release/zk-origin-cli verify --proof lineage_proof.json
-```
-
-### **Run Benchmarks**
-
-```bash
+# Run benchmarks
 ./target/release/zk-origin-cli benchmark
 ```
 
 ---
 
-##  **Project Structure**
+##  **Demo Output**
+
+Here's what you'll see when you run the demo:
+
+```
+╔═══════════════════════════════════════════════════════════════╗
+║                    ZK-ORIGIN DEMO                             ║
+║               Mode: Nova IVC (Real ZK)                      ║
+╚═══════════════════════════════════════════════════════════════╝
+
+Step 1: Creating Origin Policy
+   Policy created with 16 allowed transitions
+
+Step 2: Initializing Lineage Prover
+   Nova setup complete in 1.26s
+   Prover initialized in 1.33s
+
+Step 3: Adding Transitions
+   Step 1: Genesis → User (123.9ms)
+   Step 2: User → User (437ns)
+   Step 3: User → User (68.5ms)
+   Current depth: 3
+
+Step 4: Generating Proof
+   Proof generated in 1.94s
+   Proof size: 10072 bytes (9.84 KB)
+   Is real ZK: true
+
+Step 5: Verifying Proof
+   ✓ ZK Verification PASSED in 108ms
+   Proof size: 10072 bytes
+   Depth: 3 steps
+
+Step 6: Testing Policy Enforcement
+   Genesis → User: ALLOWED
+   User → Admin: BLOCKED
+
+
+```
+
+---
+
+## 📁 **Project Structure**
 
 ```
 zk-origin/
 │
-├── README.md                    # This file
-├── LICENSE                      # MIT License
+├── README.md
+├── LICENSE
 │
-├── prover/                      # Rust prover (main implementation)
-│   ├── Cargo.toml               # Dependencies
+├── prover/                # Rust prover
 │   ├── src/
-│   │   ├── lib.rs               # Library root
-│   │   ├── types/               # Core type definitions
-│   │   │   ├── origin.rs        # OriginClass enum
-│   │   │   ├── transition.rs    # Transition struct
-│   │   │   └── error.rs         # Error types
-│   │   │
-│   │   ├── circuit/             # Nova step circuit
-│   │   │   ├── step.rs          # Main step circuit (9,831 constraints)
-│   │   │   └── gadgets.rs       # Poseidon, Merkle gadgets
-│   │   │
-│   │   ├── prover/              # Nova prover implementation
-│   │   │   ├── lineage_prover.rs # Main prover logic
-│   │   │   └── recursive.rs     # Nova recursion wrapper
-│   │   │
-│   │   └── bin/                  # CLI binaries
-│   │       └── zk-origin-cli.rs  # Main CLI
-│   │
-│   └── benches/                  # Benchmarks
-│       └── performance.rs
+│   │   ├── types/         # Core types (OriginClass, Transition, etc.)
+│   │   ├── circuit/       # Nova step circuit
+│   │   ├── prover/        # Prover implementation
+│   │   └── bin/           # CLI
+│   └── benches/           # Benchmarks
 │
-├── circuits/                     # Circom circuits
-│   ├── src/
-│   │   ├── lineage_step.circom  # Main circuit
-│   │   └── poseidon.circom      # Poseidon hash
-│   └── test/                     # Circuit tests
+├── circuits/               # Circom circuits
+│   └── src/
+│       ├── lineage_step.circom
+│       └── poseidon.circom
 │
-└── contracts/                    # Solidity contracts
+└── contracts/              # Solidity contracts
     ├── Groth16Verifier.sol
     └── LineageVerifier.sol
 ```
@@ -399,137 +194,55 @@ zk-origin/
 ##  **Testing**
 
 ```bash
-# Run all tests
 cd prover
-cargo test
-
-# Run with output
-cargo test -- --nocapture
-
-# Run specific test
-cargo test test_proof_generation
-```
-
----
-
-## **Performance Summary**
-
-```
-┌─────────────────────────────────────────────────────────────────┐
-│                    PERFORMANCE HIGHLIGHTS                       │
-├─────────────────────────────────────────────────────────────────┤
-│                                                                 │
-│  METRIC                    │ VALUE                              │
-│────────────────────────────┼─────────────────────────────────── │
-│  Nova Setup Time           │ 1.45s                              │
-│  Primary Circuit           │ ~9,831 constraints                 │
-│  Secondary Circuit         │ ~10,357 constraints                │
-│  Step 1 Proving            │ 148ms                              │
-│  Step 2 Proving            │ 47µs                               │
-│  Step 3 Proving            │ 67ms                               │
-│  Proof Compression         │ 2.0s                               │
-│  Final Proof Size          │ ~10KB                              │
-│  Verification Time         │ 277ns                              │
-│  Policy Enforcement        │  Working                           │
-│  Real ZK Proof             │  YES                               │
-│                                                                 │
-└─────────────────────────────────────────────────────────────────┘
+cargo test                 # Run all tests
+cargo test -- --nocapture  # Show output
+cargo bench                # Run benchmarks
 ```
 
 ---
 
 ##  **Why This Matters**
 
-```
-┌─────────────────────────────────────────────────────────────────┐
-│                    REAL-WORLD IMPACT                            │
-├─────────────────────────────────────────────────────────────────┤
-│                                                                 │
-│   BRIDGE SECURITY                                               │
-│     Proves state came from legitimate source chain              │
-│     Prevents $2B+ bridge exploit class                          │
-│                                                                 │
-│   GOVERNANCE INTEGRITY                                          │
-│     Binds proposals to execution                                │
-│     Prevents governance attacks                                 │
-│                                                                 │
-│   ADMIN KEY PROTECTION                                          │
-│     Rate limits + origin tracking                               │
-│     Stolen keys can't cause unlimited damage                    │ 
-│                                                                 │
-│   REGULATORY COMPLIANCE                                         │
-│     Prove funds didn't come from forbidden sources              │
-│     Cryptographically verifiable                                │
-│                                                                 │
-└─────────────────────────────────────────────────────────────────┘
-```
+- **Bridge Security** — Prove state came from a legitimate source chain  
+- **Governance Integrity** — Bind proposals to execution  
+- **Admin Key Protection** — Rate limits + origin tracking  
+- **Regulatory Compliance** — Cryptographically verifiable provenance  
 
 ---
 
 ##  **Contributing**
 
-We welcome contributions! Here's how:
+I welcome contributions. Here's how:
 
-1. **Fork the repository**
-2. **Create a feature branch**
-   ```bash
-   git checkout -b feature/amazing-feature
-   ```
-3. **Commit your changes**
-   ```bash
-   git commit -m 'Add amazing feature'
-   ```
-4. **Push to the branch**
-   ```bash
-   git push origin feature/amazing-feature
-   ```
-5. **Open a Pull Request**
+1. Fork the repo  
+2. Create a feature branch  
+3. Commit your changes  
+4. Push and open a PR  
 
 ---
 
 ##  **License**
 
-This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
+Apache-2.0 license — use it, build on it, share it.
 
 ---
 
 ##  **Acknowledgments**
 
-- **Microsoft Nova Team** for the incredible folding scheme
-- **Mina Protocol** for recursive proof inspiration
-- **Zcash** for pioneering ZK technology
-- **Polygon, Scroll, StarkWare** for pushing ZK forward
+- **Microsoft Nova Team** — For the folding scheme  
+- **Mina Protocol** — Recursive proof inspiration  
+- **Zcash** — ZK pioneers  
+- Everyone who followed this journey — your feedback kept me going  
 
 ---
 
 ##  **Contact**
 
-- GitHub: [@ZKChainForge](https://github.com/ZKChainForge)
-- Twitter: [@zkorigin](https://x.com/zkchain_z41420)
-- LinkedIn: [ZK-ORIGIN](https://linkedin.com/in/vikram-a-a6a252395)
+- GitHub: [@ZKChainForge](https://github.com/ZKChainForge)  
+- Project repo: [github.com/ZKChainForge/zk-origin](https://github.com/ZKChainForge/zk-origin)  
 
 ---
 
-<div align="center">
-  <sub>Built with  by the VIKRAM A</sub>
-  <br>
-  <sub>Copyright © 2026 ZK-ORIGIN Contributors</sub>
-  <br>
-  <sub>⭐ Star us on GitHub — it motivates us!</sub>
-</div>
-```
-
----
-
-##  **What's Updated**
-
-| Section                      | What Changed                                                   |
-|------------------------------|----------------------------------------------------------------|
-| **Real Nova Implementation** | Added  actual Nova metrics (1.45s setup, 9.8K constraints) |
-| **Benchmarks**               |  exact demo output with 148ms, 47µs, 67ms proving times        |
-| **Proof Size**               | Updated to ~10KB (real Nova)                                   |
-| **Verification**             | 277ns real verification                                        |
-| **Policy Enforcement**       | Shows working Genesis→User Accept and User→Admin Block         |
-| **Architecture**             | Nova-specific details with constraint counts                   |
-| **Quick Start**              |  exact terminal output for reference                           |
-
+*Built with  by Vikram*  
+*March 2026*
