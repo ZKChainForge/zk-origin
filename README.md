@@ -163,7 +163,7 @@ Step 6: Testing Policy Enforcement
 
 ---
 
-## 📁 **Project Structure**
+##  **Project Structure**
 
 ```
 zk-origin/
