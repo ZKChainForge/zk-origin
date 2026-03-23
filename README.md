@@ -696,7 +696,7 @@ If you use this project in your research, please cite:
 @software{zk_origin_2026,
   title = {ZK-ORIGIN: Zero-Knowledge State Lineage Verification},
   author = {VIKRAM A},
-  year = {2024},
+  year = {2026},
   url = {https://github.com/ZKChainForge/zk-origin-prover}
 }
 ```
