@@ -684,7 +684,7 @@ This project builds on:
 
 - **Issues**: [GitHub Issues](https://github.com/ZKChainForge/zk-origin-prover/issues)
 - **Discussions**: [GitHub Discussions](https://github.com/ZKChainForge/zk-origin-prover/discussions)
-- **Email**: your.email@example.com
+- **Email**: zkchainforge@gmail.com
 
 
 
