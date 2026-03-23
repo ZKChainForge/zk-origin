@@ -28,7 +28,11 @@ pub struct Groth16Params {
 
 #[cfg(not(feature = "compact-zk"))]
 #[derive(Clone)]
+
+/// This struct holds the public inputs needed to verify
+/// or construct Groth16 proofs.
 pub struct Groth16Params {
+    /// Merkle root of the policy tree.
     #[allow(dead_code)]
     policy_root: [u8; 32],
 }
@@ -104,6 +108,8 @@ struct StoredWitness {
 }
 
 #[cfg(not(feature = "compact-zk"))]
+/// This struct manages the state required to incrementally
+/// build a Groth16 proof across multiple steps.
 pub struct Groth16LineageProver<'a> {
     _params: &'a Groth16Params,
     initialized: bool,
