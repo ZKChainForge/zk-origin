@@ -1,13 +1,19 @@
 //! Main lineage prover implementation
 
 #[cfg(all(feature = "real-nova", feature = "commitment-mode"))]
-compile_error!("Enable only one of 'real-nova' or 'commitment-mode'");
+compile_error!("Enable only one of 'real-nova', 'commitment-mode', or 'compact-zk'");
+
+#[cfg(all(feature = "real-nova", feature = "compact-zk"))]
+compile_error!("Enable only one of 'real-nova', 'commitment-mode', or 'compact-zk'");
+
+#[cfg(all(feature = "commitment-mode", feature = "compact-zk"))]
+compile_error!("Enable only one of 'real-nova', 'commitment-mode', or 'compact-zk'");
 
 use crate::prover::WitnessGenerator;
 use crate::types::{LineageCommitment, LineageProof, OriginPolicy, Transition};
 use crate::{Result, ZkOriginError};
 
-#[cfg(not(feature = "real-nova"))]
+#[cfg(not(any(feature = "real-nova", feature = "compact-zk")))]
 use std::marker::PhantomData;
 
 #[cfg(feature = "real-nova")]
@@ -15,6 +21,9 @@ use crate::prover::nova_prover::{NovaLineageProver, NovaParams};
 
 #[cfg(feature = "commitment-mode")]
 use crate::prover::commitment_prover::{CommitmentParams, CommitmentProver};
+
+#[cfg(feature = "compact-zk")]
+use crate::prover::groth16_prover::{Groth16LineageProver, Groth16Params};
 
 /// The main prover for generating lineage proofs
 pub struct LineageProver<'a> {
@@ -33,18 +42,27 @@ pub struct LineageProver<'a> {
     /// Whether initialized
     initialized: bool,
 
-    /// Backend prover (Nova or Commitment)
+    /// Backend prover (Nova)
     #[cfg(feature = "real-nova")]
     backend: Option<NovaLineageProver<'a>>,
 
+    /// Backend prover (Commitment)
     #[cfg(feature = "commitment-mode")]
     backend: Option<CommitmentProver>,
+
+    /// Backend prover (Groth16)
+    #[cfg(feature = "compact-zk")]
+    backend: Option<Groth16LineageProver<'a>>,
 
     /// Nova params borrowed from caller
     #[cfg(feature = "real-nova")]
     nova_params: &'a NovaParams,
 
-    #[cfg(not(feature = "real-nova"))]
+    /// Groth16 params borrowed from caller
+    #[cfg(feature = "compact-zk")]
+    groth16_params: &'a Groth16Params,
+
+    #[cfg(not(any(feature = "real-nova", feature = "compact-zk")))]
     _marker: PhantomData<&'a ()>,
 }
 
@@ -64,10 +82,24 @@ impl<'a> LineageProver<'a> {
         })
     }
 
+    /// Create a new lineage prover with Groth16 backend.
+    #[cfg(feature = "compact-zk")]
+    pub fn new(policy: OriginPolicy, params: &'a Groth16Params) -> Result<Self> {
+        println!("Initializing LineageProver with Groth16 backend...");
+        Ok(Self {
+            policy: policy.clone(),
+            witness_gen: WitnessGenerator::new(policy),
+            genesis_commitment: LineageCommitment::zero(),
+            num_transitions: 0,
+            initialized: false,
+            backend: None,
+            groth16_params: params,
+        })
+    }
+
     /// Create a new lineage prover with commitment backend (fast, not ZK).
-    #[cfg(not(feature = "real-nova"))]
+    #[cfg(all(feature = "commitment-mode", not(feature = "real-nova"), not(feature = "compact-zk")))]
     pub fn new(policy: OriginPolicy) -> Result<Self> {
-        #[cfg(feature = "commitment-mode")]
         println!("Initializing LineageProver with Commitment backend (fast, NOT ZK)");
         Ok(Self {
             policy: policy.clone(),
@@ -88,6 +120,14 @@ impl<'a> LineageProver<'a> {
         NovaParams::setup(policy_root)
     }
 
+    /// Setup Groth16 parameters (trusted setup).
+    #[cfg(feature = "compact-zk")]
+    pub fn setup_params(policy: &OriginPolicy) -> Result<Groth16Params> {
+        println!("Setting up Groth16 parameters (trusted setup)...");
+        let policy_root = policy.compute_hash();
+        Groth16Params::setup(policy_root)
+    }
+
     /// Initialize the prover with a genesis state
     pub fn initialize(&mut self, genesis_state_hash: [u8; 32]) -> Result<()> {
         self.witness_gen.reset(genesis_state_hash);
@@ -100,6 +140,20 @@ impl<'a> LineageProver<'a> {
             let params: &'a NovaParams = self.nova_params;
             let mut prover = NovaLineageProver::new(params);
 
+            let hasher = crate::hash::poseidon_native::NativePoseidonHasher::new();
+            let genesis_lineage = hasher.compute_genesis_commitment(&genesis_state_hash);
+            let initial_counters = hasher.compute_counter_commitment(0, &[0; 6]);
+
+            prover.initialize(genesis_lineage, initial_counters)?;
+            self.backend = Some(prover);
+        }
+
+        #[cfg(feature = "compact-zk")]
+        {
+            let params: &'a Groth16Params = self.groth16_params;
+            let mut prover = Groth16LineageProver::new(params);
+
+            // Use same initial state computation
             let hasher = crate::hash::poseidon_native::NativePoseidonHasher::new();
             let genesis_lineage = hasher.compute_genesis_commitment(&genesis_state_hash);
             let initial_counters = hasher.compute_counter_commitment(0, &[0; 6]);
@@ -129,7 +183,7 @@ impl<'a> LineageProver<'a> {
         }
 
         // Debug: print transition details
-        #[cfg(feature = "real-nova")]
+        #[cfg(any(feature = "real-nova", feature = "compact-zk"))]
         {
             println!("    [LineageProver] Adding transition:");
             println!(
@@ -158,11 +212,15 @@ impl<'a> LineageProver<'a> {
         #[cfg(feature = "real-nova")]
         {
             println!("    [LineageProver] Witness generated, calling Nova prove_step...");
+            let backend = self.backend.as_mut().ok_or(ZkOriginError::NotInitialized(
+                "Backend not initialized".into(),
+            ))?;
+            backend.prove_step(&witness)?;
         }
 
-        // Add to backend
-        #[cfg(feature = "real-nova")]
+        #[cfg(feature = "compact-zk")]
         {
+            println!("    [LineageProver] Witness generated, calling Groth16 prove_step...");
             let backend = self.backend.as_mut().ok_or(ZkOriginError::NotInitialized(
                 "Backend not initialized".into(),
             ))?;
@@ -183,6 +241,15 @@ impl<'a> LineageProver<'a> {
         {
             println!(
                 "    [LineageProver] Transition {} complete, Nova step_count: {}",
+                self.num_transitions,
+                self.backend.as_ref().map(|b| b.step_count()).unwrap_or(0)
+            );
+        }
+
+        #[cfg(feature = "compact-zk")]
+        {
+            println!(
+                "    [LineageProver] Transition {} complete, Groth16 step_count: {}",
                 self.num_transitions,
                 self.backend.as_ref().map(|b| b.step_count()).unwrap_or(0)
             );
@@ -239,12 +306,32 @@ impl<'a> LineageProver<'a> {
             return backend.finalize();
         }
 
+        #[cfg(feature = "compact-zk")]
+        {
+            let backend = self.backend.as_ref().ok_or(ZkOriginError::NotInitialized(
+                "Backend not initialized".into(),
+            ))?;
+
+            println!(
+                "[LineageProver] Finalizing with {} transitions, Groth16 step_count: {}",
+                self.num_transitions,
+                backend.step_count()
+            );
+
+            return backend.finalize();
+        }
+
         #[cfg(feature = "commitment-mode")]
         {
             let backend = self.backend.as_ref().ok_or(ZkOriginError::NotInitialized(
                 "Backend not initialized".into(),
             ))?;
-            backend.finalize()
+            return backend.finalize();
+        }
+
+        #[cfg(not(any(feature = "real-nova", feature = "commitment-mode", feature = "compact-zk")))]
+        {
+            Err(ZkOriginError::InternalError("No proving mode enabled".into()))
         }
     }
 
@@ -287,7 +374,21 @@ impl<'a> LineageProver<'a> {
         self.genesis_commitment = LineageCommitment::zero();
         self.num_transitions = 0;
         self.initialized = false;
-        self.backend = None;
+        
+        #[cfg(feature = "real-nova")]
+        {
+            self.backend = None;
+        }
+        
+        #[cfg(feature = "compact-zk")]
+        {
+            self.backend = None;
+        }
+        
+        #[cfg(feature = "commitment-mode")]
+        {
+            self.backend = None;
+        }
     }
 }
 
@@ -297,7 +398,9 @@ pub struct LineageProverBuilder<'a> {
     genesis_hash: Option<[u8; 32]>,
     #[cfg(feature = "real-nova")]
     nova_params: Option<&'a NovaParams>,
-    #[cfg(not(feature = "real-nova"))]
+    #[cfg(feature = "compact-zk")]
+    groth16_params: Option<&'a Groth16Params>,
+    #[cfg(not(any(feature = "real-nova", feature = "compact-zk")))]
     _marker: PhantomData<&'a ()>,
 }
 
@@ -309,7 +412,9 @@ impl<'a> LineageProverBuilder<'a> {
             genesis_hash: None,
             #[cfg(feature = "real-nova")]
             nova_params: None,
-            #[cfg(not(feature = "real-nova"))]
+            #[cfg(feature = "compact-zk")]
+            groth16_params: None,
+            #[cfg(not(any(feature = "real-nova", feature = "compact-zk")))]
             _marker: PhantomData,
         }
     }
@@ -333,6 +438,13 @@ impl<'a> LineageProverBuilder<'a> {
         self
     }
 
+    /// Set Groth16 parameters (required for compact-zk feature)
+    #[cfg(feature = "compact-zk")]
+    pub fn with_params(mut self, params: &'a Groth16Params) -> Self {
+        self.groth16_params = Some(params);
+        self
+    }
+
     /// Build the prover
     pub fn build(self) -> Result<LineageProver<'a>> {
         let policy = self.policy.unwrap_or_default();
@@ -347,7 +459,17 @@ impl<'a> LineageProverBuilder<'a> {
             LineageProver::new(policy, params)?
         };
 
-        #[cfg(not(feature = "real-nova"))]
+        #[cfg(feature = "compact-zk")]
+        let mut prover = {
+            let params = self.groth16_params.ok_or_else(|| {
+                ZkOriginError::NotInitialized(
+                    "Groth16 params required; call .with_params() on the builder".into(),
+                )
+            })?;
+            LineageProver::new(policy, params)?
+        };
+
+        #[cfg(all(not(feature = "real-nova"), not(feature = "compact-zk")))]
         let mut prover = LineageProver::new(policy)?;
 
         if let Some(genesis) = self.genesis_hash {
@@ -369,7 +491,7 @@ mod tests {
     use super::*;
     use crate::types::OriginClass;
 
-    #[cfg(not(feature = "real-nova"))]
+    #[cfg(all(not(feature = "real-nova"), not(feature = "compact-zk")))]
     fn create_prover() -> LineageProver<'static> {
         let mut prover = LineageProver::new(OriginPolicy::default()).unwrap();
         prover.initialize([0u8; 32]).unwrap();
@@ -377,7 +499,7 @@ mod tests {
     }
 
     #[test]
-    #[cfg(not(feature = "real-nova"))]
+    #[cfg(all(not(feature = "real-nova"), not(feature = "compact-zk")))]
     fn test_prover_creation() {
         let prover = LineageProver::new(OriginPolicy::default());
         assert!(prover.is_ok());
@@ -388,7 +510,7 @@ mod tests {
     }
 
     #[test]
-    #[cfg(not(feature = "real-nova"))]
+    #[cfg(all(not(feature = "real-nova"), not(feature = "compact-zk")))]
     fn test_prover_initialization() {
         let mut prover = LineageProver::new(OriginPolicy::default()).unwrap();
         let result = prover.initialize([42u8; 32]);
@@ -397,7 +519,7 @@ mod tests {
     }
 
     #[test]
-    #[cfg(not(feature = "real-nova"))]
+    #[cfg(all(not(feature = "real-nova"), not(feature = "compact-zk")))]
     fn test_add_transition() {
         let mut prover = create_prover();
 
@@ -409,7 +531,7 @@ mod tests {
     }
 
     #[test]
-    #[cfg(not(feature = "real-nova"))]
+    #[cfg(all(not(feature = "real-nova"), not(feature = "compact-zk")))]
     fn test_add_transition_not_initialized() {
         let mut prover = LineageProver::new(OriginPolicy::default()).unwrap();
 
@@ -420,7 +542,7 @@ mod tests {
     }
 
     #[test]
-    #[cfg(not(feature = "real-nova"))]
+    #[cfg(all(not(feature = "real-nova"), not(feature = "compact-zk")))]
     fn test_finalize() {
         let mut prover = create_prover();
 
@@ -443,7 +565,7 @@ mod tests {
     }
 
     #[test]
-    #[cfg(not(feature = "real-nova"))]
+    #[cfg(all(not(feature = "real-nova"), not(feature = "compact-zk")))]
     fn test_policy_violation() {
         let mut prover = create_prover();
 
