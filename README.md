@@ -37,7 +37,7 @@ curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh
 
 # Clone the repository
 git clone https://github.com/ZKChainForge/zk-origin-prover.git
-cd zk-origin-prover
+cd zk-origin
 ```
 
 ### Build & Run
@@ -45,6 +45,8 @@ cd zk-origin-prover
 #### 1. Commitment Mode (Fast Development)
 
 ```bash
+
+cd prover
 # Build with default features
 cargo build --release
 
@@ -697,7 +699,7 @@ If you use this project in your research, please cite:
   title = {ZK-ORIGIN: Zero-Knowledge State Lineage Verification},
   author = {VIKRAM A},
   year = {2026},
-  url = {https://github.com/ZKChainForge/zk-origin-prover}
+  url = {https://github.com/ZKChainForge/zk-origin}
 }
 ```
 
