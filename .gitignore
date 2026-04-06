@@ -3,6 +3,7 @@ node_modules/
 .env
 .env.example
 # Compilation output
+/circuits/build
 /dist
 /contracts/node_modules
 /contracts/deployments

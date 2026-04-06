@@ -1,5 +1,6 @@
 pragma circom 2.1.0;
 
+// Check if input is zero
 template IsZero() {
     signal input in;
     signal output out;
@@ -10,6 +11,7 @@ template IsZero() {
     out * (out - 1) === 0;
 }
 
+// Check if two inputs are equal
 template IsEqual() {
     signal input in[2];
     signal output out;
@@ -18,6 +20,7 @@ template IsEqual() {
     out <== isz.out;
 }
 
+// Convert number to bits
 template Num2Bits(n) {
     signal input in;
     signal output out[n];
@@ -32,6 +35,7 @@ template Num2Bits(n) {
     lc1 === in;
 }
 
+// Check if a < b
 template LessThan(n) {
     assert(n <= 252);
     signal input in[2];
@@ -41,6 +45,7 @@ template LessThan(n) {
     out <== 1 - n2b.out[n];
 }
 
+// Check if a > b
 template GreaterThan(n) {
     signal input in[2];
     signal output out;
@@ -50,6 +55,7 @@ template GreaterThan(n) {
     out <== lt.out;
 }
 
+// Check if a >= b
 template GreaterEqThan(n) {
     signal input in[2];
     signal output out;
@@ -59,6 +65,7 @@ template GreaterEqThan(n) {
     out <== lt.out;
 }
 
+// Check if a <= b
 template LessEqThan(n) {
     signal input in[2];
     signal output out;
@@ -68,6 +75,7 @@ template LessEqThan(n) {
     out <== lt.out;
 }
 
+// Multiplexer (select between two values based on bit)
 template Mux1() {
     signal input c[2];
     signal input s;
@@ -75,6 +83,7 @@ template Mux1() {
     out <== c[0] + s * (c[1] - c[0]);
 }
 
+// Check if value is in range [min, max]
 template InRange(n) {
     signal input value;
     signal input min;
@@ -87,4 +96,25 @@ template InRange(n) {
     ltEq.in[0] <== value;
     ltEq.in[1] <== max;
     out <== gtEq.out * ltEq.out;
+}
+
+// Bitwise AND
+template BitwiseAnd() {
+    signal input in[2];
+    signal output out;
+    out <== in[0] * in[1];
+}
+
+// Bitwise OR
+template BitwiseOr() {
+    signal input in[2];
+    signal output out;
+    out <== in[0] + in[1] - in[0] * in[1];
+}
+
+// Bitwise NOT
+template BitwiseNot() {
+    signal input in;
+    signal output out;
+    out <== 1 - in;
 }
