@@ -3,12 +3,5 @@
   "newStateHash": "2",
   "epochId": "1",
   "prevOriginClass": "0",
-  "newOriginClass": "1",
-  "prevLineageCommitment": "3",
-  "prevCounterCommitment": "4",
-  "policyRoot": "5",
-  "policyProof": ["6", "7", "8", "9", "10", "11"],
-  "policyIndices": [0, 0, 0, 0, 0, 0],
-  "prevCounters": ["1", "0", "0", "0", "0", "0"],
-  "rateLimits": ["999", "999", "10", "100", "5", "1000"]
+  "newOriginClass": "1"
 }
