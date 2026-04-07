@@ -1,7 +1,6 @@
 {
   "epochId": "1",
   "newOriginClass": "2",
-  "prevCounters": ["1", "0", "5", "0", "0", "0"],
-  "prevCounterCommitment": "100",
-  "rateLimits": ["999", "999", "10", "100", "5", "1000"]
+  "prevCounter": "5",
+  "rateLimit": "10"
 }

@@ -1,120 +1,182 @@
 pragma circom 2.1.0;
 
-// Check if input is zero
-template IsZero() {
+/*
+ * Core Comparison Circuits (Custom)
+ * 
+ * Safe constraint implementations for common comparisons.
+ * Renamed to avoid conflicts with circomlib comparators.
+ */
+
+include "../../node_modules/circomlib/circuits/comparators.circom";
+include "../../node_modules/circomlib/circuits/bitify.circom";
+
+// ============================================
+// IS ZERO (Custom Implementation)
+// ============================================
+template ZKIsZero() {
     signal input in;
     signal output out;
     signal inv;
+    
     inv <-- in != 0 ? 1 / in : 0;
     out <-- in == 0 ? 1 : 0;
+    
     in * inv + out === 1;
     out * (out - 1) === 0;
 }
 
-// Check if two inputs are equal
-template IsEqual() {
+// ============================================
+// IS EQUAL (Custom Implementation)
+// ============================================
+template ZKIsEqual() {
     signal input in[2];
     signal output out;
-    component isz = IsZero();
+    
+    component isz = ZKIsZero();
     isz.in <== in[1] - in[0];
     out <== isz.out;
 }
 
-// Convert number to bits
-template Num2Bits(n) {
-    signal input in;
-    signal output out[n];
-    var lc1 = 0;
-    var e2 = 1;
-    for (var i = 0; i < n; i++) {
-        out[i] <-- (in >> i) & 1;
-        out[i] * (out[i] - 1) === 0;
-        lc1 += out[i] * e2;
-        e2 = e2 + e2;
-    }
-    lc1 === in;
-}
-
-// Check if a < b
-template LessThan(n) {
-    assert(n <= 252);
+// ============================================
+// LESS THAN (Wrapper for circomlib)
+// ============================================
+template ZKLessThan(n) {
     signal input in[2];
     signal output out;
-    component n2b = Num2Bits(n+1);
-    n2b.in <== in[0] + (1<<n) - in[1];
-    out <== 1 - n2b.out[n];
+    
+    component lt = LessThan(n);
+    lt.in[0] <== in[0];
+    lt.in[1] <== in[1];
+    out <== lt.out;
 }
 
-// Check if a > b
-template GreaterThan(n) {
+// ============================================
+// GREATER THAN
+// ============================================
+template ZKGreaterThan(n) {
     signal input in[2];
     signal output out;
+    
     component lt = LessThan(n);
     lt.in[0] <== in[1];
     lt.in[1] <== in[0];
     out <== lt.out;
 }
 
-// Check if a >= b
-template GreaterEqThan(n) {
+// ============================================
+// LESS THAN OR EQUAL
+// ============================================
+template ZKLessEqThan(n) {
     signal input in[2];
     signal output out;
-    component lt = LessThan(n);
-    lt.in[0] <== in[1];
-    lt.in[1] <== in[0] + 1;
-    out <== lt.out;
-}
-
-// Check if a <= b
-template LessEqThan(n) {
-    signal input in[2];
-    signal output out;
+    
     component lt = LessThan(n);
     lt.in[0] <== in[0];
     lt.in[1] <== in[1] + 1;
     out <== lt.out;
 }
 
-// Multiplexer (select between two values based on bit)
-template Mux1() {
+// ============================================
+// GREATER THAN OR EQUAL
+// ============================================
+template ZKGreaterEqThan(n) {
+    signal input in[2];
+    signal output out;
+    
+    component lt = LessThan(n);
+    lt.in[0] <== in[1];
+    lt.in[1] <== in[0] + 1;
+    out <== lt.out;
+}
+
+// ============================================
+// IN RANGE [min, max]
+// ============================================
+template ZKInRange(n) {
+    signal input value;
+    signal input min;
+    signal input max;
+    signal output out;
+    
+    component gtEq = ZKGreaterEqThan(n);
+    gtEq.in[0] <== value;
+    gtEq.in[1] <== min;
+    
+    component ltEq = ZKLessEqThan(n);
+    ltEq.in[0] <== value;
+    ltEq.in[1] <== max;
+    
+    out <== gtEq.out * ltEq.out;
+}
+
+// ============================================
+// BITWISE AND
+// ============================================
+template ZKBitwiseAnd() {
+    signal input in[2];
+    signal output out;
+    out <== in[0] * in[1];
+}
+
+// ============================================
+// BITWISE OR
+// ============================================
+template ZKBitwiseOr() {
+    signal input in[2];
+    signal output out;
+    out <== in[0] + in[1] - in[0] * in[1];
+}
+
+// ============================================
+// BITWISE NOT
+// ============================================
+template ZKBitwiseNot() {
+    signal input in;
+    signal output out;
+    out <== 1 - in;
+}
+
+// ============================================
+// BITWISE XOR
+// ============================================
+template ZKBitwiseXor() {
+    signal input in[2];
+    signal output out;
+    out <== in[0] + in[1] - 2 * in[0] * in[1];
+}
+
+// ============================================
+// MULTIPLEXER (2-to-1 selector)
+// ============================================
+template ZKMux1() {
     signal input c[2];
     signal input s;
     signal output out;
     out <== c[0] + s * (c[1] - c[0]);
 }
 
-// Check if value is in range [min, max]
-template InRange(n) {
-    signal input value;
-    signal input min;
-    signal input max;
+// ============================================
+// MULTIPLEXER (4-to-1 selector)
+// ============================================
+template ZKMux4() {
+    signal input c[4];
+    signal input s[2];
     signal output out;
-    component gtEq = GreaterEqThan(n);
-    gtEq.in[0] <== value;
-    gtEq.in[1] <== min;
-    component ltEq = LessEqThan(n);
-    ltEq.in[0] <== value;
-    ltEq.in[1] <== max;
-    out <== gtEq.out * ltEq.out;
-}
-
-// Bitwise AND
-template BitwiseAnd() {
-    signal input in[2];
-    signal output out;
-    out <== in[0] * in[1];
-}
-
-// Bitwise OR
-template BitwiseOr() {
-    signal input in[2];
-    signal output out;
-    out <== in[0] + in[1] - in[0] * in[1];
-}
-
-// Bitwise NOT
-template BitwiseNot() {
-    signal input in;
-    signal output out;
-    out <== 1 - in;
+    
+    component mux1 = ZKMux1();
+    mux1.c[0] <== c[0];
+    mux1.c[1] <== c[1];
+    mux1.s <== s[0];
+    
+    component mux2 = ZKMux1();
+    mux2.c[0] <== c[2];
+    mux2.c[1] <== c[3];
+    mux2.s <== s[0];
+    
+    component mux3 = ZKMux1();
+    mux3.c[0] <== mux1.out;
+    mux3.c[1] <== mux2.out;
+    mux3.s <== s[1];
+    
+    out <== mux3.out;
 }

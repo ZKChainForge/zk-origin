@@ -1,111 +1,92 @@
 pragma circom 2.1.0;
 
-include "../lib/comparators.circom";
 include "../lib/poseidon.circom";
+include "../lib/comparators.circom";
 include "../lib/selector.circom";
+include "../lib/constants.circom";
 
-// Rate Limiter: Verify and enforce per-origin-class rate limits
+/*
+ * Rate Limiter: Per-Origin-Class Rate Enforcement
+ * 
+ * Verifies and enforces rate limits for each origin class.
+ * Tracks counters per origin class per epoch.
+ * Prevents counter overflow and rate limit bypass.
+ */
+
 template RateLimiter() {
+    // ============ PUBLIC INPUTS ============
     signal input epochId;
     signal input newOriginClass;
-    signal input prevCounters[6];                  // Current counters for each origin class
-    signal input prevCounterCommitment;            // Hash of previous counters
-    signal input rateLimits[6];                    // Rate limit for each origin class
+    signal input prevCounterCommitment;
+    
+    // ============ PRIVATE INPUTS ============
+    signal input prevCounters[7];
+    signal input rateLimits[7];
+    
+    // ============ OUTPUTS ============
     signal output rateLimitOk;
     signal output newCounterCommitment;
     
-    // 1. Verify counter commitment is correct
-    component counterHasher = PoseidonHash7();
-    counterHasher.in[0] <== prevCounters[0];
-    counterHasher.in[1] <== prevCounters[1];
-    counterHasher.in[2] <== prevCounters[2];
-    counterHasher.in[3] <== prevCounters[3];
-    counterHasher.in[4] <== prevCounters[4];
-    counterHasher.in[5] <== prevCounters[5];
-    counterHasher.in[6] <== epochId;
+    // ============ DECLARE ALL SIGNALS FIRST ============
+    signal newCounters[7];
+    component eqComponents[7];
+    
+    // ============ VERIFY COUNTER COMMITMENT ============
+    component counterHasher = PoseidonHash8();
+    counterHasher.in[0] <== epochId;
+    for (var i = 0; i < 7; i++) {
+        counterHasher.in[i + 1] <== prevCounters[i];
+    }
     counterHasher.out === prevCounterCommitment;
     
-    // 2. Get current counter for new origin class
-    component counterSelector = Selector(6);
-    counterSelector.values[0] <== prevCounters[0];
-    counterSelector.values[1] <== prevCounters[1];
-    counterSelector.values[2] <== prevCounters[2];
-    counterSelector.values[3] <== prevCounters[3];
-    counterSelector.values[4] <== prevCounters[4];
-    counterSelector.values[5] <== prevCounters[5];
+    // ============ GET CURRENT COUNTER FOR NEW ORIGIN ============
+    component counterSelector = Selector(7);
+    for (var i = 0; i < 7; i++) {
+        counterSelector.values[i] <== prevCounters[i];
+    }
     counterSelector.index <== newOriginClass;
     signal currentCounter <== counterSelector.out;
     
-    // 3. Get rate limit for new origin class
-    component limitSelector = Selector(6);
-    limitSelector.values[0] <== rateLimits[0];
-    limitSelector.values[1] <== rateLimits[1];
-    limitSelector.values[2] <== rateLimits[2];
-    limitSelector.values[3] <== rateLimits[3];
-    limitSelector.values[4] <== rateLimits[4];
-    limitSelector.values[5] <== rateLimits[5];
+    // ============ GET RATE LIMIT FOR NEW ORIGIN ============
+    component limitSelector = Selector(7);
+    for (var i = 0; i < 7; i++) {
+        limitSelector.values[i] <== rateLimits[i];
+    }
     limitSelector.index <== newOriginClass;
     signal currentLimit <== limitSelector.out;
     
-    // 4. Check rate limit not exceeded
-    component limitCheck = LessThan(32);
+    // ============ CHECK RATE LIMIT NOT EXCEEDED ============
+    component limitCheck = ZKLessThan(32);
     limitCheck.in[0] <== currentCounter;
     limitCheck.in[1] <== currentLimit;
-    limitCheck.out === 1;  // MUST be under limit
+    limitCheck.out === 1;
     
-    // 5. Increment counter for new origin class
-    signal newCounters[6];
-    for (var i = 0; i < 6; i++) {
-        if (i == 0) {
-            component eq0 = IsEqual();
-            eq0.in[0] <== i;
-            eq0.in[1] <== newOriginClass;
-            newCounters[i] <== prevCounters[i] + eq0.out;
-        } else if (i == 1) {
-            component eq1 = IsEqual();
-            eq1.in[0] <== i;
-            eq1.in[1] <== newOriginClass;
-            newCounters[i] <== prevCounters[i] + eq1.out;
-        } else if (i == 2) {
-            component eq2 = IsEqual();
-            eq2.in[0] <== i;
-            eq2.in[1] <== newOriginClass;
-            newCounters[i] <== prevCounters[i] + eq2.out;
-        } else if (i == 3) {
-            component eq3 = IsEqual();
-            eq3.in[0] <== i;
-            eq3.in[1] <== newOriginClass;
-            newCounters[i] <== prevCounters[i] + eq3.out;
-        } else if (i == 4) {
-            component eq4 = IsEqual();
-            eq4.in[0] <== i;
-            eq4.in[1] <== newOriginClass;
-            newCounters[i] <== prevCounters[i] + eq4.out;
-        } else {
-            component eq5 = IsEqual();
-            eq5.in[0] <== i;
-            eq5.in[1] <== newOriginClass;
-            newCounters[i] <== prevCounters[i] + eq5.out;
-        }
+    // ============ COMPUTE NEW COUNTER ============
+    signal newCounter;
+    newCounter <== currentCounter + 1;
+    
+    // ============ CHECK FOR OVERFLOW ============
+    component noOverflow = ZKLessEqThan(32);
+    noOverflow.in[0] <== newCounter;
+    noOverflow.in[1] <== 4294967295;
+    noOverflow.out === 1;
+    
+    // ============ UPDATE COUNTERS ============
+    for (var i = 0; i < 7; i++) {
+        eqComponents[i] = ZKIsEqual();
+        eqComponents[i].in[0] <== i;
+        eqComponents[i].in[1] <== newOriginClass;
+        
+        newCounters[i] <== prevCounters[i] + eqComponents[i].out;
     }
     
-    // 6. Compute new counter commitment
-    component newCounterHasher = PoseidonHash7();
-    newCounterHasher.in[0] <== newCounters[0];
-    newCounterHasher.in[1] <== newCounters[1];
-    newCounterHasher.in[2] <== newCounters[2];
-    newCounterHasher.in[3] <== newCounters[3];
-    newCounterHasher.in[4] <== newCounters[4];
-    newCounterHasher.in[5] <== newCounters[5];
-    newCounterHasher.in[6] <== epochId;
+    // ============ COMPUTE NEW COUNTER COMMITMENT ============
+    component newCounterHasher = PoseidonHash8();
+    newCounterHasher.in[0] <== epochId;
+    for (var i = 0; i < 7; i++) {
+        newCounterHasher.in[i + 1] <== newCounters[i];
+    }
     newCounterCommitment <== newCounterHasher.out;
     
     rateLimitOk <== 1;
 }
-
-component main {public [
-    epochId,
-    newOriginClass,
-    prevCounterCommitment,
-    policyRoot
-]} = RateLimiter();

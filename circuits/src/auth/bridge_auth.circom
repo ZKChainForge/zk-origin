@@ -1,38 +1,50 @@
 pragma circom 2.1.0;
 
+/*
+ * Bridge Authentication: Cross-Chain Attestation Verification
+ * 
+ * Verifies that a state import from another chain is properly attested
+ * by the bridge validators and is included in the bridge's commitment.
+ */
+
 include "../../node_modules/circomlib/circuits/eddsa.circom";
 include "../lib/comparators.circom";
 include "../lib/merkle.circom";
 
-// Bridge Authentication: Verify cross-chain attestation
-template BridgeAuthCircuit(ATTESTATION_DEPTH) {
+template BridgeAuth(ATTESTATION_DEPTH) {
+    // ============ PUBLIC INPUTS ============
     signal input sourceChainId;
     signal input expectedSourceChain;
     signal input stateRoot;
-    signal input bridgeSignature[2];               // (R, S)
-    signal input bridgePublicKey[2];               // (X, Y)
+    signal input expectedRoot;
+    
+    // ============ PRIVATE INPUTS ============
+    signal input bridgeSignatureR;
+    signal input bridgeSignatureS;
+    signal input bridgePublicKeyX;
+    signal input bridgePublicKeyY;
     signal input merkleProof[ATTESTATION_DEPTH];
     signal input merkleIndices[ATTESTATION_DEPTH];
-    signal input expectedRoot;
+    
+    // ============ OUTPUT ============
     signal output valid;
     
-    // 1. Verify chain ID matches
+    // ============ VERIFY CHAIN ID MATCHES ============
     component chainMatch = IsEqual();
     chainMatch.in[0] <== sourceChainId;
     chainMatch.in[1] <== expectedSourceChain;
     chainMatch.out === 1;
     
-    // 2. Verify bridge signature on state root
+    // ============ VERIFY BRIDGE SIGNATURE ============
     component bridgeVerifier = EdDSAVerifier();
     bridgeVerifier.M <== stateRoot;
-    bridgeVerifier.Ax <== bridgePublicKey[0];
-    bridgeVerifier.Ay <== bridgePublicKey[1];
-    bridgeVerifier.R8x <== bridgeSignature[0];
-    bridgeVerifier.R8y <== bridgeSignature[1];
-    bridgeVerifier.enabled <== 1;
+    bridgeVerifier.Ax <== bridgePublicKeyX;
+    bridgeVerifier.Ay <== bridgePublicKeyY;
+    bridgeVerifier.R8x <== bridgeSignatureR;
+    bridgeVerifier.R8y <== bridgeSignatureS;
     bridgeVerifier.valid === 1;
     
-    // 3. Verify state root is in bridge's commitment tree
+    // ============ VERIFY MERKLE PROOF ============
     component merkleVerifier = MerkleProofVerifier(ATTESTATION_DEPTH);
     merkleVerifier.leaf <== stateRoot;
     merkleVerifier.root <== expectedRoot;
@@ -50,4 +62,4 @@ component main {public [
     expectedSourceChain,
     stateRoot,
     expectedRoot
-]} = BridgeAuthCircuit(6);
+]} = BridgeAuth(6);
