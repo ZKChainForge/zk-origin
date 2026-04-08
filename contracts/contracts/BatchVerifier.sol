@@ -3,43 +3,52 @@ pragma solidity ^0.8.19;
 
 import "./LineageVerifier.sol";
 
+/**
+ * @title BatchVerifier
+ * @notice Verify multiple lineage proofs in a single transaction
+ */
 contract BatchVerifier {
+    
     LineageVerifier public immutable lineageVerifier;
     
-    struct ProofData {
+    struct BatchProof {
         uint256[2] pA;
         uint256[2][2] pB;
         uint256[2] pC;
-        uint256[5] publicSignals;
+        uint256[12] publicSignals;
     }
     
-    event BatchVerified(uint256 indexed batchId, uint256 count, bytes32 batchRoot);
+    event BatchVerified(
+        uint256 indexed batchId,
+        uint256 proofCount,
+        bytes32 finalStateHash,
+        bool success
+    );
     
     error EmptyBatch();
     error BatchTooLarge();
     error ProofFailed(uint256 index);
-    error FinalLineageMismatch();
+    error ZeroAddress();
     
     constructor(address _lineageVerifier) {
-        require(_lineageVerifier != address(0), "Zero address");
+        if (_lineageVerifier == address(0)) revert ZeroAddress();
         lineageVerifier = LineageVerifier(_lineageVerifier);
     }
     
     /**
-     * @notice Verify a batch of proofs using the full 5-signal verification
-     * @param proofs Array of proof data
-     * @param expectedFinalLineage Expected lineage commitment of the final state
+     * @notice Verify a batch of proofs
+     * @param proofs Array of proofs
+     * @return success Whether all proofs verified
      */
-    function verifyBatch(
-        ProofData[] calldata proofs,
-        bytes32 expectedFinalLineage
-    ) external returns (bool) {
+    function verifyBatch(BatchProof[] calldata proofs)
+        external
+        returns (bool)
+    {
         if (proofs.length == 0) revert EmptyBatch();
         if (proofs.length > 100) revert BatchTooLarge();
         
         for (uint256 i = 0; i < proofs.length; i++) {
-            // Use verifyLineageFull which accepts 5 public signals
-            bool success = lineageVerifier.verifyLineageFull(
+            bool success = lineageVerifier.verifyLineage(
                 proofs[i].pA,
                 proofs[i].pB,
                 proofs[i].pC,
@@ -48,21 +57,28 @@ contract BatchVerifier {
             if (!success) revert ProofFailed(i);
         }
         
-        // Verify final state matches expected
-        bytes32 finalState = bytes32(proofs[proofs.length - 1].publicSignals[4]);
-        bytes32 finalLineage = lineageVerifier.stateLineage(finalState);
-        if (finalLineage != expectedFinalLineage) revert FinalLineageMismatch();
+        bytes32 finalStateHash = bytes32(
+            proofs[proofs.length - 1].publicSignals[4]
+        );
         
-        emit BatchVerified(block.number, proofs.length, expectedFinalLineage);
+        emit BatchVerified(
+            block.number,
+            proofs.length,
+            finalStateHash,
+            true
+        );
+        
         return true;
     }
     
     /**
-     * @notice Estimate gas for batch verification
-     * @param proofCount Number of proofs in the batch
+     * @notice Estimate gas for batch
      */
-    function estimateBatchGas(uint256 proofCount) external pure returns (uint256) {
-        // Base cost + per-proof verification cost
+    function estimateGas(uint256 proofCount)
+        external
+        pure
+        returns (uint256)
+    {
         return 21000 + (proofCount * 250000);
     }
 }
