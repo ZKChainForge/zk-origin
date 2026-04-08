@@ -6,6 +6,7 @@ pragma solidity ^0.8.19;
  * @notice Interface for ZK-ORIGIN state lineage verification
  */
 interface ILineageVerifier {
+    
     // ============ Events ============
     
     event GenesisSet(
@@ -24,11 +25,9 @@ interface ILineageVerifier {
         address creator
     );
     
-    event OriginClassViolation(
-        bytes32 indexed prevStateHash,
-        uint8 prevClass,
-        uint8 newClass
-    );
+    event RateLimitExceeded(uint8 originClass, uint256 epoch, uint256 current, uint256 limit);
+    event OriginPolicyViolated(uint8 fromClass, uint8 toClass);
+    event EpochMismatch(uint256 expected, uint256 actual);
     
     // ============ Functions ============
     
@@ -45,8 +44,6 @@ interface ILineageVerifier {
     ) external returns (bool);
     
     function getLineage(bytes32 stateHash) external view returns (bytes32);
-    
     function hasVerifiedLineage(bytes32 stateHash) external view returns (bool);
-    
     function getDepth(bytes32 stateHash) external view returns (uint256);
 }

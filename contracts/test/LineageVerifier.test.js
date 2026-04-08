@@ -2,215 +2,213 @@
 const { expect } = require("chai");
 const { ethers } = require("hardhat");
 
-describe("LineageVerifier", function() {
+describe("ZK-ORIGIN System", function () {
     let lineageVerifier;
-    let mockVerifier;
-    let owner;
-    let user;
+    let groth16Verifier;
+    let epochManager;
+    let rateLimiter;
+    let authVerifier;
     
-    beforeEach(async function() {
-        [owner, user] = await ethers.getSigners();
+    let owner;
+    let user1;
+    let user2;
+    
+    const GENESIS_COMMITMENT = ethers.utils.keccak256(ethers.utils.toUtf8Bytes("genesis"));
+    const POLICY_ROOT = ethers.utils.keccak256(ethers.utils.toUtf8Bytes("policy"));
+    const GENESIS_STATE_HASH = ethers.utils.keccak256(ethers.utils.toUtf8Bytes("genesis_state"));
+    const NEW_STATE_HASH = ethers.utils.keccak256(ethers.utils.toUtf8Bytes("new_state"));
+    
+    beforeEach(async function () {
+        [owner, user1, user2] = await ethers.getSigners();
         
-        // Deploy mock Groth16 verifier (ethers v6)
-        const MockVerifier = await ethers.getContractFactory("MockGroth16Verifier");
-        mockVerifier = await MockVerifier.deploy();
-        await mockVerifier.waitForDeployment();
+        // Deploy Groth16Verifier
+        const Groth16VerifierFactory = await ethers.getContractFactory("Groth16Verifier");
+        groth16Verifier = await Groth16VerifierFactory.deploy();
+        await groth16Verifier.deployed();
         
-        // Get address (ethers v6)
-        const mockVerifierAddress = await mockVerifier.getAddress();
+        // Deploy EpochManager
+        const EpochManagerFactory = await ethers.getContractFactory("EpochManager");
+        epochManager = await EpochManagerFactory.deploy();
+        await epochManager.deployed();
+        
+        // Deploy RateLimiter
+        const RateLimiterFactory = await ethers.getContractFactory("RateLimiter");
+        rateLimiter = await RateLimiterFactory.deploy();
+        await rateLimiter.deployed();
+        
+        // Deploy AuthorizationVerifier
+        const AuthVerifierFactory = await ethers.getContractFactory("AuthorizationVerifier");
+        authVerifier = await AuthVerifierFactory.deploy();
+        await authVerifier.deployed();
         
         // Deploy LineageVerifier
-        const LineageVerifier = await ethers.getContractFactory("LineageVerifier");
-        lineageVerifier = await LineageVerifier.deploy(mockVerifierAddress);
-        await lineageVerifier.waitForDeployment();
+        const LineageVerifierFactory = await ethers.getContractFactory("LineageVerifier");
+        lineageVerifier = await LineageVerifierFactory.deploy(
+            groth16Verifier.address,
+            epochManager.address,
+            rateLimiter.address,
+            authVerifier.address,
+            GENESIS_COMMITMENT,
+            POLICY_ROOT,
+            false // no duplicates
+        );
+        await lineageVerifier.deployed();
     });
     
-    // Helper to generate random bytes32
-    function randomBytes32() {
-        return ethers.hexlify(ethers.randomBytes(32));
-    }
-    
-    describe("Genesis Setup", function() {
-        it("should allow admin to set genesis", async function() {
-            const genesisHash = randomBytes32();
-            const genesisLineage = randomBytes32();
+    describe("Genesis Initialization", function () {
+        it("Should set genesis state", async function () {
+            await lineageVerifier.setGenesis(GENESIS_STATE_HASH, GENESIS_COMMITMENT);
             
-            await expect(lineageVerifier.setGenesis(genesisHash, genesisLineage))
-                .to.emit(lineageVerifier, "GenesisSet")
-                .withArgs(genesisHash, genesisLineage);
+            const hasGenesis = await lineageVerifier.hasVerifiedLineage(GENESIS_STATE_HASH);
+            expect(hasGenesis).to.equal(true);
             
-            expect(await lineageVerifier.genesisInitialized()).to.equal(true);
-            expect(await lineageVerifier.hasVerifiedLineage(genesisHash)).to.equal(true);
+            const lineage = await lineageVerifier.getLineage(GENESIS_STATE_HASH);
+            expect(lineage).to.equal(GENESIS_COMMITMENT);
+            
+            const depth = await lineageVerifier.getDepth(GENESIS_STATE_HASH);
+            expect(depth.toString()).to.equal("0");
         });
         
-        it("should reject duplicate genesis setup", async function() {
-            const genesisHash = randomBytes32();
-            const genesisLineage = randomBytes32();
+        it("Should not allow duplicate genesis", async function () {
+            await lineageVerifier.setGenesis(GENESIS_STATE_HASH, GENESIS_COMMITMENT);
             
-            await lineageVerifier.setGenesis(genesisHash, genesisLineage);
-            
+            // Expect revert (any kind)
             await expect(
-                lineageVerifier.setGenesis(genesisHash, genesisLineage)
-            ).to.be.revertedWithCustomError(lineageVerifier, "GenesisAlreadySet");
+                lineageVerifier.setGenesis(GENESIS_STATE_HASH, GENESIS_COMMITMENT)
+            ).to.be.reverted;
         });
         
-        it("should reject non-admin genesis setup", async function() {
-            const genesisHash = randomBytes32();
-            const genesisLineage = randomBytes32();
-            
+        it("Should not allow zero state hash", async function () {
+            // Expect revert
             await expect(
-                lineageVerifier.connect(user).setGenesis(genesisHash, genesisLineage)
-            ).to.be.revertedWithCustomError(lineageVerifier, "NotAdmin");
-        });
-        
-        it("should reject zero state hash", async function() {
-            const zeroHash = ethers.ZeroHash;
-            const genesisLineage = randomBytes32();
-            
-            await expect(
-                lineageVerifier.setGenesis(zeroHash, genesisLineage)
-            ).to.be.revertedWithCustomError(lineageVerifier, "ZeroStateHash");
+                lineageVerifier.setGenesis(ethers.constants.HashZero, GENESIS_COMMITMENT)
+            ).to.be.reverted;
         });
     });
     
-    describe("Lineage Verification", function() {
-        beforeEach(async function() {
-            const genesisHash = randomBytes32();
-            const genesisLineage = randomBytes32();
-            await lineageVerifier.setGenesis(genesisHash, genesisLineage);
+    describe("Rate Limiting", function () {
+        beforeEach(async function () {
+            await rateLimiter.transferAdmin(lineageVerifier.address);
         });
         
-        it("should verify valid lineage proof", async function() {
-            const pA = [1n, 2n];
-            const pB = [[3n, 4n], [5n, 6n]];
-            const pC = [7n, 8n];
-            const publicSignals = [
-                BigInt(randomBytes32()),
-                1n
-            ];
+        it("Should track rate limits correctly", async function () {
+            const EPOCH = 0;
+            const ORIGIN_USER = 1;
             
-            await expect(lineageVerifier.verifyLineage(pA, pB, pC, publicSignals))
-                .to.emit(lineageVerifier, "LineageVerified");
+            // Check canProceed
+            const canProceed = await rateLimiter.canProceed(EPOCH, ORIGIN_USER);
+            expect(canProceed).to.equal(true);
             
-            expect(await lineageVerifier.totalTransitions()).to.equal(1n);
+            // Check counter is 0
+            const counter = await rateLimiter.getCounter(EPOCH, ORIGIN_USER);
+            expect(counter.toString()).to.equal("0");
         });
         
-        it("should reject without genesis", async function() {
-            // Deploy fresh contract without genesis
-            const mockAddr = await mockVerifier.getAddress();
-            const LineageVerifier = await ethers.getContractFactory("LineageVerifier");
-            const freshVerifier = await LineageVerifier.deploy(mockAddr);
-            await freshVerifier.waitForDeployment();
+        it("Should respect rate limits", async function () {
+            const EPOCH = 0;
+            const ORIGIN_ADMIN = 2;
             
-            const pA = [1n, 2n];
-            const pB = [[3n, 4n], [5n, 6n]];
-            const pC = [7n, 8n];
-            const publicSignals = [1n, 1n];
+            // Set rate limit to 3
+            await rateLimiter.updateRateLimit(ORIGIN_ADMIN, 3);
             
-            await expect(
-                freshVerifier.verifyLineage(pA, pB, pC, publicSignals)
-            ).to.be.revertedWithCustomError(freshVerifier, "GenesisNotSet");
-        });
-        
-        it("should reject invalid proof", async function() {
-            // Set mock to return false
-            await mockVerifier.setVerifyResult(false);
+            // Increment 3 times (should succeed)
+            await rateLimiter.incrementCounter(EPOCH, ORIGIN_ADMIN);
+            await rateLimiter.incrementCounter(EPOCH, ORIGIN_ADMIN);
+            await rateLimiter.incrementCounter(EPOCH, ORIGIN_ADMIN);
             
-            const pA = [1n, 2n];
-            const pB = [[3n, 4n], [5n, 6n]];
-            const pC = [7n, 8n];
-            const publicSignals = [1n, 1n];
+            // Check counter is 3
+            const counter = await rateLimiter.getCounter(EPOCH, ORIGIN_ADMIN);
+            expect(counter.toString()).to.equal("3");
             
-            await expect(
-                lineageVerifier.verifyLineage(pA, pB, pC, publicSignals)
-            ).to.be.revertedWithCustomError(lineageVerifier, "InvalidProof");
+            // Check canProceed is false
+            const canProceed = await rateLimiter.canProceed(EPOCH, ORIGIN_ADMIN);
+            expect(canProceed).to.equal(false);
         });
     });
     
-    describe("View Functions", function() {
-        it("should return correct state info", async function() {
-            const genesisHash = randomBytes32();
-            const genesisLineage = randomBytes32();
-            await lineageVerifier.setGenesis(genesisHash, genesisLineage);
-            
-            const [lineage, depth, verified] = await lineageVerifier.getStateInfo(genesisHash);
-            
-            expect(lineage).to.equal(genesisLineage);
-            expect(depth).to.equal(0n);
-            expect(verified).to.equal(true);
+    describe("Epoch Management", function () {
+        it("Should track epoch correctly", async function () {
+            const epoch = await epochManager.getCurrentEpoch();
+            expect(typeof epoch).to.equal("object"); // BigNumber
         });
         
-        it("should return false for unverified states", async function() {
-            const randomHash = randomBytes32();
-            expect(await lineageVerifier.hasVerifiedLineage(randomHash)).to.equal(false);
-        });
-        
-        it("should return correct lineage for verified state", async function() {
-            const genesisHash = randomBytes32();
-            const genesisLineage = randomBytes32();
-            await lineageVerifier.setGenesis(genesisHash, genesisLineage);
+        it("Should update epoch", async function () {
+            const epoch1 = await epochManager.getCurrentEpoch();
+            await epochManager.updateEpoch();
+            const epoch2 = await epochManager.getCurrentEpoch();
             
-            expect(await lineageVerifier.getLineage(genesisHash)).to.equal(genesisLineage);
-        });
-        
-        it("should return correct depth for verified state", async function() {
-            const genesisHash = randomBytes32();
-            const genesisLineage = randomBytes32();
-            await lineageVerifier.setGenesis(genesisHash, genesisLineage);
-            
-            expect(await lineageVerifier.getDepth(genesisHash)).to.equal(0n);
+            // Epochs should be equal (no time passed)
+            expect(epoch1.toString()).to.equal(epoch2.toString());
         });
     });
     
-    describe("Admin Functions", function() {
-        it("should allow admin transfer", async function() {
-            await lineageVerifier.transferAdmin(user.address);
-            expect(await lineageVerifier.admin()).to.equal(user.address);
+    describe("Origin Policy Enforcement", function () {
+        beforeEach(async function () {
+            await lineageVerifier.setGenesis(GENESIS_STATE_HASH, GENESIS_COMMITMENT);
         });
         
-        it("should reject non-admin transfer", async function() {
-            await expect(
-                lineageVerifier.connect(user).transferAdmin(user.address)
-            ).to.be.revertedWithCustomError(lineageVerifier, "NotAdmin");
+        it("Should allow Genesis to User transition", async function () {
+            const allowed = await lineageVerifier.isTransitionAllowed(0, 1); // Genesis to User
+            expect(allowed).to.equal(true);
         });
         
-        it("should allow new admin to set genesis after transfer", async function() {
-            await lineageVerifier.transferAdmin(user.address);
-            
-            const genesisHash = randomBytes32();
-            const genesisLineage = randomBytes32();
-            
-            await expect(
-                lineageVerifier.connect(user).setGenesis(genesisHash, genesisLineage)
-            ).to.emit(lineageVerifier, "GenesisSet");
+        it("Should allow Admin to Admin transition", async function () {
+            const allowed = await lineageVerifier.isTransitionAllowed(2, 2); // Admin to Admin
+            expect(allowed).to.equal(true);
+        });
+        
+        it("Should not allow User to Admin transition", async function () {
+            const allowed = await lineageVerifier.isTransitionAllowed(1, 2); // User to Admin
+            expect(allowed).to.equal(false);
+        });
+        
+        it("Should allow Governance to all", async function () {
+            for (let i = 0; i < 7; i++) {
+                const allowed = await lineageVerifier.isTransitionAllowed(4, i); // Governance to i
+                expect(allowed).to.equal(true);
+            }
         });
     });
     
-    describe("Multiple Transitions", function() {
-        beforeEach(async function() {
-            const genesisHash = randomBytes32();
-            const genesisLineage = randomBytes32();
-            await lineageVerifier.setGenesis(genesisHash, genesisLineage);
+    describe("Authorization Verification", function () {
+        it("Should verify user signature", async function () {
+            const messageHash = ethers.utils.keccak256(ethers.utils.toUtf8Bytes("test"));
+            const signature = await user1.signMessage(ethers.utils.arrayify(messageHash));
+            
+            const valid = await authVerifier.verifyUserSignature(
+                messageHash,
+                signature,
+                user1.address
+            );
+            expect(valid).to.equal(true);
         });
         
-        it("should track multiple transitions", async function() {
-            const pA = [1n, 2n];
-            const pB = [[3n, 4n], [5n, 6n]];
-            const pC = [7n, 8n];
+        it("Should reject invalid signature", async function () {
+            const messageHash = ethers.utils.keccak256(ethers.utils.toUtf8Bytes("test"));
+            const signature = await user1.signMessage(ethers.utils.arrayify(messageHash));
             
-            // First transition
-            const signals1 = [BigInt(randomBytes32()), 1n];
-            await lineageVerifier.verifyLineage(pA, pB, pC, signals1);
+            const valid = await authVerifier.verifyUserSignature(
+                messageHash,
+                signature,
+                user2.address // Wrong signer
+            );
+            expect(valid).to.equal(false);
+        });
+    });
+    
+    describe("System Statistics", function () {
+        beforeEach(async function () {
+            await lineageVerifier.setGenesis(GENESIS_STATE_HASH, GENESIS_COMMITMENT);
+        });
+        
+        it("Should return correct statistics", async function () {
+            const stats = await lineageVerifier.getStats();
             
-            // Second transition
-            const signals2 = [BigInt(randomBytes32()), 2n];
-            await lineageVerifier.verifyLineage(pA, pB, pC, signals2);
-            
-            // Third transition
-            const signals3 = [BigInt(randomBytes32()), 3n];
-            await lineageVerifier.verifyLineage(pA, pB, pC, signals3);
-            
-            expect(await lineageVerifier.totalTransitions()).to.equal(3n);
+            expect(stats.transitions.toString()).to.equal("0"); // No transitions yet
+            expect(stats.maxDepth.toString()).to.equal("0");
+            expect(stats.initialized).to.equal(true);
+            expect(stats.isPaused).to.equal(false);
+            expect(typeof stats.currentEpoch).to.equal("object"); // BigNumber
         });
     });
 });

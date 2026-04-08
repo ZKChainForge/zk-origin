@@ -7,34 +7,46 @@ pragma solidity ^0.8.19;
  */
 contract EpochManager {
     
+    // ============ Constants ============
     uint256 public constant EPOCH_DURATION = 86400; // 24 hours
     
+    // ============ State ============
     uint256 public genesisTime;
     uint256 public currentEpoch;
     address public admin;
     
+    // Track when counters were reset for each epoch
     mapping(uint256 => bool) public epochCountersReset;
     
+    // ============ Events ============
     event EpochChanged(uint256 indexed epoch, uint256 timestamp);
+    event CountersResetForEpoch(uint256 indexed epoch);
+    event AdminTransferred(address indexed newAdmin);
     
+    // ============ Errors ============
     error NotAdmin();
     error NoTimeTravel();
     
+    // ============ Modifiers ============
     modifier onlyAdmin() {
         if (msg.sender != admin) revert NotAdmin();
         _;
     }
     
+    // ============ Constructor ============
     constructor() {
         admin = msg.sender;
         genesisTime = block.timestamp;
         currentEpoch = 0;
     }
     
+    // ============ Core Functions ============
+    
     /**
-     * @notice Get current epoch
+     * @notice Get current epoch based on block timestamp
      */
     function getCurrentEpoch() external view returns (uint256) {
+        if (block.timestamp < genesisTime) revert NoTimeTravel();
         return (block.timestamp - genesisTime) / EPOCH_DURATION;
     }
     
@@ -47,7 +59,16 @@ contract EpochManager {
     }
     
     /**
-     * @notice Update current epoch
+     * @notice Get time until next epoch
+     */
+    function timeUntilNextEpoch() external view returns (uint256) {
+        uint256 nextEpochTime = genesisTime + ((currentEpoch + 1) * EPOCH_DURATION);
+        if (block.timestamp >= nextEpochTime) return 0;
+        return nextEpochTime - block.timestamp;
+    }
+    
+    /**
+     * @notice Update current epoch if needed
      */
     function updateEpoch() external {
         uint256 newEpoch = (block.timestamp - genesisTime) / EPOCH_DURATION;
@@ -62,5 +83,38 @@ contract EpochManager {
      */
     function markCountersReset(uint256 epoch) external onlyAdmin {
         epochCountersReset[epoch] = true;
+        emit CountersResetForEpoch(epoch);
+    }
+    
+    /**
+     * @notice Check if epoch counters were reset
+     */
+    function wereCountersReset(uint256 epoch) external view returns (bool) {
+        return epochCountersReset[epoch];
+    }
+    
+    /**
+     * @notice Get epoch duration
+     */
+    function getEpochDuration() external pure returns (uint256) {
+        return EPOCH_DURATION;
+    }
+    
+    /**
+     * @notice Get genesis time
+     */
+    function getGenesisTime() external view returns (uint256) {
+        return genesisTime;
+    }
+    
+    // ============ Admin Functions ============
+    
+    /**
+     * @notice Transfer admin role
+     */
+    function transferAdmin(address newAdmin) external onlyAdmin {
+        if (newAdmin == address(0)) revert();
+        admin = newAdmin;
+        emit AdminTransferred(newAdmin);
     }
 }
