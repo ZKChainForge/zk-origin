@@ -3,46 +3,50 @@ pragma solidity ^0.8.19;
 
 /**
  * @title ILineageVerifier
- * @notice Interface for the ZK-ORIGIN Lineage Verifier
+ * @notice Interface for ZK-ORIGIN state lineage verification
  */
 interface ILineageVerifier {
-    /// @notice Emitted when genesis state is set
+    // ============ Events ============
+    
     event GenesisSet(
-        bytes32 indexed stateHash, 
-        bytes32 indexed lineageCommitment,
-        address indexed setter
+        bytes32 indexed genesisStateHash,
+        bytes32 indexed genesisLineageCommitment,
+        address indexed admin
     );
     
-    /// @notice Emitted when a lineage proof is verified
     event LineageVerified(
         bytes32 indexed prevStateHash,
         bytes32 indexed newStateHash,
-        bytes32 lineageCommitment,
+        bytes32 indexed newLineageCommitment,
         uint256 depth,
         uint8 originClass,
-        address indexed creator
+        uint256 epochId,
+        address creator
     );
     
-    /// @notice Set the genesis state (can only be called once)
+    event OriginClassViolation(
+        bytes32 indexed prevStateHash,
+        uint8 prevClass,
+        uint8 newClass
+    );
+    
+    // ============ Functions ============
+    
     function setGenesis(
         bytes32 genesisStateHash,
         bytes32 genesisLineageCommitment
     ) external;
     
-    /// @notice Verify and record a lineage proof
     function verifyLineage(
         uint256[2] calldata pA,
         uint256[2][2] calldata pB,
         uint256[2] calldata pC,
-        uint256[2] calldata publicSignals
+        uint256[12] calldata publicSignals
     ) external returns (bool);
     
-    /// @notice Get the lineage commitment for a state
     function getLineage(bytes32 stateHash) external view returns (bytes32);
     
-    /// @notice Check if a state has verified lineage
     function hasVerifiedLineage(bytes32 stateHash) external view returns (bool);
     
-    /// @notice Get the current lineage depth for a state
     function getDepth(bytes32 stateHash) external view returns (uint256);
 }

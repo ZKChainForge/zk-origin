@@ -4,9 +4,9 @@ pragma solidity ^0.8.19;
 /**
  * @title PolicyRegistry
  * @author ZK-ORIGIN Team
- * @notice Manages origin transition policies for ZK-ORIGIN
- * @dev Stores the Merkle root of allowed (from_origin, to_origin) pairs
+ * @notice Manages origin transition policies
  */
+
 contract PolicyRegistry {
     
     // Types
