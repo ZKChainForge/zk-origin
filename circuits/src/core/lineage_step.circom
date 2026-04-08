@@ -8,17 +8,15 @@ include "../lib/constants.circom";
 include "./genesis_validator.circom";
 include "./policy_verifier.circom";
 include "./rate_limiter.circom";
+include "./epoch_manager.circom";
 
 /*
  * Lineage Step: Complete State Transition Verification
  * 
- * Verifies a single state transition with full lineage tracking.
- * Checks:
- * 1. Policy allows transition
- * 2. Authorization is valid
- * 3. Rate limits are enforced
- * 4. Lineage commitment is updated correctly
- * 5. Nonce prevents replays
+ * SECURITY UPDATES:
+ * - Added epoch transition handling
+ * - Added authorization verification placeholders
+ * - Added overflow protection
  */
 
 template LineageStep(POLICY_MERKLE_DEPTH) {
@@ -34,28 +32,32 @@ template LineageStep(POLICY_MERKLE_DEPTH) {
     signal input expectedGenesisHash;
     
     // ============ PRIVATE INPUTS ============
+    signal input prevEpochId;
     signal input prevDepth;
     signal input nonce;
     signal input prevNonce;
     signal input timestamp;
+    signal input prevTimestamp;
     signal input policyProof[POLICY_MERKLE_DEPTH];
     signal input policyIndices[POLICY_MERKLE_DEPTH];
     signal input prevCounters[7];
     signal input rateLimits[7];
-    signal input authWitness[200];
+    signal input authorizationValid;  // From external auth circuit
     
     // ============ OUTPUTS ============
     signal output newLineageCommitment;
     signal output newCounterCommitment;
     signal output lineageValid;
     
-    // ============ DECLARE ALL COMPONENTS FIRST ============
+    // ============ DECLARE COMPONENTS ============
     component prevClassValidator = ValidOriginClass();
     component newClassValidator = ValidOriginClass();
     component nonceCheck = ZKIsEqual();
+    component nonceOverflowCheck = ValidNonce();
     component stateDiff = ZKIsEqual();
     component genesisValidator = GenesisValidator();
     component policyVerifier = PolicyVerifier(POLICY_MERKLE_DEPTH);
+    component epochManager = EpochManager();
     component rateLimiter = RateLimiter();
     component transitionHasher = PoseidonHash6();
     component lineageHasher = PoseidonHash3();
@@ -67,10 +69,13 @@ template LineageStep(POLICY_MERKLE_DEPTH) {
     newClassValidator.origin <== newOriginClass;
     newClassValidator.valid === 1;
     
-    // ============ STEP 2: VALIDATE NONCE (REPLAY PREVENTION) ============
+    // ============ STEP 2: VALIDATE NONCE ============
     nonceCheck.in[0] <== nonce;
     nonceCheck.in[1] <== prevNonce + 1;
     nonceCheck.out === 1;
+    
+    nonceOverflowCheck.nonce <== nonce;
+    nonceOverflowCheck.valid === 1;
     
     // ============ STEP 3: VALIDATE STATES ARE DIFFERENT ============
     stateDiff.in[0] <== prevStateHash;
@@ -78,13 +83,24 @@ template LineageStep(POLICY_MERKLE_DEPTH) {
     signal stateChanged <== 1 - stateDiff.out;
     stateChanged === 1;
     
-    // ============ STEP 4: VALIDATE GENESIS STATE ============
+    // ============ STEP 4: VALIDATE GENESIS ============
     genesisValidator.prevStateHash <== prevStateHash;
     genesisValidator.expectedGenesisHash <== expectedGenesisHash;
     genesisValidator.currentDepth <== prevDepth;
     genesisValidator.valid === 1;
     
-    // ============ STEP 5: VERIFY POLICY ALLOWS TRANSITION ============
+    // ============ STEP 5: VERIFY EPOCH TRANSITION ============
+    epochManager.prevEpochId <== prevEpochId;
+    epochManager.newEpochId <== epochId;
+    epochManager.prevTimestamp <== prevTimestamp;
+    epochManager.newTimestamp <== timestamp;
+    for (var i = 0; i < 7; i++) {
+        epochManager.prevCounters[i] <== prevCounters[i];
+    }
+    epochManager.epochValid === 1;
+    epochManager.countersValid === 1;
+    
+    // ============ STEP 6: VERIFY POLICY ============
     policyVerifier.prevOriginClass <== prevOriginClass;
     policyVerifier.newOriginClass <== newOriginClass;
     policyVerifier.policyRoot <== policyRoot;
@@ -94,7 +110,15 @@ template LineageStep(POLICY_MERKLE_DEPTH) {
     }
     policyVerifier.isAllowed === 1;
     
-    // ============ STEP 6: VERIFY RATE LIMITS ============
+    // ============ STEP 7: VERIFY AUTHORIZATION ============
+    // NOTE: In full implementation, call appropriate auth circuit based on newOriginClass
+    // For now, accept precomputed authorization result
+    component authCheck = ZKIsEqual();
+    authCheck.in[0] <== authorizationValid;
+    authCheck.in[1] <== 1;
+    authCheck.out === 1;
+    
+    // ============ STEP 8: VERIFY RATE LIMITS ============
     rateLimiter.epochId <== epochId;
     rateLimiter.newOriginClass <== newOriginClass;
     rateLimiter.prevCounterCommitment <== prevCounterCommitment;
@@ -105,7 +129,7 @@ template LineageStep(POLICY_MERKLE_DEPTH) {
     rateLimiter.rateLimitOk === 1;
     newCounterCommitment <== rateLimiter.newCounterCommitment;
     
-    // ============ STEP 7: COMPUTE TRANSITION HASH ============
+    // ============ STEP 9: COMPUTE TRANSITION HASH ============
     transitionHasher.in[0] <== prevStateHash;
     transitionHasher.in[1] <== newStateHash;
     transitionHasher.in[2] <== newOriginClass;
@@ -113,13 +137,11 @@ template LineageStep(POLICY_MERKLE_DEPTH) {
     transitionHasher.in[4] <== timestamp;
     transitionHasher.in[5] <== nonce;
     
-    // ============ STEP 8: UPDATE LINEAGE COMMITMENT ============
+    // ============ STEP 10: UPDATE LINEAGE COMMITMENT ============
     lineageHasher.in[0] <== prevLineageCommitment;
     lineageHasher.in[1] <== transitionHasher.out;
     lineageHasher.in[2] <== prevDepth + 1;
     
     newLineageCommitment <== lineageHasher.out;
-    
-    // ============ OUTPUT ============
     lineageValid <== 1;
 }

@@ -7,6 +7,7 @@ node_modules/
 /circuits/build
 /circuits/logs
 /circuits/test
+/contracts/deployment.json
 /dist
 /contracts/node_modules
 /contracts/deployments
@@ -14,6 +15,11 @@ node_modules/
 /circuits/node_modules
 /contracts/artifacts
 /contracts/cache
+
+/circuits/proof.json
+/circuits/public.json
+/circuits/test_input.json
+/contracts/witness.wtns 
 
 *.ptau
 *.zkey

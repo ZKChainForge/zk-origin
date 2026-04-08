@@ -4,13 +4,13 @@ include "./comparators.circom";
 include "./constants.circom";
 
 /*
- * Validators and Type Checkers
+ * Input Validators
  * 
- * Ensures inputs are within valid ranges.
+ * Ensures all inputs are within valid ranges.
  */
 
 // ============================================
-// VALID ORIGIN CLASS
+// VALID ORIGIN CLASS (0-6)
 // ============================================
 template ValidOriginClass() {
     signal input origin;
@@ -23,43 +23,55 @@ template ValidOriginClass() {
 }
 
 // ============================================
-// VALID DEPTH
+// VALID DEPTH (< MAX_LINEAGE_DEPTH)
 // ============================================
 template ValidDepth() {
     signal input depth;
     signal output valid;
     
-    valid <== 1;
+    component lt = ZKLessThan(32);
+    lt.in[0] <== depth;
+    lt.in[1] <== MAX_LINEAGE_DEPTH();
+    valid <== lt.out;
 }
 
 // ============================================
-// VALID TIMESTAMP
+// VALID TIMESTAMP (< u32::MAX)
 // ============================================
 template ValidTimestamp() {
     signal input timestamp;
     signal output valid;
     
-    valid <== 1;
+    component lt = ZKLessThan(32);
+    lt.in[0] <== timestamp;
+    lt.in[1] <== COUNTER_MAX();
+    valid <== lt.out;
 }
 
 // ============================================
-// VALID EPOCH
+// VALID EPOCH (< MAX_EPOCH_NUMBER)
 // ============================================
 template ValidEpoch() {
     signal input epoch;
     signal output valid;
     
-    valid <== 1;
+    component lt = ZKLessThan(32);
+    lt.in[0] <== epoch;
+    lt.in[1] <== MAX_EPOCH_NUMBER();
+    valid <== lt.out;
 }
 
 // ============================================
-// VALID NONCE
+// VALID NONCE (< 2^64)
 // ============================================
 template ValidNonce() {
     signal input nonce;
     signal output valid;
     
-    valid <== 1;
+    component lt = ZKLessThan(64);
+    lt.in[0] <== nonce;
+    lt.in[1] <== 18446744073709551615; // 2^64 - 1
+    valid <== lt.out;
 }
 
 // ============================================
@@ -89,13 +101,12 @@ template DifferentHashes() {
 }
 
 // ============================================
-// NON-ZERO COUNTER
+// BINARY CONSTRAINT (0 or 1)
 // ============================================
-template NonZeroCounter() {
-    signal input counter;
+template IsBinary() {
+    signal input value;
     signal output valid;
     
-    component isZero = ZKIsZero();
-    isZero.in <== counter;
-    valid <== 1 - isZero.out;
+    value * (value - 1) === 0;
+    valid <== 1;
 }
