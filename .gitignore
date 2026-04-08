@@ -3,7 +3,10 @@ node_modules/
 .env
 .env.example
 # Compilation output
+/build
 /circuits/build
+/circuits/logs
+/circuits/test
 /dist
 /contracts/node_modules
 /contracts/deployments
@@ -11,6 +14,10 @@ node_modules/
 /circuits/node_modules
 /contracts/artifacts
 /contracts/cache
+
+*.ptau
+*.zkey
+*.r1cs
 # pnpm deploy output
 /bundle
 

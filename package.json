@@ -1,31 +1,25 @@
+
 {
-  "dependencies": {
-    "circomlib": "^2.0.5",
-    "commander": "^14.0.3",
-    "ffjavascript": "^0.3.1",
-    "snarkjs": "^0.7.6"
+  "name": "zk-origin",
+  "version": "1.0.0",
+  "description": "ZK Provenance & State-Lineage Verification Protocol",
+  "main": "index.js",
+  "scripts": {
+    "compile": "bash scripts/compile.sh",
+    "setup": "bash scripts/setup.sh",
+    "prove": "bash scripts/prove.sh",
+    "verify": "bash scripts/verify.sh",
+    "test": "node test/test.js",
+    "clean": "bash scripts/clean.sh",
+    "status": "bash scripts/status.sh"
   },
-  "devDependencies": {
-    "hardhat":"2.28.6",
-    "@nomiclabs/hardhat-etherscan":"^3.1.8",
-    "@nomiclabs/hardhat-ethers": "^2.2.3",
-    "@types/big-integer": "^0.0.30",
-    "@types/chai": "^4.3.20",
-    "@types/circomlibjs": "^0.1.6",
-    "@types/mocha": "^10.0.10",
-    "@types/node": "^22.19.11",
-    "@types/snarkjs": "^0.7.9",
-    "big-integer": "^1.6.52",
-    "chai": "^4.5.0",
-    "chalk": "^4.1.2",
-    "circomlibjs": "^0.1.7",
-    "dotenv": "^16.3.1",
-    "ethers": "^5.8.0",
-    "forge-std": "github:foundry-rs/forge-std#v1.9.4",
-    "mocha": "^10.2.0",
-    "ora": "^5.4.1",
-    "ts-node": "^10.9.2",
-    "typescript": "~5.8.0",
-    "viem": "^2.45.3"
-  }
+  "dependencies": {
+    "circom": "^2.1.0",
+    "snarkjs": "^0.7.0",
+    "circomlib": "^2.0.5",
+    "ethers": "^6.0.0"
+  },
+  "devDependencies": {},
+  "author": "ZK-ORIGIN",
+  "license": "MIT"
 }
