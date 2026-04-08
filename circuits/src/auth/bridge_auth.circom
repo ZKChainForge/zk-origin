@@ -1,22 +1,31 @@
 pragma circom 2.1.0;
 
-/*
- * Bridge Authentication: Cross-Chain Attestation Verification
- * 
- * Verifies that a state import from another chain is properly attested
- * by the bridge validators and is included in the bridge's commitment.
- */
-
 include "../../node_modules/circomlib/circuits/eddsa.circom";
 include "../lib/comparators.circom";
 include "../lib/merkle.circom";
+include "../lib/validators.circom";
+include "../lib/constants.circom";
 
-template BridgeAuth(ATTESTATION_DEPTH) {
-    // ============ PUBLIC INPUTS ============
+/*
+ * Bridge Authentication: Cross-Chain Attestation with Finality
+ * 
+ * SECURITY FIX: Verifies source chain finality and validator quorum
+ */
+
+template BridgeAuth(ATTESTATION_DEPTH, MAX_VALIDATORS) {
     signal input sourceChainId;
     signal input expectedSourceChain;
     signal input stateRoot;
     signal input expectedRoot;
+    
+    // ============ FINALITY INPUTS ============
+    signal input sourceBlockNumber;
+    signal input sourceLatestBlock;
+    
+    // ============ VALIDATOR QUORUM INPUTS ============
+    signal input validatorPublicKeys[MAX_VALIDATORS][2];
+    signal input validatorSignatures[MAX_VALIDATORS][2];
+    signal input validatorMask[MAX_VALIDATORS];
     
     // ============ PRIVATE INPUTS ============
     signal input bridgeSignatureR;
@@ -26,14 +35,56 @@ template BridgeAuth(ATTESTATION_DEPTH) {
     signal input merkleProof[ATTESTATION_DEPTH];
     signal input merkleIndices[ATTESTATION_DEPTH];
     
-    // ============ OUTPUT ============
     signal output valid;
     
     // ============ VERIFY CHAIN ID MATCHES ============
-    component chainMatch = IsEqual();
+    component chainMatch = ZKIsEqual();
     chainMatch.in[0] <== sourceChainId;
     chainMatch.in[1] <== expectedSourceChain;
     chainMatch.out === 1;
+    
+    // ============ VERIFY FINALITY ============
+    signal confirmations;
+    confirmations <== sourceLatestBlock - sourceBlockNumber;
+    
+    component finalityCheck = ZKGreaterEqThan(32);
+    finalityCheck.in[0] <== confirmations;
+    finalityCheck.in[1] <== MIN_BRIDGE_CONFIRMATIONS();
+    finalityCheck.out === 1;
+    
+    // ============ VERIFY VALIDATOR MASKS ARE BINARY ============
+    component maskValidators[MAX_VALIDATORS];
+    for (var i = 0; i < MAX_VALIDATORS; i++) {
+        maskValidators[i] = IsBinary();
+        maskValidators[i].value <== validatorMask[i];
+        maskValidators[i].valid === 1;
+    }
+    
+    // ============ VERIFY VALIDATOR QUORUM ============
+    component validatorVerifiers[MAX_VALIDATORS];
+    signal validSignatures[MAX_VALIDATORS + 1];
+    validSignatures[0] <== 0;
+    
+    for (var i = 0; i < MAX_VALIDATORS; i++) {
+        validatorVerifiers[i] = EdDSAVerifier();
+        validatorVerifiers[i].M <== stateRoot;
+        validatorVerifiers[i].Ax <== validatorPublicKeys[i][0];
+        validatorVerifiers[i].Ay <== validatorPublicKeys[i][1];
+        validatorVerifiers[i].R8x <== validatorSignatures[i][0];
+        validatorVerifiers[i].R8y <== validatorSignatures[i][1];
+        
+        validSignatures[i + 1] <== validSignatures[i] + 
+            validatorVerifiers[i].valid * validatorMask[i];
+    }
+    
+    // Require 2/3+ quorum
+    signal quorumThreshold;
+    quorumThreshold <== (MAX_VALIDATORS * BRIDGE_QUORUM_NUMERATOR()) \ BRIDGE_QUORUM_DENOMINATOR();
+    
+    component quorumCheck = ZKGreaterEqThan(8);
+    quorumCheck.in[0] <== validSignatures[MAX_VALIDATORS];
+    quorumCheck.in[1] <== quorumThreshold;
+    quorumCheck.out === 1;
     
     // ============ VERIFY BRIDGE SIGNATURE ============
     component bridgeVerifier = EdDSAVerifier();
@@ -61,5 +112,7 @@ component main {public [
     sourceChainId,
     expectedSourceChain,
     stateRoot,
-    expectedRoot
-]} = BridgeAuth(6);
+    expectedRoot,
+    sourceBlockNumber,
+    sourceLatestBlock
+]} = BridgeAuth(6, 21);

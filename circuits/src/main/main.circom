@@ -1,3 +1,4 @@
+
 pragma circom 2.1.0;
 
 include "../lib/poseidon.circom";
@@ -8,13 +9,9 @@ include "../core/lineage_step.circom";
 
 /*
  * ZK-ORIGIN Main Circuit
- * 
- * Complete state transition proof with all validations.
- * Entry point for the proving system.
  */
 
 template Main() {
-    // ============ PUBLIC INPUTS ============
     signal input prevStateHash;
     signal input newStateHash;
     signal input epochId;
@@ -25,26 +22,24 @@ template Main() {
     signal input policyRoot;
     signal input expectedGenesisHash;
     
-    // ============ PRIVATE INPUTS ============
+    signal input prevEpochId;
     signal input prevDepth;
     signal input nonce;
     signal input prevNonce;
     signal input timestamp;
+    signal input prevTimestamp;
     signal input policyProof[6];
     signal input policyIndices[6];
     signal input prevCounters[7];
     signal input rateLimits[7];
-    signal input authWitness[200];
+    signal input authorizationValid;
     
-    // ============ OUTPUTS ============
     signal output newLineageCommitment;
     signal output newCounterCommitment;
     signal output lineageValid;
     
-    // ============ DECLARE COMPONENT FIRST ============
     component lineageStep = LineageStep(6);
     
-    // ============ PUBLIC INPUTS ============
     lineageStep.prevStateHash <== prevStateHash;
     lineageStep.newStateHash <== newStateHash;
     lineageStep.epochId <== epochId;
@@ -55,11 +50,12 @@ template Main() {
     lineageStep.policyRoot <== policyRoot;
     lineageStep.expectedGenesisHash <== expectedGenesisHash;
     
-    // ============ PRIVATE INPUTS ============
+    lineageStep.prevEpochId <== prevEpochId;
     lineageStep.prevDepth <== prevDepth;
     lineageStep.nonce <== nonce;
     lineageStep.prevNonce <== prevNonce;
     lineageStep.timestamp <== timestamp;
+    lineageStep.prevTimestamp <== prevTimestamp;
     
     for (var i = 0; i < 6; i++) {
         lineageStep.policyProof[i] <== policyProof[i];
@@ -69,11 +65,8 @@ template Main() {
         lineageStep.prevCounters[i] <== prevCounters[i];
         lineageStep.rateLimits[i] <== rateLimits[i];
     }
-    for (var i = 0; i < 200; i++) {
-        lineageStep.authWitness[i] <== authWitness[i];
-    }
+    lineageStep.authorizationValid <== authorizationValid;
     
-    // ============ OUTPUTS ============
     newLineageCommitment <== lineageStep.newLineageCommitment;
     newCounterCommitment <== lineageStep.newCounterCommitment;
     lineageValid <== lineageStep.lineageValid;

@@ -1,20 +1,16 @@
 pragma circom 2.1.0;
 
-/*
- * Governance Authentication: Proposal Approval Verification
- * 
- * Verifies that:
- * 1. A governance proposal received sufficient votes
- * 2. Timelock has expired
- * 3. The transition matches the proposal content
- */
-
 include "../lib/comparators.circom";
 include "../lib/poseidon.circom";
 include "../lib/constants.circom";
 
+/*
+ * Governance Authentication: Proposal Approval Verification
+ * 
+ * SECURITY FIX: Prevents underflow in vote subtraction
+ */
+
 template GovernanceAuth() {
-    // ============ PUBLIC INPUTS ============
     signal input proposalId;
     signal input proposalContentHash;
     signal input transitionHash;
@@ -24,32 +20,55 @@ template GovernanceAuth() {
     signal input proposalTimestamp;
     signal input currentTimestamp;
     
-    // ============ OUTPUT ============
     signal output valid;
     
-    // ============ VERIFY VOTES EXCEED THRESHOLD ============
+    // ============ VALIDATE VOTE RANGES ============
+    component yesRange = ZKLessThan(32);
+    yesRange.in[0] <== yesVotes;
+    yesRange.in[1] <== MAX_GOVERNANCE_VOTES();
+    yesRange.out === 1;
+    
+    component noRange = ZKLessThan(32);
+    noRange.in[0] <== noVotes;
+    noRange.in[1] <== MAX_GOVERNANCE_VOTES();
+    noRange.out === 1;
+    
+    // ============ VERIFY YES > NO (PREVENTS UNDERFLOW) ============
+    component yesGreater = ZKGreaterEqThan(32);
+    yesGreater.in[0] <== yesVotes;
+    yesGreater.in[1] <== noVotes;
+    yesGreater.out === 1;
+    
+    // ============ COMPUTE NET VOTES (NOW SAFE) ============
     signal netVotes;
     netVotes <== yesVotes - noVotes;
     
-    component voteCheck = GreaterThan(32);
+    // ============ VERIFY NET VOTES EXCEED THRESHOLD ============
+    component voteCheck = ZKGreaterThan(32);
     voteCheck.in[0] <== netVotes;
     voteCheck.in[1] <== requiredThreshold;
     voteCheck.out === 1;
+    
+    // ============ CHECK NO OVERFLOW IN THRESHOLD CALCULATION ============
+    signal thresholdPlusNo;
+    thresholdPlusNo <== requiredThreshold + noVotes;
+    
+    component noOverflow = ZKLessThan(32);
+    noOverflow.in[0] <== thresholdPlusNo;
+    noOverflow.in[1] <== COUNTER_MAX();
+    noOverflow.out === 1;
     
     // ============ VERIFY TIMELOCK EXPIRED ============
     signal timeSinceProposal;
     timeSinceProposal <== currentTimestamp - proposalTimestamp;
     
-    signal timelockDuration;
-    timelockDuration <== GOVERNANCE_TIMELOCK_SECONDS();
-    
-    component timelockCheck = GreaterEqThan(32);
+    component timelockCheck = ZKGreaterEqThan(32);
     timelockCheck.in[0] <== timeSinceProposal;
-    timelockCheck.in[1] <== timelockDuration;
+    timelockCheck.in[1] <== GOVERNANCE_TIMELOCK_SECONDS();
     timelockCheck.out === 1;
     
     // ============ VERIFY TRANSITION MATCHES PROPOSAL ============
-    component contentMatch = IsEqual();
+    component contentMatch = ZKIsEqual();
     contentMatch.in[0] <== proposalContentHash;
     contentMatch.in[1] <== transitionHash;
     contentMatch.out === 1;
