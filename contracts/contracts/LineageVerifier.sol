@@ -5,6 +5,7 @@ import "./interfaces/ILineageVerifier.sol";
 import "./Groth16Verifier.sol";
 import "./EpochManager.sol";
 import "./RateLimiter.sol";
+import "./AuthorizationVerifier.sol";
 
 /**
  * @title LineageVerifier
@@ -18,7 +19,7 @@ contract LineageVerifier is ILineageVerifier {
     uint256 public constant MAX_DEPTH = 1_000_000;
     uint256 public constant VERSION = 1;
     
-    // Origin classes (must match circuit)
+    // Origin classes
     uint8 public constant ORIGIN_GENESIS = 0;
     uint8 public constant ORIGIN_USER = 1;
     uint8 public constant ORIGIN_ADMIN = 2;
@@ -32,6 +33,7 @@ contract LineageVerifier is ILineageVerifier {
     Groth16Verifier public immutable groth16Verifier;
     EpochManager public immutable epochManager;
     RateLimiter public immutable rateLimiter;
+    AuthorizationVerifier public immutable authVerifier;
     
     // ============ Mutable State ============
     
@@ -46,6 +48,10 @@ contract LineageVerifier is ILineageVerifier {
     bool public paused;
     bool public allowDuplicateStates;
     
+    // Policy enforcement matrix
+    bool[7][7] public policyMatrix;
+    
+    // State tracking
     mapping(bytes32 => bytes32) public stateLineage;
     mapping(bytes32 => uint256) public stateDepth;
     mapping(bytes32 => bool) public verifiedStates;
@@ -54,25 +60,9 @@ contract LineageVerifier is ILineageVerifier {
     mapping(bytes32 => address) public stateCreator;
     mapping(bytes32 => bool) public usedProofs;
     
+    // Statistics
     uint256 public totalTransitions;
     uint256 public maxDepthReached;
-    
-    // ============ Structs ============
-    
-    struct PublicSignals {
-        bytes32 prevLineageCommitment;    // Index 0
-        bytes32 newLineageCommitment;     // Index 1
-        bytes32 policyRoot;               // Index 2
-        bytes32 prevStateHash;            // Index 3
-        bytes32 newStateHash;             // Index 4
-        bytes32 prevCounterCommitment;    // Index 5
-        bytes32 newCounterCommitment;     // Index 6
-        uint256 epochId;                  // Index 7
-        uint256 prevOriginClass;          // Index 8
-        uint256 newOriginClass;           // Index 9
-        uint256 timestamp;                // Index 10
-        uint256 lineageValid;             // Index 11
-    }
     
     // ============ Errors ============
     
@@ -91,9 +81,11 @@ contract LineageVerifier is ILineageVerifier {
     error ProofAlreadyUsed();
     error StateAlreadyExists();
     error InvalidOriginClass();
-    error EpochMismatch();
-    error RateLimitExceeded();
-    error InvalidLineageValid();
+    error EpochMismatchError(uint256 expected, uint256 actual);
+    error RateLimitExceededError(uint8 originClass);
+    error OriginPolicyViolatedError(uint8 from, uint8 to);
+    error AuthorizationFailedError();
+    error LineageValidFlagError();
     
     // ============ Modifiers ============
     
@@ -118,6 +110,7 @@ contract LineageVerifier is ILineageVerifier {
         address _groth16Verifier,
         address _epochManager,
         address _rateLimiter,
+        address _authVerifier,
         bytes32 _genesisLineageCommitment,
         bytes32 _policyRoot,
         bool _allowDuplicates
@@ -125,25 +118,59 @@ contract LineageVerifier is ILineageVerifier {
         if (_groth16Verifier == address(0)) revert ZeroAddress();
         if (_epochManager == address(0)) revert ZeroAddress();
         if (_rateLimiter == address(0)) revert ZeroAddress();
+        if (_authVerifier == address(0)) revert ZeroAddress();
         
         groth16Verifier = Groth16Verifier(_groth16Verifier);
         epochManager = EpochManager(_epochManager);
         rateLimiter = RateLimiter(_rateLimiter);
+        authVerifier = AuthorizationVerifier(_authVerifier);
         
         admin = msg.sender;
         currentPolicyRoot = _policyRoot;
         genesisLineageCommitment = _genesisLineageCommitment;
         allowDuplicateStates = _allowDuplicates;
         paused = false;
+        
+        _initializeDefaultPolicy();
+    }
+    
+    // ============ Policy Initialization ============
+    
+    function _initializeDefaultPolicy() internal {
+        // Genesis → User, Admin, System
+        policyMatrix[ORIGIN_GENESIS][ORIGIN_USER] = true;
+        policyMatrix[ORIGIN_GENESIS][ORIGIN_ADMIN] = true;
+        policyMatrix[ORIGIN_GENESIS][ORIGIN_SYSTEM] = true;
+        
+        // User → User
+        policyMatrix[ORIGIN_USER][ORIGIN_USER] = true;
+        
+        // Admin → User, Admin, Bridge, System
+        policyMatrix[ORIGIN_ADMIN][ORIGIN_USER] = true;
+        policyMatrix[ORIGIN_ADMIN][ORIGIN_ADMIN] = true;
+        policyMatrix[ORIGIN_ADMIN][ORIGIN_BRIDGE] = true;
+        policyMatrix[ORIGIN_ADMIN][ORIGIN_SYSTEM] = true;
+        
+        // Bridge → User
+        policyMatrix[ORIGIN_BRIDGE][ORIGIN_USER] = true;
+        
+        // Governance → ALL
+        for (uint8 i = 0; i < 7; i++) {
+            policyMatrix[ORIGIN_GOVERNANCE][i] = true;
+        }
+        
+        // System → User, System
+        policyMatrix[ORIGIN_SYSTEM][ORIGIN_USER] = true;
+        policyMatrix[ORIGIN_SYSTEM][ORIGIN_SYSTEM] = true;
+        
+        // Emergency → User, Admin, System
+        policyMatrix[ORIGIN_EMERGENCY][ORIGIN_USER] = true;
+        policyMatrix[ORIGIN_EMERGENCY][ORIGIN_ADMIN] = true;
+        policyMatrix[ORIGIN_EMERGENCY][ORIGIN_SYSTEM] = true;
     }
     
     // ============ Admin Functions ============
     
-    /**
-     * @notice Initialize genesis state
-     * @param _genesisStateHash Genesis state hash
-     * @param _genesisLineageCommitment Genesis lineage commitment
-     */
     function setGenesis(
         bytes32 _genesisStateHash,
         bytes32 _genesisLineageCommitment
@@ -166,49 +193,152 @@ contract LineageVerifier is ILineageVerifier {
         emit GenesisSet(_genesisStateHash, _genesisLineageCommitment, msg.sender);
     }
     
-    /**
-     * @notice Update policy root
-     * @param _newPolicyRoot New policy root
-     */
     function updatePolicyRoot(bytes32 _newPolicyRoot) external onlyAdmin {
         currentPolicyRoot = _newPolicyRoot;
     }
     
-    /**
-     * @notice Transfer admin role (two-step process)
-     * @param _newAdmin New admin address
-     */
+    function setPolicyTransition(
+        uint8 from,
+        uint8 to,
+        bool allowed
+    ) external onlyAdmin {
+        if (from >= 7 || to >= 7) revert InvalidOriginClass();
+        policyMatrix[from][to] = allowed;
+    }
+    
     function transferAdmin(address _newAdmin) external onlyAdmin {
         if (_newAdmin == address(0)) revert ZeroAddress();
         pendingAdmin = _newAdmin;
     }
     
-    /**
-     * @notice Accept admin role transfer
-     */
     function acceptAdmin() external {
         if (msg.sender != pendingAdmin) revert NotPendingAdmin();
         admin = pendingAdmin;
         pendingAdmin = address(0);
     }
     
-    /**
-     * @notice Pause/unpause contract
-     * @param _paused Whether to pause
-     */
     function setPaused(bool _paused) external onlyAdmin {
         paused = _paused;
     }
     
-    // ============ Core Verification ============
+    // ============ Core Verification (OPTIMIZED) ============
     
     /**
-     * @notice Verify a lineage proof (12 public signals)
-     * @param pA Groth16 proof point A
-     * @param pB Groth16 proof point B
-     * @param pC Groth16 proof point C
-     * @param publicSignals 12 public signals from circuit
-     * @return success Whether verification succeeded
+     * @notice Helper: Extract and validate public signals
+     */
+    function _extractSignals(uint256[12] calldata signals)
+        internal
+        pure
+        returns (
+            bytes32 prevLineage,
+            bytes32 newLineage,
+            bytes32 policyRoot,
+            bytes32 prevStateHash,
+            bytes32 newStateHash,
+            uint8 prevOriginClass,
+            uint8 newOriginClass,
+            uint256 epochId,
+            uint256 lineageValid
+        )
+    {
+        prevLineage = bytes32(signals[0]);
+        newLineage = bytes32(signals[1]);
+        policyRoot = bytes32(signals[2]);
+        prevStateHash = bytes32(signals[3]);
+        newStateHash = bytes32(signals[4]);
+        epochId = signals[7];
+        prevOriginClass = uint8(signals[8]);
+        newOriginClass = uint8(signals[9]);
+        lineageValid = signals[11];
+        
+        // Quick validation
+        if (prevOriginClass > 6) revert InvalidOriginClass();
+        if (newOriginClass > 6) revert InvalidOriginClass();
+        if (lineageValid != 1) revert LineageValidFlagError();
+    }
+    
+    /**
+     * @notice Helper: Verify all preconditions
+     */
+    function _verifyPreconditions(
+        bytes32 prevStateHash,
+        bytes32 newStateHash,
+        bytes32 prevLineageCommitment,
+        bytes32 policyRootSignal,
+        uint8 prevOriginClass,
+        uint8 newOriginClass
+    ) internal view {
+        if (newStateHash == bytes32(0)) revert ZeroStateHash();
+        if (prevStateHash == bytes32(0)) revert ZeroStateHash();
+        
+        if (!allowDuplicateStates && verifiedStates[newStateHash]) {
+            revert StateAlreadyExists();
+        }
+        
+        if (!verifiedStates[prevStateHash]) {
+            revert PreviousStateNotVerified();
+        }
+        
+        if (stateLineage[prevStateHash] != prevLineageCommitment) {
+            revert LineageMismatch();
+        }
+        
+        if (policyRootSignal != currentPolicyRoot) {
+            revert PolicyMismatch();
+        }
+        
+        uint8 actualPrevOriginClass = stateOriginClass[prevStateHash];
+        if (actualPrevOriginClass != prevOriginClass) {
+            revert OriginPolicyViolatedError(actualPrevOriginClass, prevOriginClass);
+        }
+        
+        if (!policyMatrix[prevOriginClass][newOriginClass]) {
+            revert OriginPolicyViolatedError(prevOriginClass, newOriginClass);
+        }
+    }
+    
+    /**
+     * @notice Helper: Verify and update epoch/rate limits
+     */
+    function _verifyAndUpdateEpoch(uint8 newOriginClass, uint256 epochId) internal {
+        uint256 currentEpoch = epochManager.getCurrentEpoch();
+        if (epochId != currentEpoch) {
+            revert EpochMismatchError(currentEpoch, epochId);
+        }
+        epochManager.updateEpoch();
+        
+        if (!rateLimiter.canProceed(epochId, newOriginClass)) {
+            revert RateLimitExceededError(newOriginClass);
+        }
+    }
+    
+    /**
+     * @notice Helper: Record new state
+     */
+    function _recordState(
+        bytes32 newStateHash,
+        bytes32 newLineageCommitment,
+        uint8 newOriginClass,
+        uint256 prevDepth
+    ) internal {
+        uint256 newDepth = prevDepth + 1;
+        if (newDepth > MAX_DEPTH) revert MaxDepthExceeded();
+        
+        stateLineage[newStateHash] = newLineageCommitment;
+        stateDepth[newStateHash] = newDepth;
+        verifiedStates[newStateHash] = true;
+        stateOriginClass[newStateHash] = newOriginClass;
+        stateTimestamp[newStateHash] = block.timestamp;
+        stateCreator[newStateHash] = msg.sender;
+        
+        totalTransitions++;
+        if (newDepth > maxDepthReached) {
+            maxDepthReached = newDepth;
+        }
+    }
+    
+    /**
+     * @notice Main verification function (OPTIMIZED)
      */
     function verifyLineage(
         uint256[2] calldata pA,
@@ -217,140 +347,67 @@ contract LineageVerifier is ILineageVerifier {
         uint256[12] calldata publicSignals
     ) external override whenNotPaused genesisRequired returns (bool) {
         
-        // Parse public signals
-        PublicSignals memory signals = _parseSignals(publicSignals);
+        // Extract and validate signals
+        (
+            bytes32 prevLineage,
+            bytes32 newLineage,
+            bytes32 policyRoot,
+            bytes32 prevStateHash,
+            bytes32 newStateHash,
+            uint8 prevOriginClass,
+            uint8 newOriginClass,
+            uint256 epochId,
+            uint256 lineageValid
+        ) = _extractSignals(publicSignals);
         
-        // Generate proof hash for replay protection
-        bytes32 proofHash = keccak256(abi.encodePacked(pA, pB, pC, publicSignals));
+        // Compute proof hash for replay protection
+        bytes32 proofHash = keccak256(abi.encode(pA, pB, pC));
         if (usedProofs[proofHash]) revert ProofAlreadyUsed();
-        
-        // Mark proof as used
         usedProofs[proofHash] = true;
         
-        // Validate all inputs
-        _validateSignals(signals);
+        // Verify all preconditions
+        _verifyPreconditions(
+            prevStateHash,
+            newStateHash,
+            prevLineage,
+            policyRoot,
+            prevOriginClass,
+            newOriginClass
+        );
         
         // Verify Groth16 proof
         if (!groth16Verifier.verifyProof(pA, pB, pC, publicSignals)) {
             revert InvalidProof();
         }
         
-        // Get previous state depth
-        uint256 prevDepth = stateDepth[signals.prevStateHash];
-        uint256 newDepth = prevDepth + 1;
+        // Verify and update epoch/rate limits
+        _verifyAndUpdateEpoch(newOriginClass, epochId);
         
-        if (newDepth > MAX_DEPTH) revert MaxDepthExceeded();
+        // Get previous depth
+        uint256 prevDepth = stateDepth[prevStateHash];
         
         // Record new state
-        _recordState(
-            signals.newStateHash,
-            signals.newLineageCommitment,
-            newDepth,
-            uint8(signals.newOriginClass)
-        );
+        _recordState(newStateHash, newLineage, newOriginClass, prevDepth);
         
-        totalTransitions++;
-        if (newDepth > maxDepthReached) {
-            maxDepthReached = newDepth;
-        }
+        // Increment rate limiter
+        rateLimiter.incrementCounter(epochId, newOriginClass);
         
+        // Emit event
         emit LineageVerified(
-            signals.prevStateHash,
-            signals.newStateHash,
-            signals.newLineageCommitment,
-            newDepth,
-            uint8(signals.newOriginClass),
-            signals.epochId,
+            prevStateHash,
+            newStateHash,
+            newLineage,
+            prevDepth + 1,
+            newOriginClass,
+            epochId,
             msg.sender
         );
         
         return true;
     }
     
-    // ============ Internal Functions ============
-    
-    /**
-     * @notice Parse 12 public signals into struct
-     */
-    function _parseSignals(uint256[12] calldata signals)
-        internal
-        pure
-        returns (PublicSignals memory)
-    {
-        return PublicSignals({
-            prevLineageCommitment: bytes32(signals[0]),
-            newLineageCommitment: bytes32(signals[1]),
-            policyRoot: bytes32(signals[2]),
-            prevStateHash: bytes32(signals[3]),
-            newStateHash: bytes32(signals[4]),
-            prevCounterCommitment: bytes32(signals[5]),
-            newCounterCommitment: bytes32(signals[6]),
-            epochId: signals[7],
-            prevOriginClass: signals[8],
-            newOriginClass: signals[9],
-            timestamp: signals[10],
-            lineageValid: signals[11]
-        });
-    }
-    
-    /**
-     * @notice Validate all signal constraints
-     */
-    function _validateSignals(PublicSignals memory signals) internal view {
-        // 1. Validate state hashes are non-zero
-        if (signals.newStateHash == bytes32(0)) revert ZeroStateHash();
-        if (signals.prevStateHash == bytes32(0)) revert ZeroStateHash();
-        
-        // 2. Check duplicate state prevention
-        if (!allowDuplicateStates && verifiedStates[signals.newStateHash]) {
-            revert StateAlreadyExists();
-        }
-        
-        // 3. Verify previous state exists
-        if (!verifiedStates[signals.prevStateHash]) {
-            revert PreviousStateNotVerified();
-        }
-        
-        // 4. Verify lineage commitment matches
-        if (stateLineage[signals.prevStateHash] != signals.prevLineageCommitment) {
-            revert LineageMismatch();
-        }
-        
-        // 5. Verify policy root matches
-        if (signals.policyRoot != currentPolicyRoot) {
-            revert PolicyMismatch();
-        }
-        
-        // 6. Validate origin classes
-        if (signals.prevOriginClass > 6) revert InvalidOriginClass();
-        if (signals.newOriginClass > 6) revert InvalidOriginClass();
-        
-        // 7. Verify lineageValid flag
-        if (signals.lineageValid != 1) revert InvalidLineageValid();
-    }
-    
-    /**
-     * @notice Record verified state
-     */
-    function _recordState(
-        bytes32 _stateHash,
-        bytes32 _lineageCommitment,
-        uint256 _depth,
-        uint8 _originClass
-    ) internal {
-        stateLineage[_stateHash] = _lineageCommitment;
-        stateDepth[_stateHash] = _depth;
-        verifiedStates[_stateHash] = true;
-        stateOriginClass[_stateHash] = _originClass;
-        stateTimestamp[_stateHash] = block.timestamp;
-        stateCreator[_stateHash] = msg.sender;
-    }
-    
     // ============ View Functions ============
     
-    /**
-     * @notice Get lineage commitment for state
-     */
     function getLineage(bytes32 stateHash)
         external
         view
@@ -360,9 +417,6 @@ contract LineageVerifier is ILineageVerifier {
         return stateLineage[stateHash];
     }
     
-    /**
-     * @notice Check if state has verified lineage
-     */
     function hasVerifiedLineage(bytes32 stateHash)
         external
         view
@@ -372,9 +426,6 @@ contract LineageVerifier is ILineageVerifier {
         return verifiedStates[stateHash];
     }
     
-    /**
-     * @notice Get depth of state
-     */
     function getDepth(bytes32 stateHash)
         external
         view
@@ -384,36 +435,52 @@ contract LineageVerifier is ILineageVerifier {
         return stateDepth[stateHash];
     }
     
-    /**
-     * @notice Check if proof hash has been used
-     */
-    function isProofUsed(bytes32 proofHash) external view returns (bool) {
-        return usedProofs[proofHash];
+    function isTransitionAllowed(uint8 from, uint8 to)
+        external
+        view
+        returns (bool)
+    {
+        if (from >= 7 || to >= 7) return false;
+        return policyMatrix[from][to];
     }
     
-    /**
-     * @notice Get origin class of state
-     */
-    function getOriginClass(bytes32 stateHash) external view returns (uint8) {
+    function getOriginClass(bytes32 stateHash)
+        external
+        view
+        returns (uint8)
+    {
         return stateOriginClass[stateHash];
     }
     
-    /**
-     * @notice Get state creator
-     */
-    function getStateCreator(bytes32 stateHash) external view returns (address) {
+    function getStateCreator(bytes32 stateHash)
+        external
+        view
+        returns (address)
+    {
         return stateCreator[stateHash];
     }
     
-    /**
-     * @notice Get stats
-     */
+    function isProofUsed(bytes32 proofHash)
+        external
+        view
+        returns (bool)
+    {
+        return usedProofs[proofHash];
+    }
+    
     function getStats() external view returns (
         uint256 transitions,
         uint256 maxDepth,
-        bool isInitialized,
-        bool isPaused
+        bool initialized,
+        bool isPaused,
+        uint256 currentEpoch
     ) {
-        return (totalTransitions, maxDepthReached, genesisInitialized, paused);
+        return (
+            totalTransitions,
+            maxDepthReached,
+            genesisInitialized,
+            paused,
+            epochManager.getCurrentEpoch()
+        );
     }
 }

@@ -8,6 +8,7 @@ node_modules/
 /circuits/logs
 /circuits/test
 /contracts/deployment.json
+/contracts/deployment-complete.json
 /dist
 /contracts/node_modules
 /contracts/deployments
