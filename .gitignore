@@ -3,6 +3,8 @@ node_modules/
 .env
 .env.example
 # Compilation output
+/target
+/policy_roort.json
 /build
 /circuits/build
 /circuits/logs
@@ -14,6 +16,7 @@ node_modules/
 /contracts/deployments
 /demo/node_modules
 /circuits/node_modules
+/contracts/proof_root.json
 /contracts/artifacts
 /contracts/cache
 

@@ -3,99 +3,88 @@ pragma solidity ^0.8.19;
 
 /**
  * @title PolicyRegistry
- * @author ZK-ORIGIN Team
- * @notice Manages origin transition policies
+ * @notice Manages origin transition policies with Merkle tree
  */
-
 contract PolicyRegistry {
     
-    // Types
-    
     struct Policy {
-        bytes32 merkleRoot;      // Merkle root of allowed transitions
-        uint256 createdAt;       // When the policy was created
-        bool active;             // Whether the policy is active
-        string description;      // Human-readable description
+        bytes32 merkleRoot;
+        uint256 createdAt;
+        bool active;
+        string description;
+        uint256 transitionCount;
     }
     
-    
-    // State Variables
-    
-    
-    /// @notice Admin address
     address public admin;
-    
-    /// @notice Current active policy ID
     uint256 public currentPolicyId;
-    
-    /// @notice Mapping from policy ID to policy
     mapping(uint256 => Policy) public policies;
-    
-    /// @notice Total number of policies
     uint256 public policyCount;
     
-    
-    // Events
-    
+    // Transition storage for verification
+    mapping(uint256 => mapping(bytes32 => bool)) public policyTransitions;
     
     event PolicyCreated(uint256 indexed policyId, bytes32 merkleRoot, string description);
     event PolicyActivated(uint256 indexed policyId);
-    event PolicyDeactivated(uint256 indexed policyId);
-    
-    
-    // Errors
-    
+    event TransitionAdded(uint256 indexed policyId, uint8 from, uint8 to);
     
     error NotAdmin();
     error PolicyNotFound();
     error PolicyNotActive();
     
-    // Constructor
+    modifier onlyAdmin() {
+        if (msg.sender != admin) revert NotAdmin();
+        _;
+    }
     
     constructor() {
         admin = msg.sender;
     }
     
-    // Admin Functions
-    
     /**
-     * @notice Create a new policy
-     * @param merkleRoot Merkle root of allowed transitions
+     * @notice Create policy with pre-computed Merkle root
+     * @param merkleRoot Root of allowed transitions Merkle tree
      * @param description Human-readable description
-     * @return policyId The new policy ID
+     * @param transitions Array of (from, to) pairs for verification
      */
     function createPolicy(
         bytes32 merkleRoot,
-        string calldata description
-    ) external returns (uint256 policyId) {
-        if (msg.sender != admin) revert NotAdmin();
-        
+        string calldata description,
+        uint8[2][] calldata transitions
+    ) external onlyAdmin returns (uint256 policyId) {
         policyId = policyCount++;
+        
         policies[policyId] = Policy({
             merkleRoot: merkleRoot,
             createdAt: block.timestamp,
             active: false,
-            description: description
+            description: description,
+            transitionCount: transitions.length
         });
+        
+        // Store transitions for off-chain verification
+        for (uint256 i = 0; i < transitions.length; i++) {
+            bytes32 transitionHash = keccak256(abi.encodePacked(
+                transitions[i][0],
+                transitions[i][1]
+            ));
+            policyTransitions[policyId][transitionHash] = true;
+            
+            emit TransitionAdded(policyId, transitions[i][0], transitions[i][1]);
+        }
         
         emit PolicyCreated(policyId, merkleRoot, description);
     }
     
     /**
      * @notice Activate a policy
-     * @param policyId ID of the policy to activate
      */
-    function activatePolicy(uint256 policyId) external {
-        if (msg.sender != admin) revert NotAdmin();
+    function activatePolicy(uint256 policyId) external onlyAdmin {
         if (policyId >= policyCount) revert PolicyNotFound();
         
-        // Deactivate current policy
         if (currentPolicyId < policyCount) {
             policies[currentPolicyId].active = false;
-            emit PolicyDeactivated(currentPolicyId);
         }
         
-        // Activate new policy
         policies[policyId].active = true;
         currentPolicyId = policyId;
         
@@ -103,20 +92,15 @@ contract PolicyRegistry {
     }
     
     /**
-     * @notice Transfer admin role
-     * @param newAdmin Address of the new admin
+     * @notice Check if transition is allowed (off-chain check)
      */
-    function transferAdmin(address newAdmin) external {
-        if (msg.sender != admin) revert NotAdmin();
-        admin = newAdmin;
+    function isTransitionAllowed(uint8 from, uint8 to) external view returns (bool) {
+        bytes32 transitionHash = keccak256(abi.encodePacked(from, to));
+        return policyTransitions[currentPolicyId][transitionHash];
     }
     
-    // View Functions
- 
-    
     /**
-     * @notice Get the current policy Merkle root
-     * @return merkleRoot The current policy Merkle root
+     * @notice Get current policy root
      */
     function getCurrentPolicyRoot() external view returns (bytes32) {
         if (!policies[currentPolicyId].active) revert PolicyNotActive();
@@ -125,8 +109,6 @@ contract PolicyRegistry {
     
     /**
      * @notice Get policy details
-     * @param policyId ID of the policy
-     * @return policy The policy details
      */
     function getPolicy(uint256 policyId) external view returns (Policy memory) {
         if (policyId >= policyCount) revert PolicyNotFound();
