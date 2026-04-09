@@ -30,7 +30,6 @@ node_modules/
 *.r1cs
 # pnpm deploy output
 /bundle
-
 # Hardhat Build Artifacts
 /artifacts
 
