@@ -1,4 +1,3 @@
-
 pragma circom 2.1.0;
 
 include "../lib/poseidon.circom";
@@ -72,6 +71,7 @@ template Main() {
     lineageValid <== lineageStep.lineageValid;
 }
 
+// ✅ ONLY THIS FILE HAS component main
 component main {public [
     prevStateHash,
     newStateHash,
