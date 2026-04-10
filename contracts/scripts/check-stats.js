@@ -1,67 +1,85 @@
 const hre = require("hardhat");
-const fs = require("fs");
-const path = require("path");
+const { getContractInstance, getDeploymentMetadata, getAllContractAddresses } = require("./helpers/deployment");
 
-async function main() {
-    console.log(" ZK-ORIGIN Contract Statistics\n");
+async function checkStats() {
+    console.log("╔════════════════════════════════════════════════════════╗");
+    console.log("║       ZK-ORIGIN Contract Statistics Report             ║");
+    console.log("╚════════════════════════════════════════════════════════╝\n");
 
-    // Load deployment
-    const deploymentFile = path.join(__dirname, "../deployment-complete.json");
-    if (!fs.existsSync(deploymentFile)) {
-        throw new Error("No deployment found. Run deploy-complete.js first.");
+    try {
+        // Load deployment info
+        const metadata = getDeploymentMetadata();
+        const addresses = getAllContractAddresses();
+
+        console.log(" Deployment Information:");
+        console.log("   Network:", metadata.network);
+        console.log("   Chain ID:", metadata.chainId);
+        console.log("   Deployer:", metadata.deployer);
+        console.log("   Timestamp:", metadata.timestamp, "\n");
+
+        console.log(" Contract Addresses:");
+        console.log("   LineageVerifier:", addresses.LineageVerifier);
+        console.log("   Groth16Verifier:", addresses.Groth16Verifier);
+        console.log("   EpochManager:", addresses.EpochManager);
+        console.log("   RateLimiter:", addresses.RateLimiter);
+        console.log("   AuthorizationVerifier:", addresses.AuthorizationVerifier);
+        console.log("   PolicyRegistry:", addresses.PolicyRegistry);
+        console.log("   BatchVerifier:", addresses.BatchVerifier, "\n");
+
+        // Get contract instances
+        const lineageVerifier = await getContractInstance(hre, "LineageVerifier");
+        const epochManager = await getContractInstance(hre, "EpochManager");
+        const policyRegistry = await getContractInstance(hre, "PolicyRegistry");
+
+        console.log(" Contract Statistics:");
+        
+        // LineageVerifier stats
+        const maxDepth = await lineageVerifier.MAX_DEPTH();
+        const version = await lineageVerifier.VERSION();
+        const genesisInit = await lineageVerifier.genesisInitialized();
+        
+        console.log("\n   LineageVerifier:");
+        console.log("      MAX_DEPTH:", maxDepth.toString());
+        console.log("      VERSION:", version.toString());
+        console.log("      Genesis Initialized:", genesisInit);
+        console.log("      Genesis State Hash:", metadata.genesisStateHash);
+        console.log("      Genesis Lineage Commitment:", metadata.genesisLineageCommitment);
+
+        // EpochManager stats
+        const currentEpoch = await epochManager.getCurrentEpoch();
+        const epochDuration = await epochManager.EPOCH_DURATION();
+        
+        console.log("\n   EpochManager:");
+        console.log("      Current Epoch:", currentEpoch.toString());
+        console.log("      Epoch Duration:", epochDuration.toString(), "seconds");
+        console.log("      Hours per epoch:", (epochDuration.toNumber() / 3600).toFixed(2));
+
+        // PolicyRegistry stats
+        const currentPolicyRoot = await policyRegistry.getCurrentPolicyRoot();
+        
+        console.log("\n   PolicyRegistry:");
+        console.log("      Current Policy Root:", currentPolicyRoot);
+        console.log("      Policy Root (stored):", metadata.policyRoot);
+        console.log("      Transition Count:", metadata.transitionCount);
+
+        // System Configuration
+        console.log("\n  System Configuration:");
+        console.log("   Policy Root:", metadata.policyRoot);
+        console.log("   Transition Count:", metadata.transitionCount);
+        console.log("   Allow Duplicate States:", "false (default)");
+
+        
+
+    } catch (error) {
+        console.error("\n Error: Invalid deployment structure");
+        console.error("   Details:", error.message);
+  
     }
-
-    const deployment = JSON.parse(fs.readFileSync(deploymentFile, "utf8"));
-
-    // Get contracts
-    const lineageVerifier = await hre.ethers.getContractAt(
-        "LineageVerifier",
-        deployment.lineageVerifier
-    );
-
-    const epochManager = await hre.ethers.getContractAt(
-        "EpochManager",
-        deployment.epochManager
-    );
-
-    const policyRegistry = await hre.ethers.getContractAt(
-        "PolicyRegistry",
-        deployment.policyRegistry
-    );
-
-    // Get stats
-    const stats = await lineageVerifier.getStats();
-    const currentEpoch = await epochManager.getCurrentEpoch();
-    const currentPolicyRoot = await policyRegistry.getCurrentPolicyRoot();
-
-
-    console.log("   Network:", deployment.network);
-    console.log("   Deployed:", deployment.timestamp);
-    console.log("   Deployer:", deployment.deployer, "\n");
-
-
-    console.log("   Total transitions:", stats.transitions.toString());
-    console.log("   Max depth reached:", stats.maxDepth.toString());
-    console.log("   Genesis initialized:", stats.initialized);
-    console.log("   Contract paused:", stats.isPaused);
-    console.log("   Current epoch:", stats.currentEpoch.toString(), "\n");
-
-
-    console.log("   Current epoch:", currentEpoch.toString());
-    const timeToNext = await epochManager.timeUntilNextEpoch();
-    console.log("   Time to next epoch:", timeToNext.toString(), "seconds\n");
-
-    
-    console.log("   Active policy root:", currentPolicyRoot);
-    const policyCount = await policyRegistry.policyCount();
-    console.log("   Total policies:", policyCount.toString(), "\n");
-
-    
 }
 
-main()
+checkStats()
     .then(() => process.exit(0))
     .catch((error) => {
-        console.error(error);
+        console.error("\n Fatal error:", error.message);
         process.exit(1);
     });

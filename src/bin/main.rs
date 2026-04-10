@@ -48,7 +48,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 }
 
 fn generate_policy() -> Result<(), Box<dyn std::error::Error>> {
-    println!("🌳 Generating Policy Merkle Tree...\n");
+    println!(" Generating Policy Merkle Tree...\n");
     
     let transitions = get_policy_leaves();
     let tree = PolicyTree::new(transitions.clone());
@@ -70,10 +70,10 @@ fn verify_proof(from: u8, to: u8) -> Result<(), Box<dyn std::error::Error>> {
     let tree = PolicyTree::new(transitions);
     
     if let Some(proof) = tree.prove(from_class, to_class) {
-        println!("✅ Proof found for {} → {}", from_class, to_class);
+        println!(" Proof found for {} → {}", from_class, to_class);
         println!("Valid: {}", tree.verify(&proof));
     } else {
-        println!("❌ No proof found (transition not allowed)");
+        println!(" No proof found (transition not allowed)");
     }
     
     Ok(())
@@ -83,7 +83,7 @@ fn show_policy() {
     use zk_origin::policy::default_policy_matrix;
     use zk_origin::types::OriginClass;
     
-    println!("📋 ZK-ORIGIN Policy Matrix\n");
+    println!(" ZK-ORIGIN Policy Matrix\n");
     
     let policy = default_policy_matrix();
     
@@ -91,7 +91,7 @@ fn show_policy() {
         println!("{:?}:", from);
         for to in OriginClass::all() {
             if policy.get(&(from, to)).copied().unwrap_or(false) {
-                println!("  → {:?} ✓", to);
+                println!("  → {:?} ", to);
             }
         }
         println!();

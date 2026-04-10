@@ -15,17 +15,6 @@ ff = "0.13"
 ff_ce = "0.11"
 group = "0.13"
 pairing = "0.23"
-ark-std = "0.4"
-ark-ff = "0.4"
-ark-ec = "0.4"
-ark-serialize = "0.4"
-ark-relations = "0.4"
-ark-r1cs-std = "0.4"
-ark-groth16 = "0.4"
-ark-bn254 = "0.4"
-ark-crypto-primitives = "0.4"
-
-# Poseidon hash
 poseidon-rs = "0.0.10"
 
 # Serialization
@@ -39,11 +28,7 @@ rand = "0.8"
 sha2 = "0.10"
 thiserror = "1.0"
 anyhow = "1.0"
-
-# CLI
 clap = { version = "4.4", features = ["derive"] }
-
-# Performance
 rayon = "1.8"
 criterion = "0.5"
 
@@ -55,7 +40,6 @@ authors.workspace = true
 license.workspace = true
 
 [dependencies]
-# Workspace dependencies
 bellman.workspace = true
 ff.workspace = true
 ff_ce.workspace = true
@@ -77,6 +61,22 @@ criterion.workspace = true
 [[bin]]
 name = "generate_policy"
 path = "src/bin/generate_policy.rs"
+
+[[bin]]
+name = "verify_policy"
+path = "src/bin/verify_policy.rs"
+
+[[bin]]
+name = "generate_witness"
+path = "src/bin/generate_witness.rs"
+
+[[bin]]
+name = "submit_proof"
+path = "src/bin/submit_proof.rs"
+
+[[bin]]
+name = "proof_pipeline"
+path = "src/bin/proof_pipeline.rs"
 
 [[bin]]
 name = "zk-origin"

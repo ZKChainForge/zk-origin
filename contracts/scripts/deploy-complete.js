@@ -56,19 +56,16 @@ async function main() {
         transitions = [];
     }
 
-    const deployments = {};
     const deploymentFile = path.join(__dirname, "../deployment-complete.json");
 
     // ============================================================
     // STEP 1: Deploy Groth16Verifier
     // ============================================================
 
-
+    console.log(" Deploying Groth16Verifier...");
     const Groth16Verifier = await hre.ethers.getContractFactory("Groth16Verifier");
     const groth16Verifier = await Groth16Verifier.deploy();
     await groth16Verifier.deployed();
-    
-    deployments.groth16Verifier = groth16Verifier.address;
     
     console.log(" Groth16Verifier deployed to:", groth16Verifier.address);
    
@@ -77,12 +74,10 @@ async function main() {
     // STEP 2: Deploy EpochManager
     // ============================================================
 
-
+    console.log(" Deploying EpochManager...");
     const EpochManager = await hre.ethers.getContractFactory("EpochManager");
     const epochManager = await EpochManager.deploy();
     await epochManager.deployed();
-    
-    deployments.epochManager = epochManager.address;
     
     const currentEpoch = await epochManager.getCurrentEpoch();
     const epochDuration = await epochManager.EPOCH_DURATION();
@@ -95,12 +90,10 @@ async function main() {
     // STEP 3: Deploy RateLimiter
     // ============================================================
 
-
+    console.log(" Deploying RateLimiter...");
     const RateLimiter = await hre.ethers.getContractFactory("RateLimiter");
     const rateLimiter = await RateLimiter.deploy();
     await rateLimiter.deployed();
-    
-    deployments.rateLimiter = rateLimiter.address;
     
     console.log(" RateLimiter deployed to:", rateLimiter.address);
 
@@ -109,12 +102,10 @@ async function main() {
     // STEP 4: Deploy AuthorizationVerifier
     // ============================================================
 
-
+    console.log(" Deploying AuthorizationVerifier...");
     const AuthorizationVerifier = await hre.ethers.getContractFactory("AuthorizationVerifier");
     const authVerifier = await AuthorizationVerifier.deploy();
     await authVerifier.deployed();
-    
-    deployments.authorizationVerifier = authVerifier.address;
     
     console.log(" AuthorizationVerifier deployed to:", authVerifier.address);
 
@@ -123,10 +114,11 @@ async function main() {
     // STEP 5: Deploy LineageVerifier (Main Contract)
     // ============================================================
 
-
     const genesisLineageCommitment = "0x" + "0".repeat(64);
     const allowDuplicateStates = false;
 
+    console.log(" Deploying LineageVerifier...");
+    console.log("   Dependencies:");
     console.log("     - Groth16Verifier:", groth16Verifier.address);
     console.log("     - EpochManager:", epochManager.address);
     console.log("     - RateLimiter:", rateLimiter.address);
@@ -147,8 +139,6 @@ async function main() {
     );
     await lineageVerifier.deployed();
     
-    deployments.lineageVerifier = lineageVerifier.address;
-    
     console.log(" LineageVerifier deployed to:", lineageVerifier.address);
     console.log("   Max depth:", (await lineageVerifier.MAX_DEPTH()).toString());
     console.log("   Version:", (await lineageVerifier.VERSION()).toString(), "\n");
@@ -157,8 +147,7 @@ async function main() {
     // STEP 6: Transfer RateLimiter Admin to LineageVerifier
     // ============================================================
 
-
-    console.log("   Transferring RateLimiter admin to LineageVerifier...");
+    console.log(" Transferring RateLimiter admin to LineageVerifier...");
     const transferTx = await rateLimiter.transferAdmin(lineageVerifier.address);
     await transferTx.wait();
     
@@ -168,11 +157,10 @@ async function main() {
     // STEP 7: Deploy PolicyRegistry
     // ============================================================
 
+    console.log(" Deploying PolicyRegistry...");
     const PolicyRegistry = await hre.ethers.getContractFactory("PolicyRegistry");
     const policyRegistry = await PolicyRegistry.deploy();
     await policyRegistry.deployed();
-    
-    deployments.policyRegistry = policyRegistry.address;
     
     console.log(" PolicyRegistry deployed to:", policyRegistry.address, "\n");
 
@@ -180,8 +168,7 @@ async function main() {
     // STEP 8: Create and Activate Initial Policy
     // ============================================================
     if (transitions.length > 0) {
-
-
+        console.log(" Creating and activating policy...");
         console.log("   Creating policy with", transitions.length, "transitions...");
         const createPolicyTx = await policyRegistry.createPolicy(
             policyRoot,
@@ -200,28 +187,25 @@ async function main() {
         const currentPolicyRoot = await policyRegistry.getCurrentPolicyRoot();
         console.log("   Active policy root:", currentPolicyRoot, "\n");
     } else {
-        console.log("  No transitions loaded, skipping policy creation\n");
+        console.log(" No transitions loaded, skipping policy creation\n");
     }
 
     // ============================================================
     // STEP 9: Deploy BatchVerifier
     // ============================================================
 
-
+    console.log(" Deploying BatchVerifier...");
     const BatchVerifier = await hre.ethers.getContractFactory("BatchVerifier");
     const batchVerifier = await BatchVerifier.deploy(lineageVerifier.address);
     await batchVerifier.deployed();
     
-    deployments.batchVerifier = batchVerifier.address;
-    
-    console.log(" BatchVerifier deployed to:", batchVerifier.address);
-    
+    console.log(" BatchVerifier deployed to:", batchVerifier.address, "\n");
 
     // ============================================================
     // STEP 10: Set Genesis State
     // ============================================================
 
-
+    console.log(" Setting genesis state...");
     const genesisStateHash = hre.ethers.utils.keccak256(hre.ethers.utils.toUtf8Bytes("ZK-ORIGIN Genesis State v1.0"));
     const genesisCommitment = hre.ethers.utils.keccak256(hre.ethers.utils.toUtf8Bytes("ZK-ORIGIN Genesis Lineage v1.0"));
 
@@ -241,40 +225,57 @@ async function main() {
     // ============================================================
     // Save Deployment Info
     // ============================================================
-    deployments.network = hre.network.name;
-    deployments.chainId = (await hre.ethers.provider.getNetwork()).chainId.toString();
-    deployments.deployer = deployer.address;
-    deployments.timestamp = new Date().toISOString();
-    deployments.genesisStateHash = genesisStateHash;
-    deployments.genesisLineageCommitment = genesisCommitment;
-    deployments.policyRoot = policyRoot;
-    deployments.transitionCount = transitions.length;
+
+    const deployments = {
+        LineageVerifier: lineageVerifier.address,
+        Groth16Verifier: groth16Verifier.address,
+        EpochManager: epochManager.address,
+        RateLimiter: rateLimiter.address,
+        AuthorizationVerifier: authVerifier.address,
+        PolicyRegistry: policyRegistry.address,
+        BatchVerifier: batchVerifier.address,
+        network: hre.network.name,
+        chainId: (await hre.ethers.provider.getNetwork()).chainId.toString(),
+        deployer: deployer.address,
+        timestamp: new Date().toISOString(),
+        genesisStateHash: genesisStateHash,
+        genesisLineageCommitment: genesisCommitment,
+        policyRoot: policyRoot,
+        transitionCount: transitions.length
+    };
 
     fs.writeFileSync(
         deploymentFile,
         JSON.stringify(deployments, null, 2)
     );
 
-    
+    console.log("=============================================================");
+    console.log(" Deployment Complete!");
+    console.log("=============================================================\n");
 
-    console.log(" Deployment:");
+    console.log(" Deployment Metadata:");
     console.log("   Network:", deployments.network);
     console.log("   Chain ID:", deployments.chainId);
     console.log("   Deployer:", deployments.deployer);
     console.log("   Timestamp:", deployments.timestamp, "\n");
 
     console.log(" Contract Addresses:");
-    console.log("   Groth16Verifier:", deployments.groth16Verifier);
-    console.log("   EpochManager:", deployments.epochManager);
-    console.log("   RateLimiter:", deployments.rateLimiter);
-    console.log("   AuthorizationVerifier:", deployments.authorizationVerifier);
-    console.log("   LineageVerifier:", deployments.lineageVerifier);
-    console.log("   PolicyRegistry:", deployments.policyRegistry);
-    console.log("   BatchVerifier:", deployments.batchVerifier, "\n");
+    console.log("   LineageVerifier:", deployments.LineageVerifier);
+    console.log("   Groth16Verifier:", deployments.Groth16Verifier);
+    console.log("   EpochManager:", deployments.EpochManager);
+    console.log("   RateLimiter:", deployments.RateLimiter);
+    console.log("   AuthorizationVerifier:", deployments.AuthorizationVerifier);
+    console.log("   PolicyRegistry:", deployments.PolicyRegistry);
+    console.log("   BatchVerifier:", deployments.BatchVerifier, "\n");
 
-    console.log(" Deployment saved to:", deploymentFile, "\n");
+    console.log(" Deployment Configuration:");
+    console.log("   Genesis State Hash:", deployments.genesisStateHash);
+    console.log("   Genesis Lineage Commitment:", deployments.genesisLineageCommitment);
+    console.log("   Policy Root:", deployments.policyRoot);
+    console.log("   Transition Count:", deployments.transitionCount, "\n");
 
-
+    console.log(" Deployment file saved to:", deploymentFile);
+    
 
     return deployments;
 }
@@ -282,7 +283,7 @@ async function main() {
 main()
     .then(() => process.exit(0))
     .catch((error) => {
-        console.error("\n❌ Deployment failed:\n");
+        console.error("\n Deployment failed:\n");
         console.error(error);
         process.exit(1);
     });
