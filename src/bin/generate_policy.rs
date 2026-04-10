@@ -5,7 +5,7 @@ use std::io::Write;
 use ff_ce::PrimeField;  // ← ADD THIS LINE
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
-    println!("🌳 Generating Policy Merkle Tree...\n");
+    println!(" Generating Policy Merkle Tree...\n");
     
     // Get all allowed transitions
     let transitions = get_policy_leaves();
@@ -57,8 +57,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     let mut file = File::create("policy_root.json")?;
     file.write_all(serde_json::to_string_pretty(&output)?.as_bytes())?;
     
-    println!("\n✅ Policy root saved to policy_root.json");
-    println!("✅ Ready for contract deployment");
+
     
     Ok(())
 }

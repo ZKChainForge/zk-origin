@@ -1,6 +1,6 @@
 use super::*;
 use poseidon_rs::{Poseidon, Fr, FrRepr};
-use ff_ce::PrimeField;  // ← Use ff_ce instead of ff
+use ff_ce::PrimeField;
 
 /// Merkle tree for policy
 #[derive(Debug, Clone)]
@@ -57,9 +57,26 @@ impl PolicyTree {
         }
     }
     
+    // ============ PUBLIC GETTERS ============
+    
     /// Get root
     pub fn root(&self) -> Fr {
         self.root
+    }
+    
+    /// Get tree depth
+    pub fn get_depth(&self) -> usize {
+        self.depth
+    }
+    
+    /// Get number of leaves
+    pub fn leaf_count(&self) -> usize {
+        self.leaves.len()
+    }
+    
+    /// Get all leaves
+    pub fn get_leaves(&self) -> &[Fr] {
+        &self.leaves
     }
     
     /// Get Merkle proof for transition
@@ -114,7 +131,7 @@ impl PolicyTree {
     }
 }
 
-/// Policy Merkle proof (NO SERIALIZE - Fr doesn't support it)
+/// Policy Merkle proof
 #[derive(Debug, Clone)]
 pub struct PolicyProof {
     pub from: OriginClass,
@@ -186,7 +203,7 @@ mod tests {
         let transitions = get_policy_leaves();
         let tree = PolicyTree::new(transitions);
         
-        assert_eq!(tree.depth, 6);
-        assert_eq!(tree.leaves.len(), 64);
+        assert_eq!(tree.get_depth(), 6);
+        assert_eq!(tree.leaf_count(), 64);
     }
 }
