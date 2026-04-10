@@ -24,7 +24,8 @@ node_modules/
 /circuits/public.json
 /circuits/test_input.json
 /contracts/witness.wtns 
-
+proof_root.json
+proof_submission.json
 *.ptau
 *.zkey
 *.r1cs
