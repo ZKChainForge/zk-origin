@@ -26,6 +26,7 @@ node_modules/
 /contracts/witness.wtns 
 proof_root.json
 proof_submission.json
+policy_roort.json
 *.ptau
 *.zkey
 *.r1cs
