@@ -7,7 +7,7 @@ include "../lib/constants.circom";
 /*
  * Governance Authentication: Proposal Approval Verification
  * 
- * SECURITY FIX: Prevents underflow in vote subtraction
+ * FIXED: Uses absolute threshold instead of subtraction
  */
 
 template GovernanceAuth() {
@@ -33,32 +33,27 @@ template GovernanceAuth() {
     noRange.in[1] <== MAX_GOVERNANCE_VOTES();
     noRange.out === 1;
     
-    // ============ VERIFY YES > NO (PREVENTS UNDERFLOW) ============
-    component yesGreater = ZKGreaterEqThan(32);
-    yesGreater.in[0] <== yesVotes;
-    yesGreater.in[1] <== noVotes;
-    yesGreater.out === 1;
-    
-    // ============ COMPUTE NET VOTES (NOW SAFE) ============
-    signal netVotes;
-    netVotes <== yesVotes - noVotes;
-    
-    // ============ VERIFY NET VOTES EXCEED THRESHOLD ============
+    // ============ VERIFY YES VOTES EXCEED THRESHOLD ============
     component voteCheck = ZKGreaterThan(32);
-    voteCheck.in[0] <== netVotes;
+    voteCheck.in[0] <== yesVotes;
     voteCheck.in[1] <== requiredThreshold;
     voteCheck.out === 1;
     
-    // ============ CHECK NO OVERFLOW IN THRESHOLD CALCULATION ============
-    signal thresholdPlusNo;
-    thresholdPlusNo <== requiredThreshold + noVotes;
+    // ============ VERIFY QUORUM (YES + NO > MINIMUM) ============
+    signal totalVotes;
+    totalVotes <== yesVotes + noVotes;
     
-    component noOverflow = ZKLessThan(32);
-    noOverflow.in[0] <== thresholdPlusNo;
-    noOverflow.in[1] <== COUNTER_MAX();
-    noOverflow.out === 1;
+    component quorumCheck = ZKGreaterThan(32);
+    quorumCheck.in[0] <== totalVotes;
+    quorumCheck.in[1] <== 0;
+    quorumCheck.out === 1;
     
     // ============ VERIFY TIMELOCK EXPIRED ============
+    component timeDiffCheck = ZKGreaterEqThan(32);
+    timeDiffCheck.in[0] <== currentTimestamp;
+    timeDiffCheck.in[1] <== proposalTimestamp;
+    timeDiffCheck.out === 1;
+    
     signal timeSinceProposal;
     timeSinceProposal <== currentTimestamp - proposalTimestamp;
     

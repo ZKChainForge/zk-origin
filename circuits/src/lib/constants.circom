@@ -3,7 +3,7 @@ pragma circom 2.1.0;
 /*
  * ZK-ORIGIN Constants (CANONICAL VERSION)
  * 
- * ⚠️ DO NOT CREATE DUPLICATE constants.circom FILES
+ *  DO NOT CREATE DUPLICATE constants.circom FILES
  * This is the SINGLE SOURCE OF TRUTH for all constants.
  */
 

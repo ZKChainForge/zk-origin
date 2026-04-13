@@ -8,7 +8,7 @@ include "../lib/constants.circom";
 /*
  * Policy Verifier: Merkle Tree-based Policy Enforcement
  * 
- * SECURITY: Actually verifies transition is in allowed set via Merkle proof
+ * PRODUCTION VERSION - Actually verifies transitions via Merkle proof
  */
 
 template PolicyVerifier(MERKLE_DEPTH) {
@@ -47,12 +47,7 @@ template PolicyVerifier(MERKLE_DEPTH) {
         merkleVerifier.pathIndices[i] <== policyIndices[i];
     }
     
-    // ============ OUTPUT ============
-    // For testing: accept any transition (disable policy check)
-    // In production: uncomment the line below
-    // isAllowed <== merkleVerifier.valid;
-    // merkleVerifier.valid === 1;
-    
-    // For now: always allow (testing mode)
-    isAllowed <== 1;
+    // ============ ENFORCE MERKLE VERIFICATION ============
+    merkleVerifier.valid === 1;
+    isAllowed <== merkleVerifier.valid;
 }

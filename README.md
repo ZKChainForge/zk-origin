@@ -1,710 +1,692 @@
 # ZK-ORIGIN: Zero-Knowledge State Lineage Verification
 
-![License](https://img.shields.io/badge/license-MIT-blue.svg)
-![Rust](https://img.shields.io/badge/rust-1.70%2B-orange.svg)
-![ZK](https://img.shields.io/badge/zero--knowledge-enabled-brightgreen.svg)
+[![License](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
+[![Rust](https://img.shields.io/badge/rust-1.70%2B-orange.svg)](https://www.rust-lang.org/)
+[![Circom](https://img.shields.io/badge/circom-2.1.0-purple.svg)](https://docs.circom.io/)
+[![Solidity](https://img.shields.io/badge/solidity-0.8.19-blue.svg)](https://soliditylang.org/)
 
-**ZK-ORIGIN** is a production-ready zero-knowledge proving system for verifiable state lineage. It enables cryptographic proof that a state has undergone a valid sequence of transitions according to a policy, without revealing the transition history.
+**ZK-ORIGIN** is a production-ready zero-knowledge proving system for **cryptographic state lineage verification**. It enables provable state transition histories with **origin-based policy enforcement**, **rate limiting**, and **zero-knowledge privacy** — all while maintaining **constant-size proofs**.
 
-##  Features
+---
 
-- **Three Proving Modes**: Choose the right backend for your use case
-- **Constant-Size Proofs**: All modes produce constant-size proofs regardless of history length
-- **Policy Enforcement**: Define and enforce origin-based transition rules
-- **Rate Limiting**: Built-in epoch-based rate limiting per origin class
-- **Zero-Knowledge**: Real cryptographic security (Nova & Groth16 modes)
-- **Production Ready**: All modes tested and working
+##  What Problem Does This Solve?
 
-##  Mode Comparison
+**The Problem:** Current ZK systems prove "this state is valid" but cannot prove "this state came from a legitimate source."
 
-| Feature | Commitment | Nova IVC | Groth16 (Compact) |
-|---------|-----------|----------|-------------------|
-| **Proof Size** | 32 bytes | ~10 KB | **192 bytes**  |
-| **Setup Time** | <1ms | ~1.4s | ~138ms |
-| **Proving Time** | <1µs/step | ~66ms/step | ~65ms (batch) |
-| **Verify Time** | ~1µs | ~543ms | **~11ms**  |
-| **Zero-Knowledge** |  No | Yes |  Yes |
-| **Incremental** |  Yes |  Yes |  Batch only |
-| **Use Case** | Development | Streaming data | Size-critical apps |
+**Real-World Impact:**
+- **$2B+** in bridge exploits (malicious state imports)
+- **$500M+** in governance attacks (unauthorized state changes)
+- **$1B+** in admin key compromises (synthetic state injection)
+
+**ZK-ORIGIN Solution:**
+Every state transition cryptographically proves:
+-  **Valid state** (standard ZK)
+-  **Legitimate origin** (NEW: origin class verification)
+-  **Policy compliance** (NEW: transition rules enforced)
+-  **Rate limits** (NEW: prevent abuse)
+-  **Complete lineage** (NEW: ancestry cryptographically proven)
+
+---
 
 ##  Quick Start
 
-### Prerequisites
+### **Prerequisites**
 
 ```bash
 # Install Rust (1.70+)
 curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh
 
-# Clone the repository
-git clone https://github.com/ZKChainForge/zk-origin-prover.git
+# Install Node.js (16+) for circuits
+curl -fsSL https://deb.nodesource.com/setup_18.x | sudo -E bash -
+sudo apt-get install -y nodejs
+
+# Install Circom
+git clone https://github.com/iden3/circom.git
+cd circom
+cargo build --release
+sudo cp target/release/circom /usr/local/bin/
+```
+
+### **Clone Repository**
+
+```bash
+git clone https://github.com/ZKChainForge/zk-origin.git
 cd zk-origin
 ```
 
-### Build & Run
+---
 
-#### 1. Commitment Mode (Fast Development)
+##  Complete System Demo (End-to-End)
+
+### **Step 1: Build Circuits**
 
 ```bash
+cd circuits
 
-cd prover
-# Build with default features
-cargo build --release
+# Install dependencies
+npm install
 
-# Run demo
-./target/release/zk-origin-cli demo
+# Generate policy Merkle tree
+node scripts/generate_policy_proof.js
+
+# Generate valid test inputs
+node scripts/update_test_input.js
+
+# Compile circuit
+circom src/main/main.circom --r1cs --wasm --sym -o .
+
+# Generate witness
+node main_js/generate_witness.js main_js/main.wasm test/inputs/main_input.json witness.wtns
+
+# Trusted setup (using Powers of Tau)
+snarkjs groth16 setup main.r1cs pot14_final.ptau main_0000.zkey
+snarkjs zkey contribute main_0000.zkey main_final.zkey --name="Production" -v
+
+# Export verification key
+snarkjs zkey export verificationkey main_final.zkey verification_key.json
+
+# Generate Solidity verifier
+snarkjs zkey export solidityverifier main_final.zkey Groth16Verifier.sol
+cp Groth16Verifier.sol ../contracts/contracts/
+
+# Generate proof
+snarkjs groth16 prove main_final.zkey witness.wtns proof.json public.json
+
+# Verify proof off-chain
+snarkjs groth16 verify verification_key.json public.json proof.json
+# Expected: [INFO]  snarkJS: OK!
 ```
 
 **Output:**
 ```
-Proof size:    32 bytes
-Proving time:  <1µs per step
-Verify time:   ~1µs
-Real ZK:       NO (hash commitments only)
+ Circuit compiled: 3,731 constraints
+ Witness generated successfully  
+ Proof generated: 192 bytes
+ Verification: OK!
 ```
 
-#### 2. Nova IVC Mode (Incremental ZK)
+---
+
+### **Step 2: Deploy Smart Contracts**
 
 ```bash
-# Build with Nova backend
-cargo build --release --features real-nova --no-default-features
+# Terminal 1: Start local Hardhat node
+cd contracts
+npx hardhat node
 
-# Run demo
-./target/release/zk-origin-cli demo
+# Terminal 2: Deploy contracts
+npx hardhat clean
+npx hardhat compile
+npx hardhat run scripts/deploy-complete.js --network localhost
 ```
 
 **Output:**
 ```
-Proof size:    10,072 bytes (~10 KB)
-Setup time:    ~1.4 seconds (one-time)
-Proving time:  ~66ms per step
-Verify time:   ~543ms
-Real ZK:       YES 
-Incremental:   YES 
+Deploying ZK-ORIGIN contracts...
+
+1. Groth16Verifier deployed to: 0x5FbDB...
+2. EpochManager deployed to: 0xe7f17...
+3. RateLimiter deployed to: 0x9fE46...
+4. AuthorizationVerifier deployed to: 0xCf7Ed...
+5. LineageVerifier deployed to: 0xDc64a...
+
 ```
 
-#### 3. Groth16 Mode (Compact ZK) 
+---
+
+### **Step 3: Submit Proof On-Chain**
 
 ```bash
-# Build with Groth16 backend
-cargo build --release --features compact-zk --no-default-features
-
-# Run demo
-./target/release/zk-origin-cli demo
+node scripts/test-proof-submission.js
 ```
 
 **Output:**
 ```
-Proof size:    192 bytes (<1 KB) 
-Setup time:    ~138ms (trusted setup)
-Proving time:  ~65ms (batch)
-Verify time:   ~11ms 
-Real ZK:       YES 
-Incremental:   NO (batch processing)
+Testing ZK-ORIGIN proof submission...
+
+ Setting genesis...
+ Genesis set
+
+ Public signals:
+  [0] 16342691... (newLineageCommitment)
+  [1] 2940156...  (newCounterCommitment)
+  [2] 1           (lineageValid)
+  ...
+
+ Submitting proof to contract...
+ Proof verified on-chain!
+Gas used: 40,100
+Block: 2
+
+
 ```
 
-##  Usage Examples
-
-### Basic Usage
-
-```rust
-use zk_origin::*;
-
-// Create a policy
-let policy = OriginPolicy::default();
-
-// Setup proving parameters (choose your mode)
-let params = LineageProver::setup_params(&policy)?;
-
-// Create and initialize prover
-let mut prover = LineageProver::new(policy.clone(), &params)?;
-prover.initialize([0u8; 32])?;
-
-// Add transitions
-let transition = Transition::new(
-    [0u8; 32],      // prev_state
-    [1u8; 32],      // new_state
-    OriginClass::User,
-    1000,           // timestamp
-);
-prover.add_transition(transition)?;
-
-// Generate proof
-let proof = prover.finalize()?;
-println!("Proof size: {} bytes", proof.proof_size());
-println!("Is real ZK: {}", proof.is_real_zk());
-
-// Verify proof
-let verifier = LineageVerifier::from_proof(&proof, &policy);
-assert!(verifier.verify(&proof)?);
-```
-
-### Nova IVC (Incremental Proving)
-
-```rust
-use zk_origin::*;
-
-let policy = OriginPolicy::default();
-let params = NovaParams::setup(policy.compute_hash())?;
-let mut prover = NovaLineageProver::new(&params);
-
-// Initialize with genesis
-prover.initialize([0u8; 32], [0u8; 32])?;
-
-// Add steps incrementally
-for i in 0..100 {
-    let witness = create_witness(i);
-    prover.prove_step(&witness)?;
-    // Proof is updated after each step!
-}
-
-// Finalize and compress
-let proof = prover.finalize()?;
-println!("100 steps → {} bytes", proof.proof_size()); // ~10 KB
-```
-
-### Groth16 (Compact Batch Proving)
-
-```rust
-use zk_origin::*;
-
-let policy = OriginPolicy::default();
-let params = Groth16Params::setup(policy.compute_hash())?;
-let mut prover = Groth16LineageProver::new(&params);
-
-// Initialize
-prover.initialize([0u8; 32], [0u8; 32])?;
-
-// Collect all transitions
-for i in 0..100 {
-    let witness = create_witness(i);
-    prover.prove_step(&witness)?; // Just stores witness
-}
-
-// Generate proof for all steps at once
-let proof = prover.finalize()?;
-println!("100 steps → {} bytes", proof.proof_size()); // 192 bytes!
-
-// Fast verification
-let verified = verify_groth16_proof(
-    &proof.proof_bytes,
-    &proof.verifier_key.unwrap(),
-    &genesis_lineage,
-    &genesis_counters,
-    &proof.final_lineage.value,
-    &proof.final_counters.value,
-)?;
-assert!(verified);
-```
-
-### Custom Policy
-
-```rust
-use zk_origin::*;
-
-let mut policy = OriginPolicy::new();
-
-// Define allowed transitions
-policy.allow(OriginClass::Genesis, OriginClass::User);
-policy.allow(OriginClass::User, OriginClass::User);
-policy.allow(OriginClass::User, OriginClass::Bridge);
-
-// Set rate limits (per epoch)
-policy.set_rate_limit(OriginClass::User, 1000);
-policy.set_rate_limit(OriginClass::Bridge, 10);
-
-// This transition would be rejected:
-// policy.allow(OriginClass::User, OriginClass::Admin); // Not allowed!
-
-let mut prover = LineageProver::new(policy.clone())?;
-// ... rest of proving
-```
+---
 
 ##  Architecture
 
-### Core Components
+### **System Overview**
 
 ```
-zk-origin-prover/
-├── src/
-│   ├── bin/
-│   │   └── cli.rs                 # CLI demo application
-│   ├── prover/
-│   │   ├── commitment_prover.rs   # Fast commitment backend
-│   │   ├── nova_prover.rs         # Nova IVC backend
-│   │   ├── nova_circuit.rs        # Nova circuit implementation
-│   │   ├── groth16_prover.rs      # Groth16 backend
-│   │   ├── groth16_circuit.rs     # Groth16 circuit
-│   │   └── lineage_prover.rs      # Unified prover interface
-│   ├── verifier/
-│   │   └── verify.rs              # Proof verification
-│   ├── types/
-│   │   ├── lineage.rs             # Lineage commitments
-│   │   ├── proof.rs               # Proof structures
-│   │   ├── policy.rs              # Origin policies
-│   │   └── witness.rs             # Step witnesses
-│   └── lib.rs                     # Library entry point
-└── Cargo.toml
+┌─────────────────────────────────────────────────────────────┐
+│                     ZK-ORIGIN SYSTEM                        │
+├─────────────────────────────────────────────────────────────┤
+│                                                             │
+│  ┌──────────────┐       ┌──────────────┐                    │
+│  │   Circuits   │──────▶│  Smart       │                    │
+│  │  (Circom)    │ Proof │  Contracts   │                    │
+│  │              │◀──────│  (Solidity)  │                    │
+│  └──────────────┘ Verify└──────────────┘                    │
+│         │                       │                           │
+│         │                       │                           │
+│    3,731 constraints      On-chain verification             │
+│    192-byte proofs        ~40K gas per proof                │
+│                                                             │
+│  Components:                                                │
+│  ├── Origin Classification (6 classes)                      │
+│  ├── Policy Enforcement (Merkle proofs)                     │
+│  ├── Rate Limiting (per epoch, per class)                   │ 
+│  ├── Counter Commitments (cryptographic tracking)           │
+│  └── Lineage Proofs (recursive compression)                 │
+│                                                             │
+└─────────────────────────────────────────────────────────────┘
 ```
 
-### Proving Flow
+---
+
+##  Core Components
+
+### **1. Origin Classes**
+
+Every state transition is tagged with its **origin**:
+
+| Class | Description | Example | Rate Limit |
+|-------|-------------|---------|------------|
+| `Genesis` | Initial state | Protocol deployment | 1 |
+| `User` | User transaction | Token transfer | Unlimited |
+| `Admin` | Admin multisig | Protocol upgrade | 10/epoch |
+| `Bridge` | Cross-chain import | L1→L2 deposit | 100/epoch |
+| `Governance` | DAO proposal | Parameter change | 5/epoch |
+| `System` | System operation | Fee collection | 1000/epoch |
+| `Emergency` | Emergency action | Pause protocol | 1/epoch |
+
+---
+
+### **2. Policy Firewall**
+
+Defines **allowed origin transitions** via Merkle tree:
 
 ```
-┌─────────────┐
-│   Genesis   │
-│   State     │
-└──────┬──────┘
-       │
-       ▼
-┌─────────────┐
-│ Transition 1│ ─────┐
-│  (proven)   │      │
-└──────┬──────┘      │
-       │             │
-       ▼             ▼
-┌─────────────┐  ┌──────────┐
-│ Transition 2│  │  Policy  │
-│  (proven)   │  │  Check   │
-└──────┬──────┘  └──────────┘
-       │
-       ▼
-┌─────────────┐
-│ Transition N│
-│  (proven)   │
-└──────┬──────┘
-       │
-       ▼
-┌─────────────┐
-│  Final      │
-│  Proof      │
-│  (192 bytes)│
-└─────────────┘
+Allowed Transitions (verified in ZK):
+Genesis   → User, Admin, System
+User      → User
+Admin     → User, Admin, Bridge, System
+Bridge    → User
+Governance→ ALL
+System    → User, System
+Emergency → User, Admin, System
 ```
 
-##  Technical Details
+**Security:** Prevents unauthorized paths (e.g., `User → Admin` is blocked in-circuit).
 
-### Proof Systems
+---
 
-#### 1. **Nova IVC (Incremental Verifiable Computation)**
+### **3. Rate Limiting**
 
-- **Curves**: Pallas/Vesta (Pasta curves)
-- **Scheme**: Folding-based IVC
-- **Proof Size**: ~10 KB (constant)
-- **Primary Circuit**: ~9,831 constraints
-- **Secondary Circuit**: ~10,357 constraints
-
-**How it works:**
-- Uses **folding schemes** to incrementally update proofs
-- Each `prove_step()` folds the new computation into the proof
-- Final compression uses Spartan SNARK
-- Proof covers all steps but remains constant size
-
-#### 2. **Groth16 (Compact SNARK)**
-
-- **Curve**: BLS12-381
-- **Scheme**: Groth16 zk-SNARK
-- **Proof Size**: 192 bytes (constant)
-- **Structure**: 3 elliptic curve points (A, B, C)
-- **Trusted Setup**: Required (138ms)
-
-**How it works:**
-- Collects all transitions as witnesses
-- Builds single circuit proving all steps
-- Generates compact proof in one shot
-- Verification checks pairing equations
-
-#### 3. **Commitment Mode**
-
-- **Hash Function**: SHA-256
-- **Proof Size**: 32 bytes (just a hash)
-- **Security**: Not zero-knowledge!
-- **Purpose**: Development and testing only
-
-### Circuit Design
-
-The core lineage circuit proves:
+Cryptographically enforced **per-epoch limits**:
 
 ```
-For each transition step:
-  1. state_product = prev_state × new_state
-  2. transition_hash = state_product + origin + timestamp
-  3. lineage_product = current_lineage × transition_hash
-  4. new_lineage = lineage_product + current_lineage + transition_hash
-  5. new_counters = current_counters + origin + epoch_id
+Epoch 0: Admin used 7/10 transitions
+         Bridge used 45/100
+         Emergency used 0/1
 
-Public inputs:
-  - genesis_lineage
-  - genesis_counters
-  - final_lineage
-  - final_counters
-
-Private inputs (witness):
-  - prev_state, new_state
-  - origin, timestamp
-  - epoch_id
-  - policy proof (Merkle path)
-  - rate limits
+If Admin tries 11th transition → Circuit REJECTS
 ```
 
-### Proof Size Analysis
+**Implementation:** Counter commitments verified in ZK.
 
-All three modes produce **constant-size proofs**:
+---
 
-| History Length | Commitment | Nova | Groth16 |
-|----------------|-----------|------|---------|
-| 1 transition   | 32 bytes  | ~10 KB | 192 bytes |
-| 10 transitions | 32 bytes  | ~10 KB | 192 bytes |
-| 100 transitions | 32 bytes  | ~10 KB | 192 bytes |
-| 1,000 transitions | 32 bytes  | ~10 KB | 192 bytes |
-| 1,000,000 transitions | 32 bytes  | ~10 KB | 192 bytes |
+### **4. Lineage Commitments**
 
-**This is the power of succinct proofs!**
+**Recursive compression** ensures constant-size proofs:
 
-##  Use Cases
+```
+State 1: commitment₁ = Hash(genesis, transition₁)
+State 2: commitment₂ = Hash(commitment₁, transition₂)
+State N: commitmentₙ = Hash(commitmentₙ₋₁, transitionₙ)
 
-### Groth16 (Compact ZK) - Best For:
-
- **Blockchain Rollups**
-- L2 state proofs (192 bytes on-chain)
-- ZK-rollup batches
-- Cross-chain bridges
-
- **IoT & Mobile**
-- Limited bandwidth
-- Battery-constrained devices
-- Embedded systems
-
- **Privacy-Preserving Audits**
-- Compliance verification
-- Supply chain tracking
-- Medical records
-
-### Nova IVC - Best For:
-
- **Streaming Data**
-- Continuous computation
-- Real-time updates
-- Long-running processes
-
- **Incremental Computation**
-- Add steps as they happen
-- No need to know total steps upfront
-- Update proofs on-the-fly
-
- **Blockchain State**
-- State transition proofs
-- Incremental state updates
-- Progressive rollups
-
-### Commitment Mode - Best For:
-
- **Development**
-- Fast iteration
-- Testing logic
-- Debugging circuits
-
- **Prototyping**
-- Proof of concept
-- Performance benchmarking
-- Integration testing
-
- **NOT for Production** (not zero-knowledge!)
-
-##  Performance Benchmarks
-
-
-### Setup Time
-
-| Mode | Setup Time | One-time? |
-|------|-----------|-----------|
-| Commitment | <1ms | N/A |
-| Nova IVC | ~1.4s |  Yes (cacheable) |
-| Groth16 | ~138ms |  Yes (trusted setup) |
-
-### Proving Time (3 transitions)
-
-| Mode | Time | Per Step |
-|------|------|----------|
-| Commitment | <1µs | <1µs |
-| Nova IVC | ~199ms | ~66ms/step |
-| Groth16 | ~65ms | ~22ms/step (batch) |
-
-### Verification Time
-
-| Mode | Time | Speed |
-|------|------|-------|
-| Commitment | ~1µs |  Instant |
-| Nova IVC | ~543ms | Slow |
-| Groth16 | **~11ms** |  **Fast!** |
-
-### Proof Size
-
-| Mode | Size | Compression |
-|------|------|-------------|
-| Commitment | 32 bytes | N/A (hash) |
-| Nova IVC | 10,072 bytes | ~10 KB |
-| Groth16 | **192 bytes** | **<200 bytes!**  |
-
-### Scaling (1000 transitions)
-
-| Mode | Proof Size | Proving Time | Verify Time |
-|------|-----------|--------------|-------------|
-| Commitment | 32 bytes | ~1ms | ~1µs |
-| Nova IVC | ~10 KB | ~66s | ~543ms |
-| Groth16 | **192 bytes** | ~21s | **~11ms** |
-
-**Key Insight**: Groth16 shines when proof size and verification speed matter most!
-
-##  Security Considerations
-
-### Groth16 Security
-
- **Cryptographic Assumptions**:
-- Relies on hardness of discrete logarithm on BLS12-381
-- Standard assumptions (well-studied)
-
- **Trusted Setup**:
-- Requires trusted ceremony for parameter generation
-- If setup is compromised, fake proofs possible
-- Mitigation: Use multi-party computation (MPC) ceremony
-
-### Nova Security
-
- **Cryptographic Assumptions**:
-- Based on hardness of discrete logarithm on Pasta curves
-- Folding scheme security (newer, but well-reviewed)
-
- **No Trusted Setup**:
-- Universal setup (no ceremony needed)
-- Transparent (nothing to hide)
-
-### Best Practices
-
-1. **Use Real ZK in Production**
-   ```bash
-   #  Good
-   cargo build --features real-nova --no-default-features
-   cargo build --features compact-zk --no-default-features
-   
-   #  Bad (for production)
-   cargo build  # commitment mode
-   ```
-
-2. **Validate Inputs**
-   ```rust
-   // Always validate transitions
-   prover.validate_transition(&transition)?;
-   ```
-
-3. **Check Proof Validity**
-   ```rust
-   // Verify before trusting
-   let verifier = LineageVerifier::from_proof(&proof, &policy);
-   assert!(verifier.verify(&proof)?);
-   ```
-
-4. **Secure Policy Definition**
-   ```rust
-   // Carefully design transition rules
-   policy.allow(OriginClass::User, OriginClass::User);
-   // DON'T allow everything!
-   ```
-
-##  API Reference
-
-### Core Types
-
-#### `OriginClass`
-```rust
-pub enum OriginClass {
-    Genesis,   // Initial state
-    User,      // User action
-    Admin,     // Admin action
-    System,    // System action
-    Bridge,    // Cross-chain bridge
-    External,  // External oracle
-}
+Final proof size: 192 bytes (regardless of N)
 ```
 
-#### `Transition`
-```rust
-pub struct Transition {
-    pub prev_state_hash: [u8; 32],
-    pub new_state_hash: [u8; 32],
-    pub origin_class: OriginClass,
-    pub timestamp: u64,
-}
+---
+
+## 📊 Performance Benchmarks
+
+| Metric | Value | Details |
+|--------|-------|---------|
+| **Circuit Constraints** | 3,731 | Non-linear constraints |
+| **Proof Size** | 192 bytes | Groth16 (3 curve points) |
+| **Proving Time** | ~65ms | For 3 transitions (batch) |
+| **Verification Time** | ~11ms | On-chain (off-chain: instant) |
+| **On-Chain Gas** | ~40,000 | Per proof verification |
+| **Setup Time** | ~138ms | Groth16 trusted setup |
+| **Witness Generation** | <1ms | Per transition |
+
+**Scaling:**
+- 1 transition: 192 bytes proof
+- 1,000 transitions: **192 bytes proof** (same!)
+- 1,000,000 transitions: **192 bytes proof** (same!)
+
+---
+
+##  Security Features
+
+### **1. Policy Enforcement (In-Circuit)**
+
+```circom
+// Policy verified via Merkle proof
+component policyVerifier = PolicyVerifier(6);
+policyVerifier.prevOriginClass <== prevOriginClass;
+policyVerifier.newOriginClass <== newOriginClass;
+policyVerifier.policyRoot <== policyRoot;
+policyVerifier.isAllowed === 1;  // ← Enforced cryptographically
 ```
 
-#### `LineageProof`
-```rust
-pub struct LineageProof {
-    pub proof_bytes: Vec<u8>,           // The actual proof
-    pub final_lineage: LineageCommitment,
-    pub final_counters: CounterCommitment,
-    pub genesis_commitment: LineageCommitment,
-    pub num_steps: u64,
-    pub policy_hash: [u8; 32],
-    pub metadata: ProofMetadata,
-    pub verifier_key: Option<Vec<u8>>,
-}
+**Attack Prevention:**
+-  User cannot forge Admin transition (Merkle proof fails)
+-  Bridge cannot bypass policy (not in allowed set)
+-  Compromised admin cannot exceed rate limits (counter check)
+
+---
+
+### **2. Rate Limit Enforcement**
+
+```circom
+// Counter verification in ZK
+component rateLimiter = RateLimiter();
+rateLimiter.prevCounters <== prevCounters;
+rateLimiter.newOriginClass <== newOriginClass;
+rateLimiter.rateLimitOk === 1;  // ← Fails if limit exceeded
 ```
 
-### Main APIs
+**Attack Prevention:**
+-  Cannot submit 11th admin action in epoch (circuit rejects)
+-  Cannot reset counters without epoch change (commitment mismatch)
+-  Cannot forge counter values (commitment verified)
 
-#### `LineageProver`
-```rust
-impl LineageProver {
-    // Create prover (mode depends on features)
-    pub fn new(policy: OriginPolicy, params: &NovaParams) -> Result<Self>;
-    
-    // Setup parameters
-    pub fn setup_params(policy: &OriginPolicy) -> Result<NovaParams>;
-    
-    // Initialize with genesis
-    pub fn initialize(&mut self, genesis_hash: [u8; 32]) -> Result<()>;
-    
-    // Add transition (incremental for Nova/Commitment)
-    pub fn add_transition(&mut self, transition: Transition) -> Result<()>;
-    
-    // Validate without adding
-    pub fn validate_transition(&self, transition: &Transition) -> Result<()>;
-    
-    // Generate final proof
-    pub fn finalize(&self) -> Result<LineageProof>;
-    
-    // Query state
-    pub fn current_depth(&self) -> u64;
-    pub fn is_initialized(&self) -> bool;
-}
+---
+
+### **3. Nonce Protection**
+
+```circom
+// Sequential nonce enforcement
+component nonceCheck = ZKIsEqual();
+nonceCheck.in[0] <== nonce;
+nonceCheck.in[1] <== prevNonce + 1;
+nonceCheck.out === 1;  // ← Prevents replay attacks
 ```
 
-#### `LineageVerifier`
-```rust
-impl LineageVerifier {
-    // Create verifier
-    pub fn new(genesis_hash: [u8; 32], policy: &OriginPolicy) -> Self;
-    pub fn from_proof(proof: &LineageProof, policy: &OriginPolicy) -> Self;
-    
-    // Verify proof (structural)
-    pub fn verify(&self, proof: &LineageProof) -> Result<bool>;
-    
-    // Verify cryptographically (real ZK)
-    pub fn verify_zk(&self, proof: &LineageProof) -> Result<bool>;
-    
-    // Detailed verification
-    pub fn verify_detailed(&self, proof: &LineageProof) -> VerificationResult;
-}
+**Attack Prevention:**
+-  Cannot replay old transitions (nonce mismatch)
+-  Cannot skip nonces (sequential check)
+-  Cannot overflow nonce (range check)
+
+---
+
+##  Project Structure
+
+```
+zk-origin/
+├── circuits/                    # Circom ZK circuits
+│   ├── src/
+│   │   ├── main/
+│   │   │   └── main.circom     # Main entry circuit
+│   │   ├── core/
+│   │   │   ├── lineage_step.circom      # Transition logic
+│   │   │   ├── policy_verifier.circom   # Policy enforcement
+│   │   │   ├── rate_limiter.circom      # Rate limiting
+│   │   │   ├── epoch_manager.circom     # Epoch transitions
+│   │   │   └── genesis_validator.circom # Genesis verification
+│   │   ├── auth/                # Authorization circuits
+│   │   │   ├── user_auth.circom
+│   │   │   ├── admin_auth.circom
+│   │   │   ├── bridge_auth.circom
+│   │   │   ├── governance_auth.circom
+│   │   │   ├── system_auth.circom
+│   │   │   └── emergency_auth.circom
+│   │   └── lib/                 # Utility circuits
+│   │       ├── poseidon.circom
+│   │       ├── merkle.circom
+│   │       ├── comparators.circom
+│   │       └── validators.circom
+│   ├── scripts/
+│   │   ├── generate_policy_proof.js
+│   │   └── update_test_input.js
+│   └── test/inputs/
+│       └── main_input.json
+│
+├── contracts/                   # Solidity smart contracts
+│   ├── contracts/
+│   │   ├── LineageVerifier.sol  # Main verification contract
+│   │   ├── Groth16Verifier.sol  # Auto-generated verifier
+│   │   ├── EpochManager.sol
+│   │   ├── RateLimiter.sol
+│   │   ├── AuthorizationVerifier.sol
+│   │   ├── PolicyRegistry.sol
+│   │   └── interfaces/
+│   ├── scripts/
+│   │   ├── deploy-complete.js
+│   │   └── test-proof-submission.js
+│   └── test/
+│
+├── prover/                      # Rust proving backend (optional)
+│   ├── src/
+│   │   ├── prover/
+│   │   ├── verifier/
+│   │   ├── types/
+│   │   └── lib.rs
+│   └── Cargo.toml
+│
+└── README.md
 ```
 
-#### `Groth16LineageProver`
-```rust
-impl Groth16LineageProver {
-    // Create prover
-    pub fn new(params: &Groth16Params) -> Self;
-    
-    // Initialize
-    pub fn initialize(&mut self, genesis: [u8; 32], counters: [u8; 32]) -> Result<()>;
-    
-    // Add transition (batched)
-    pub fn prove_step(&mut self, witness: &StepWitness) -> Result<()>;
-    
-    // Generate compact proof
-    pub fn finalize(&self) -> Result<LineageProof>;
-}
+---
 
-// Verify Groth16 proof
-pub fn verify_groth16_proof(
-    proof_bytes: &[u8],
-    vk_bytes: &[u8],
-    genesis_lineage: &[u8; 32],
-    genesis_counters: &[u8; 32],
-    final_lineage: &[u8; 32],
-    final_counters: &[u8; 32],
-) -> Result<bool>;
+##  Usage Examples
+
+### **Example 1: Verify Genesis → User Transition**
+
+```javascript
+// contracts/scripts/test-proof-submission.js
+const proof = JSON.parse(fs.readFileSync("../circuits/proof.json"));
+const publicSignals = JSON.parse(fs.readFileSync("../circuits/public.json"));
+
+// Public signals layout:
+// [0] = newLineageCommitment (output)
+// [1] = newCounterCommitment (output)
+// [2] = lineageValid (output)
+// [3] = prevStateHash (input)
+// [4] = newStateHash (input)
+// [5] = epochId (input)
+// [6] = prevOriginClass (0 = Genesis)
+// [7] = newOriginClass (1 = User)
+// ...
+
+const pA = [proof.pi_a[0], proof.pi_a[1]];
+const pB = [[proof.pi_b[0][1], proof.pi_b[0][0]], [proof.pi_b[1][1], proof.pi_b[1][0]]];
+const pC = [proof.pi_c[0], proof.pi_c[1]];
+
+const tx = await lineageVerifier.verifyLineage(pA, pB, pC, publicSignals);
+await tx.wait();
+
+console.log(" Proof verified on-chain!");
 ```
+
+---
+
+### **Example 2: Policy Violation Detection**
+
+```javascript
+// Try to create User → Admin transition (forbidden)
+const badInput = {
+  prevOriginClass: "1",  // User
+  newOriginClass: "2",   // Admin
+  // ... other inputs
+};
+
+// Witness generation will FAIL
+node main_js/generate_witness.js main_js/main.wasm bad_input.json witness.wtns
+// Error: Assert Failed in PolicyVerifier (Merkle proof invalid)
+```
+
+---
+
+### **Example 3: Rate Limit Enforcement**
+
+```javascript
+// Admin has already used 10 transitions this epoch
+const input = {
+  prevOriginClass: "2",  // Admin
+  newOriginClass: "2",   // Admin
+  prevCounters: ["0", "0", "10", "0", "0", "0", "0"],  // Admin counter = 10
+  rateLimits: ["1", "4294967295", "10", "100", "5", "1000", "1"],
+  // ...
+};
+
+// Witness generation will FAIL
+// Error: Assert Failed in RateLimiter (counter >= limit)
+```
+
+---
 
 ##  Testing
 
-```bash
-# Run all tests
-cargo test
-
-# Run tests for specific mode
-cargo test --features real-nova --no-default-features
-cargo test --features compact-zk --no-default-features
-
-# Run benchmarks
-cargo bench
-
-# Run with output
-cargo test -- --nocapture
-```
-
-
-
-##  Contributing
-
-Contributions welcome! Please:
-
-1. Fork the repository
-2. Create a feature branch
-3. Add tests for new functionality
-4. Ensure all tests pass
-5. Submit a pull request
-
-### Development Setup
+### **Circuit Tests**
 
 ```bash
-# Install development dependencies
-cargo install cargo-watch
-cargo install cargo-expand
+cd circuits
 
-# Run tests on file change
-cargo watch -x test
+# Test witness generation
+node main_js/generate_witness.js main_js/main.wasm test/inputs/main_input.json witness.wtns
 
-# Check formatting
-cargo fmt --check
+# Test proof generation
+snarkjs groth16 prove main_final.zkey witness.wtns proof.json public.json
 
-# Run linter
-cargo clippy
+# Test verification
+snarkjs groth16 verify verification_key.json public.json proof.json
 ```
+
+---
+
+### **Contract Tests**
+
+```bash
+cd contracts
+
+# Run full test suite
+npx hardhat test
+
+# Test specific contract
+npx hardhat test test/LineageVerifier.test.js
+
+# Test with gas reporting
+REPORT_GAS=true npx hardhat test
+```
+
+---
+
+##  Technical Deep-Dive
+
+### **Signal Ordering (Critical!)**
+
+Circom outputs signals in this order:
+1. **Outputs first** (in declaration order)
+2. **Public inputs** (in `component main {public [...]}` order)
+
+```circom
+// Circuit outputs these 12 signals:
+[0]  newLineageCommitment     (output)
+[1]  newCounterCommitment     (output)
+[2]  lineageValid             (output)
+[3]  prevStateHash            (public input)
+[4]  newStateHash             (public input)
+[5]  epochId                  (public input)
+[6]  prevOriginClass          (public input)
+[7]  newOriginClass           (public input)
+[8]  prevLineageCommitment    (public input)
+[9]  prevCounterCommitment    (public input)
+[10] policyRoot               (public input)
+[11] expectedGenesisHash      (public input)
+```
+
+**Contract must extract in this exact order!**
+
+---
+
+### **Counter Commitment Scheme**
+
+```
+CounterCommitment = Poseidon(
+  epochId,
+  counter[Genesis],
+  counter[User],
+  counter[Admin],
+  counter[Bridge],
+  counter[Governance],
+  counter[System],
+  counter[Emergency]
+)
+```
+
+**Security:** Prevents counter forgery via cryptographic commitment.
+
+---
+
+### **Policy Merkle Tree**
+
+```
+Leaf = Poseidon(from_origin, to_origin)
+
+Tree structure (21 allowed transitions):
+        Root (policy commitment)
+       /    \
+     ...    ...
+    /  \   /  \
+   L₀  L₁ L₂  L₃
+   │   │  │   │
+(0,1)(0,2)(1,1)(2,1)...
+
+Proof = [sibling₀, sibling₁, ..., siblingₙ]
+```
+
+**Security:** Only allowed transitions have valid Merkle proofs.
+
+---
+
+##  Known Issues & Limitations
+
+### **Current Limitations**
+
+1. **Trusted Setup Required**
+   - Groth16 requires MPC ceremony
+   - Mitigation: Use transparent setup in future (Plonk/STARKs)
+
+2. **Single Transition Per Proof**
+   - Current implementation proves 3 transitions
+   - Future: Batch many transitions in single proof
+
+3. **Policy Updates**
+   - Policy changes require new Merkle tree
+   - Future: Implement versioned policies
+
+4. **Bridge Finality**
+   - Bridge auth checks confirmations (64 blocks)
+   - May be insufficient for some chains
+
+---
+
+##  Roadmap
+
+### **Phase 1: Core (COMPLETE )**
+- [x] Origin classification
+- [x] Policy enforcement
+- [x] Rate limiting
+- [x] Lineage proofs
+- [x] On-chain verification
+
+### **Phase 2: Production Hardening (Q2 2026)**
+- [ ] Formal security audit
+- [ ] Gas optimizations (<30K per proof)
+- [ ] Multi-chain deployment (Polygon, Arbitrum, Optimism)
+- [ ] Policy upgrade mechanism
+- [ ] Emergency pause functionality
+
+### **Phase 3: Advanced Features (Q3 2026)**
+- [ ] Recursive proof aggregation (1000s of transitions)
+- [ ] Cross-chain lineage verification
+- [ ] Privacy-preserving origin classes
+- [ ] Governance-based policy updates
+
+### **Phase 4: Ecosystem (Q4 2024)**
+- [ ] Bridge integration (LayerZero, Wormhole)
+- [ ] Rollup integration (zkSync, Scroll)
+- [ ] Auditor dashboard
+- [ ] Public MPC ceremony for trusted setup
+
+---
 
 ##  License
 
-This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
+This project is licensed under the **MIT License** - see the [LICENSE](LICENSE) file for details.
+
+---
 
 ##  Acknowledgments
 
-This project builds on:
+**This project builds on:**
+- [Circom](https://docs.circom.io/) - ZK circuit compiler
+- [SnarkJS](https://github.com/iden3/snarkjs) - SNARK proof generation
+- [Groth16](https://eprint.iacr.org/2016/260.pdf) - Compact zk-SNARK scheme
+- [Poseidon](https://eprint.iacr.org/2019/458.pdf) - ZK-friendly hash function
+- [Hardhat](https://hardhat.org/) - Ethereum development environment
 
-- [Nova](https://github.com/microsoft/Nova) - Recursive SNARKs without trusted setup
-- [Bellman](https://github.com/zkcrypto/bellman) - zk-SNARK library
-- [Pasta Curves](https://github.com/zcash/pasta_curves) - Pallas/Vesta curves
-- [BLS12-381](https://github.com/zkcrypto/bls12_381) - Pairing-friendly curve
+**Special thanks to:**
+- iden3 team for circomlib
+- 0xPARC for Circom learning resources
+- Ethereum Foundation for ZK research grants
 
-##  Contact & Support
+---
 
-- **Issues**: [GitHub Issues](https://github.com/ZKChainForge/zk-origin-prover/issues)
-- **Discussions**: [GitHub Discussions](https://github.com/ZKChainForge/zk-origin-prover/discussions)
-- **Email**: zkchainforge@gmail.com
+## 📞 Contact & Support
 
+- **Issues:** [GitHub Issues](https://github.com/ZKChainForge/zk-origin/issues)
+- **Discussions:** [GitHub Discussions](https://github.com/ZKChainForge/zk-origin/discussions)
+- **Email:** zkchainforge@gmail.com
+- **Twitter:** [@https://x.com/zkchain_z41420](https://twitter.com/ZKChainForge)
 
+---
 
 ##  Citation
 
-If you use this project in your research, please cite:
+If you use ZK-ORIGIN in your research, please cite:
 
 ```bibtex
 @software{zk_origin_2026,
   title = {ZK-ORIGIN: Zero-Knowledge State Lineage Verification},
   author = {VIKRAM A},
-  year = {2026},
-  url = {https://github.com/ZKChainForge/zk-origin}
+  year = {2024},
+  url = {https://github.com/ZKChainForge/zk-origin},
+  note = {Production-ready ZK proving system with origin-based policy enforcement}
 }
 ```
 
 ---
 
-**Built with ❤️ using Rust and Zero-Knowledge Cryptography**
+##  Why ZK-ORIGIN?
 
-*For questions, feedback, or collaboration opportunities, please open an issue or discussion on GitHub.*
+**Traditional ZK Systems:**
+```
+State A → State B
+          Valid transition
+         But from where?
+```
+
+**With ZK-ORIGIN:**
+```
+State A → State B
+          Valid transition
+          Legitimate origin (User)
+          Policy allowed (User→User)
+          Rate limit ok (345/unlimited)
+          Complete lineage proven
+```
+
+**Built with ❤️ using Rust, Circom, and Zero-Knowledge Cryptography**
+
+---
+
+**⭐ Star this repo if you find it useful!**
+
+**🔗 Share with the ZK community!**
+

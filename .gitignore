@@ -77,6 +77,14 @@ witness.wtns
 /contracts/deployment.json
 /contracts/deployment-complete.json
 
+# Additional ignores (circuits + scripts + local changes)
+/circuits/main_js/
+/circuits/policy_tree.json
+/circuits/verification_key.json
+
+
+/policy_root.json
+
 #######################################
 # Rust (ZK / backend)
 /target
