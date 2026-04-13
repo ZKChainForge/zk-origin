@@ -8,7 +8,7 @@ include "../lib/constants.circom";
 /*
  * Rate Limiter: Enforce Rate Limits Per Origin Class
  * 
- * SECURITY: Actually checks counter < limit and verifies commitment
+ * PRODUCTION VERSION - Actually enforces rate limits
  */
 
 template RateLimiter() {
@@ -29,8 +29,8 @@ template RateLimiter() {
         prevHasher.in[i + 1] <== prevCounters[i];
     }
     
-    // For testing: skip commitment verification
-    // prevHasher.out === prevCounterCommitment;
+    // ENFORCE COMMITMENT VERIFICATION
+    prevHasher.out === prevCounterCommitment;
     
     // ============ STEP 2: SELECT CURRENT COUNTER FOR ORIGIN CLASS ============
     component counterSelector = Selector(7);
@@ -48,18 +48,16 @@ template RateLimiter() {
     limitSelector.index <== newOriginClass;
     signal limit <== limitSelector.out;
     
-    // ============ STEP 4: CHECK RATE LIMIT ============
-    // For testing: skip rate limit check
-    // component limitCheck = ZKLessThan(32);
-    // limitCheck.in[0] <== currentCount;
-    // limitCheck.in[1] <== limit;
-    // limitCheck.out === 1;
-    // rateLimitOk <== limitCheck.out;
+    // ============ STEP 4: ENFORCE RATE LIMIT CHECK ============
+    component limitCheck = ZKLessThan(32);
+    limitCheck.in[0] <== currentCount;
+    limitCheck.in[1] <== limit;
     
-    rateLimitOk <== 1;  // Always pass for testing
+    // ENFORCE LIMIT CHECK PASSES
+    limitCheck.out === 1;
+    rateLimitOk <== 1;
     
     // ============ STEP 5: INCREMENT COUNTER ============
-    // Use SetAt component to increment the selected counter
     component incrementer = IncrementAt(7, COUNTER_MAX());
     for (var i = 0; i < 7; i++) {
         incrementer.values[i] <== prevCounters[i];

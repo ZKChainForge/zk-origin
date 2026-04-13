@@ -13,7 +13,7 @@ include "./epoch_manager.circom";
 /*
  * Lineage Step: Complete State Transition Verification
  * 
- * FINAL VERSION - All components properly integrated
+ * FIXED: Nonce overflow protection added
  */
 
 template LineageStep(POLICY_MERKLE_DEPTH) {
@@ -55,7 +55,12 @@ template LineageStep(POLICY_MERKLE_DEPTH) {
     newClassValidator.origin <== newOriginClass;
     newClassValidator.valid === 1;
     
-    // ============ STEP 2: VALIDATE NONCE ============
+    // ============ STEP 2: VALIDATE NONCE WITH OVERFLOW PROTECTION ============
+    component nonceLess = ZKLessThan(64);
+    nonceLess.in[0] <== prevNonce;
+    nonceLess.in[1] <== nonce;
+    nonceLess.out === 1;
+    
     component nonceCheck = ZKIsEqual();
     nonceCheck.in[0] <== nonce;
     nonceCheck.in[1] <== prevNonce + 1;
@@ -91,7 +96,7 @@ template LineageStep(POLICY_MERKLE_DEPTH) {
     epochManager.epochValid === 1;
     epochManager.countersValid === 1;
     
-    // ============ STEP 6: VERIFY POLICY (FIXED!) ============
+    // ============ STEP 6: VERIFY POLICY ============
     component policyVerifier = PolicyVerifier(POLICY_MERKLE_DEPTH);
     policyVerifier.prevOriginClass <== prevOriginClass;
     policyVerifier.newOriginClass <== newOriginClass;
@@ -108,7 +113,7 @@ template LineageStep(POLICY_MERKLE_DEPTH) {
     authCheck.in[1] <== 1;
     authCheck.out === 1;
     
-    // ============ STEP 8: VERIFY RATE LIMITS (FIXED!) ============
+    // ============ STEP 8: VERIFY RATE LIMITS ============
     component rateLimiter = RateLimiter();
     rateLimiter.epochId <== epochId;
     rateLimiter.newOriginClass <== newOriginClass;

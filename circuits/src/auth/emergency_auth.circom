@@ -7,8 +7,6 @@ include "../lib/constants.circom";
 
 /*
  * Emergency Authentication: Emergency Key and Conditions Verification
- * 
- * SECURITY FIX: Actually verifies emergency conditions (not just trust prover)
  */
 
 template EmergencyAuth() {
@@ -35,6 +33,12 @@ template EmergencyAuth() {
     keyMatch.in[0] <== emergencyKeyHash;
     keyMatch.in[1] <== expectedEmergencyKeyHash;
     keyMatch.out === 1;
+    
+    // ============ VERIFY NO OVERFLOW IN TVL MULTIPLICATION ============
+    component overflowCheck = ZKLessThan(64);
+    overflowCheck.in[0] <== normalTVL;
+    overflowCheck.in[1] <== 9223372036854775807; // 2^63 - 1
+    overflowCheck.out === 1;
     
     // ============ CONDITION 1: TVL SPIKE ============
     signal normalTVLThreshold;

@@ -3,7 +3,7 @@ pragma circom 2.1.0;
 include "../lib/poseidon.circom";
 include "../lib/comparators.circom";
 include "../lib/selector.circom";
-include "../utils/validators.circom";
+
 
 template RateLimiter() {
     signal input epochId;

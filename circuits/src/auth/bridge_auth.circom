@@ -9,7 +9,7 @@ include "../lib/constants.circom";
 /*
  * Bridge Authentication: Cross-Chain Attestation with Finality
  * 
- * SECURITY FIX: Verifies source chain finality and validator quorum
+ * FIXED: Verifies block order to prevent underflow
  */
 
 template BridgeAuth(ATTESTATION_DEPTH, MAX_VALIDATORS) {
@@ -42,6 +42,12 @@ template BridgeAuth(ATTESTATION_DEPTH, MAX_VALIDATORS) {
     chainMatch.in[0] <== sourceChainId;
     chainMatch.in[1] <== expectedSourceChain;
     chainMatch.out === 1;
+    
+    // ============ VERIFY BLOCK ORDER (PREVENTS UNDERFLOW) ============
+    component blockOrder = ZKGreaterThan(32);
+    blockOrder.in[0] <== sourceLatestBlock;
+    blockOrder.in[1] <== sourceBlockNumber;
+    blockOrder.out === 1;
     
     // ============ VERIFY FINALITY ============
     signal confirmations;
@@ -77,9 +83,12 @@ template BridgeAuth(ATTESTATION_DEPTH, MAX_VALIDATORS) {
             validatorVerifiers[i].valid * validatorMask[i];
     }
     
-    // Require 2/3+ quorum
+    // ============ COMPUTE QUORUM THRESHOLD (ROUNDS UP) ============
+    signal quorumNumerator;
+    quorumNumerator <== MAX_VALIDATORS * BRIDGE_QUORUM_NUMERATOR() + BRIDGE_QUORUM_DENOMINATOR() - 1;
+    
     signal quorumThreshold;
-    quorumThreshold <== (MAX_VALIDATORS * BRIDGE_QUORUM_NUMERATOR()) \ BRIDGE_QUORUM_DENOMINATOR();
+    quorumThreshold <== quorumNumerator \ BRIDGE_QUORUM_DENOMINATOR();
     
     component quorumCheck = ZKGreaterEqThan(8);
     quorumCheck.in[0] <== validSignatures[MAX_VALIDATORS];
