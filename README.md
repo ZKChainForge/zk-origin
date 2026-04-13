@@ -638,7 +638,7 @@ This project is licensed under the **MIT License** - see the [LICENSE](LICENSE) 
 
 ---
 
-## 📞 Contact & Support
+## Contact & Support
 
 - **Issues:** [GitHub Issues](https://github.com/ZKChainForge/zk-origin/issues)
 - **Discussions:** [GitHub Discussions](https://github.com/ZKChainForge/zk-origin/discussions)
@@ -688,5 +688,5 @@ State A → State B
 
 **⭐ Star this repo if you find it useful!**
 
-**🔗 Share with the ZK community!**
+** Share with the ZK community!**
 
