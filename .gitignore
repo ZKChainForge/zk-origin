@@ -1,47 +1,116 @@
-# Node modules
+#######################################
+# Node / JS / TS
+#######################################
 node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+.pnpm-store/
+.npm/
+
+#######################################
+# Environment & secrets
+#######################################
 .env
-.env.example
-# Compilation output
-/target
-/policy_roort.json
+.env.*
+!.env.example
+*.key
+*.pem
+*.secret
+
+#######################################
+# Build / Compilation
+#######################################
 /build
+/dist
+/out
+/tmp
+/temp
+*.log
+
+#######################################
+# Circom / ZK artifacts
+#######################################
+*.ptau
+*.zkey
+*.r1cs
+*.sym
+*.wasm
+*.wtns
+
 /circuits/build
 /circuits/logs
 /circuits/test
-/contracts/deployment.json
-/contracts/deployment-complete.json
-/dist
-/contracts/node_modules
-/contracts/deployments
-/demo/node_modules
 /circuits/node_modules
-/contracts/proof_root.json
-/contracts/artifacts
-/contracts/cache
 
 /circuits/proof.json
 /circuits/public.json
 /circuits/test_input.json
-/contracts/witness.wtns 
+
+#######################################
+# Proof / Witness files (root + contracts)
+#######################################
+proof.json
 proof_root.json
 proof_submission.json
-policy_roort.json
-*.ptau
-*.zkey
-*.r1cs
-# pnpm deploy output
-/bundle
-# Hardhat Build Artifacts
+public.json
+witness.wtns
+
+/contracts/proof_root.json
+/contracts/witness.wtns
+
+#######################################
+# Hardhat / Solidity
+#######################################
 /artifacts
-
-# Hardhat compilation (v2) support directory
 /cache
-
-# Typechain output
+/cacheproffectional
+/typechain
 /types
-
-# Hardhat coverage reports
 /coverage
 
+/contracts/artifacts
+/contracts/cache
+/contracts/node_modules
+/contracts/deployments
+/contracts/deployment.json
+/contracts/deployment-complete.json
+
+#######################################
+# Rust (ZK / backend)
+/target
+**/target/
 /prover/target
+
+#######################################
+# Demo / nested modules
+/demo/node_modules
+
+#######################################
+# Deployment / Bundles
+#######################################
+/bundle
+
+#######################################
+# OS / Editor junk
+#######################################
+.DS_Store
+Thumbs.db
+*.swp
+*.swo
+*.tmp
+
+#######################################
+# IDEs
+#######################################
+.vscode/
+.idea/
+*.iml
+
+#######################################
+# Misc
+#######################################
+*.bak
+*.old
+*.orig
