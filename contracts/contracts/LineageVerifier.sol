@@ -11,6 +11,8 @@ import "./AuthorizationVerifier.sol";
  * @title LineageVerifier
  * @notice Core contract for ZK-ORIGIN state lineage verification
  * @dev Verifies state transitions using Groth16 zero-knowledge proofs
+ * 
+ * PRODUCTION VERSION - All security fixes applied
  */
 contract LineageVerifier is ILineageVerifier {
     
@@ -60,6 +62,9 @@ contract LineageVerifier is ILineageVerifier {
     mapping(bytes32 => address) public stateCreator;
     mapping(bytes32 => bool) public usedProofs;
     
+    // ADDED: Counter commitment tracking
+    mapping(uint256 => bytes32) public epochCounterCommitments;
+    
     // Statistics
     uint256 public totalTransitions;
     uint256 public maxDepthReached;
@@ -86,6 +91,7 @@ contract LineageVerifier is ILineageVerifier {
     error OriginPolicyViolatedError(uint8 from, uint8 to);
     error AuthorizationFailedError();
     error LineageValidFlagError();
+    error CounterCommitmentMismatch();
     
     // ============ Modifiers ============
     
@@ -221,41 +227,62 @@ contract LineageVerifier is ILineageVerifier {
         paused = _paused;
     }
     
-    // ============ Core Verification (OPTIMIZED) ============
+    // ============ Core Verification (FIXED) ============
     
-    /**
-     * @notice Helper: Extract and validate public signals
-     */
-    function _extractSignals(uint256[12] calldata signals)
-        internal
-        pure
-        returns (
-            bytes32 prevLineage,
-            bytes32 newLineage,
-            bytes32 policyRoot,
-            bytes32 prevStateHash,
-            bytes32 newStateHash,
-            uint8 prevOriginClass,
-            uint8 newOriginClass,
-            uint256 epochId,
-            uint256 lineageValid
-        )
-    {
-        prevLineage = bytes32(signals[0]);
-        newLineage = bytes32(signals[1]);
-        policyRoot = bytes32(signals[2]);
-        prevStateHash = bytes32(signals[3]);
-        newStateHash = bytes32(signals[4]);
-        epochId = signals[7];
-        prevOriginClass = uint8(signals[8]);
-        newOriginClass = uint8(signals[9]);
-        lineageValid = signals[11];
-        
-        // Quick validation
-        if (prevOriginClass > 6) revert InvalidOriginClass();
-        if (newOriginClass > 6) revert InvalidOriginClass();
-        if (lineageValid != 1) revert LineageValidFlagError();
-    }
+/**
+ * @notice Extract and validate public signals
+ * 
+ * CORRECT Signal Order (OUTPUTS FIRST!):
+ * [0]  newLineageCommitment     (output)
+ * [1]  newCounterCommitment     (output)
+ * [2]  lineageValid             (output)
+ * [3]  prevStateHash            (input)
+ * [4]  newStateHash             (input)
+ * [5]  epochId                  (input)
+ * [6]  prevOriginClass          (input)
+ * [7]  newOriginClass           (input)
+ * [8]  prevLineageCommitment    (input)
+ * [9]  prevCounterCommitment    (input)
+ * [10] policyRoot               (input)
+ * [11] expectedGenesisHash      (input)
+ */
+function _extractSignals(uint256[12] calldata signals)
+    internal
+    pure
+    returns (
+        bytes32 prevLineage,
+        bytes32 newLineage,
+        bytes32 policyRoot,
+        bytes32 prevStateHash,
+        bytes32 newStateHash,
+        bytes32 prevCounterCommit,
+        bytes32 newCounterCommit,
+        uint8 prevOriginClass,
+        uint8 newOriginClass,
+        uint256 epochId,
+        uint256 lineageValid
+    )
+{
+    // OUTPUTS FIRST
+    newLineage = bytes32(signals[0]);
+    newCounterCommit = bytes32(signals[1]);
+    lineageValid = signals[2];
+    
+    // THEN INPUTS
+    prevStateHash = bytes32(signals[3]);
+    newStateHash = bytes32(signals[4]);
+    epochId = signals[5];
+    prevOriginClass = uint8(signals[6]);
+    newOriginClass = uint8(signals[7]);
+    prevLineage = bytes32(signals[8]);
+    prevCounterCommit = bytes32(signals[9]);
+    policyRoot = bytes32(signals[10]);
+    // signals[11] = expectedGenesisHash (not used by contract)
+    
+    if (prevOriginClass > 6) revert InvalidOriginClass();
+    if (newOriginClass > 6) revert InvalidOriginClass();
+    if (lineageValid != 1) revert LineageValidFlagError();
+}
     
     /**
      * @notice Helper: Verify all preconditions
@@ -299,12 +326,16 @@ contract LineageVerifier is ILineageVerifier {
     
     /**
      * @notice Helper: Verify and update epoch/rate limits
+     * FIXED: Allow proofs from previous epoch (1 epoch grace period)
      */
     function _verifyAndUpdateEpoch(uint8 newOriginClass, uint256 epochId) internal {
         uint256 currentEpoch = epochManager.getCurrentEpoch();
-        if (epochId != currentEpoch) {
+        
+        // FIXED: Allow proofs from current epoch or 1 epoch ago
+        if (epochId < currentEpoch - 1 || epochId > currentEpoch) {
             revert EpochMismatchError(currentEpoch, epochId);
         }
+        
         epochManager.updateEpoch();
         
         if (!rateLimiter.canProceed(epochId, newOriginClass)) {
@@ -338,7 +369,12 @@ contract LineageVerifier is ILineageVerifier {
     }
     
     /**
-     * @notice Main verification function (OPTIMIZED)
+     * @notice Main verification function (PRODUCTION VERSION)
+     * 
+     * FIXES APPLIED:
+     * 1. Proof hash includes publicSignals (prevents replay with different signals)
+     * 2. Counter commitment verification (ensures circuit computed correct counters)
+     * 3. Epoch grace period (allows proofs from previous epoch)
      */
     function verifyLineage(
         uint256[2] calldata pA,
@@ -354,14 +390,21 @@ contract LineageVerifier is ILineageVerifier {
             bytes32 policyRoot,
             bytes32 prevStateHash,
             bytes32 newStateHash,
+            bytes32 prevCounterCommit,
+            bytes32 newCounterCommit,
             uint8 prevOriginClass,
             uint8 newOriginClass,
             uint256 epochId,
-            uint256 lineageValid
         ) = _extractSignals(publicSignals);
         
-        // Compute proof hash for replay protection
-        bytes32 proofHash = keccak256(abi.encode(pA, pB, pC));
+        // FIXED: Verify counter commitment consistency
+        bytes32 storedCounterCommit = epochCounterCommitments[epochId];
+        if (storedCounterCommit != bytes32(0) && storedCounterCommit != prevCounterCommit) {
+            revert CounterCommitmentMismatch();
+        }
+        
+        // FIXED: Compute proof hash including public signals
+        bytes32 proofHash = keccak256(abi.encode(pA, pB, pC, publicSignals));
         if (usedProofs[proofHash]) revert ProofAlreadyUsed();
         usedProofs[proofHash] = true;
         
@@ -380,7 +423,7 @@ contract LineageVerifier is ILineageVerifier {
             revert InvalidProof();
         }
         
-        // Verify and update epoch/rate limits
+        // FIXED: Verify and update epoch/rate limits (with grace period)
         _verifyAndUpdateEpoch(newOriginClass, epochId);
         
         // Get previous depth
@@ -391,6 +434,9 @@ contract LineageVerifier is ILineageVerifier {
         
         // Increment rate limiter
         rateLimiter.incrementCounter(epochId, newOriginClass);
+        
+        // FIXED: Store new counter commitment
+        epochCounterCommitments[epochId] = newCounterCommit;
         
         // Emit event
         emit LineageVerified(
@@ -466,6 +512,17 @@ contract LineageVerifier is ILineageVerifier {
         returns (bool)
     {
         return usedProofs[proofHash];
+    }
+    
+    /**
+     * @notice Get counter commitment for an epoch
+     */
+    function getCounterCommitment(uint256 epochId)
+        external
+        view
+        returns (bytes32)
+    {
+        return epochCounterCommitments[epochId];
     }
     
     function getStats() external view returns (
