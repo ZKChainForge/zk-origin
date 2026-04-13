@@ -45,13 +45,6 @@ contract AuthorizationVerifier is IAuthorizationVerifier {
     
     // ============ User Authorization ============
     
-    /**
-     * @notice Verify single user signature
-     * @param messageHash Hash of message
-     * @param signature Signature bytes
-     * @param signer Address of signer
-     * @return valid Whether signature is valid
-     */
     function verifyUserSignature(
         bytes32 messageHash,
         bytes calldata signature,
@@ -59,7 +52,6 @@ contract AuthorizationVerifier is IAuthorizationVerifier {
     ) public pure returns (bool valid) {
         if (signer == address(0)) revert ZeroAddress();
         
-        // Recover signer from signature
         bytes32 ethSignedHash = keccak256(
             abi.encodePacked("\x19Ethereum Signed Message:\n32", messageHash)
         );
@@ -68,9 +60,6 @@ contract AuthorizationVerifier is IAuthorizationVerifier {
         valid = (recoveredSigner == signer);
     }
     
-    /**
-     * @notice Recover signer from signature
-     */
     function recoverSigner(
         bytes32 messageHash,
         bytes calldata signature
@@ -96,14 +85,6 @@ contract AuthorizationVerifier is IAuthorizationVerifier {
     
     // ============ Admin Authorization ============
     
-    /**
-     * @notice Verify M-of-N admin multisig
-     * @param messageHash Hash of message
-     * @param signatures Array of signatures
-     * @param signers Array of signer addresses
-     * @param threshold Minimum required signatures
-     * @return valid Whether threshold met
-     */
     function verifyAdminMultisigMemory(
         bytes32 messageHash,
         bytes[] memory signatures,
@@ -127,7 +108,6 @@ contract AuthorizationVerifier is IAuthorizationVerifier {
                 validSignatures++;
             }
             
-            // Prevent duplicate signers
             for (uint256 j = i + 1; j < signers.length; j++) {
                 if (signers[i] == signers[j]) return false;
             }
@@ -136,9 +116,6 @@ contract AuthorizationVerifier is IAuthorizationVerifier {
         valid = (validSignatures >= threshold);
     }
     
-    /**
-     * @notice Recover signer from signature (memory version)
-     */
     function recoverSignerMemory(
         bytes32 messageHash,
         bytes memory signature
@@ -164,36 +141,16 @@ contract AuthorizationVerifier is IAuthorizationVerifier {
     
     // ============ Governance Authorization ============
     
-    /**
-     * @notice Verify governance proposal passed
-     * @param proposalId Proposal identifier
-     * @param yesVotes Yes vote count
-     * @param noVotes No vote count
-     * @param threshold Voting threshold
-     * @return valid Whether proposal valid
-     */
     function verifyGovernanceProposal(
-        uint256 proposalId,
         uint256 yesVotes,
-        uint256 noVotes,
+        uint256 /* noVotes */,
         uint256 threshold
     ) public pure returns (bool valid) {
-        if (yesVotes < noVotes) return false;
-        
-        uint256 netVotes = yesVotes - noVotes;
-        valid = (netVotes > threshold);
+        valid = (yesVotes > threshold);
     }
     
     // ============ Bridge Authorization ============
     
-    /**
-     * @notice Verify bridge attestation
-     * @param sourceChainId Source chain identifier
-     * @param stateRoot State root being attested
-     * @param signature Bridge signature
-     * @param bridgeKey Bridge public key
-     * @return valid Whether attestation valid
-     */
     function verifyBridgeAttestation(
         uint256 sourceChainId,
         bytes32 stateRoot,
@@ -209,23 +166,16 @@ contract AuthorizationVerifier is IAuthorizationVerifier {
     
     // ============ Authorization Verification (Main Interface) ============
     
-    /**
-     * @notice Verify authorization by type
-     * @param authType Type of authorization
-     * @param data Encoded authorization data
-     * @return valid Whether authorization valid
-     */
     function verifyAuthorization(
         AuthType authType,
         bytes calldata data
-    ) external view override returns (bool valid) {
+    ) external pure override returns (bool valid) {
         if (authType == AuthType.User) {
             (bytes32 messageHash, bytes memory signature, address signer) = abi.decode(
                 data,
                 (bytes32, bytes, address)
             );
             
-            // Convert memory to bytes we can work with
             bytes memory sigMem = signature;
             if (sigMem.length != 65) return false;
             
@@ -243,11 +193,11 @@ contract AuthorizationVerifier is IAuthorizationVerifier {
             return verifyAdminMultisigMemory(messageHash, signatures, signers, threshold);
             
         } else if (authType == AuthType.Governance) {
-            (uint256 proposalId, uint256 yesVotes, uint256 noVotes, uint256 threshold) = abi.decode(
+            (uint256 yesVotes, uint256 noVotes, uint256 threshold) = abi.decode(
                 data,
-                (uint256, uint256, uint256, uint256)
+                (uint256, uint256, uint256)
             );
-            return verifyGovernanceProposal(proposalId, yesVotes, noVotes, threshold);
+            return verifyGovernanceProposal(yesVotes, noVotes, threshold);
             
         } else if (authType == AuthType.Bridge) {
             (uint256 sourceChainId, bytes32 stateRoot, bytes memory signature, address bridgeKey) = abi.decode(
@@ -255,7 +205,6 @@ contract AuthorizationVerifier is IAuthorizationVerifier {
                 (uint256, bytes32, bytes, address)
             );
             
-            // Convert memory to bytes we can work with
             bytes32 messageHash = keccak256(
                 abi.encodePacked(sourceChainId, stateRoot)
             );
@@ -270,16 +219,10 @@ contract AuthorizationVerifier is IAuthorizationVerifier {
         }
     }
     
-    /**
-     * @notice Get authorization commitment
-     * @param authType Type of authorization
-     * @param data Encoded authorization data
-     * @return commitment Keccak256 commitment to authorization
-     */
     function getAuthorizationCommitment(
         AuthType authType,
         bytes calldata data
-    ) external view override returns (bytes32 commitment) {
+    ) external pure override returns (bytes32 commitment) {
         return keccak256(abi.encodePacked(authType, data));
     }
 }
