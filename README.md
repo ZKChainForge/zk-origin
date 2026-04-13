@@ -261,7 +261,7 @@ Final proof size: 192 bytes (regardless of N)
 
 ---
 
-## 📊 Performance Benchmarks
+## Performance Benchmarks
 
 | Metric | Value | Details |
 |--------|-------|---------|
