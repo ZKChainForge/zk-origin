@@ -7,7 +7,6 @@ include "../lib/constants.circom";
 /*
  * Governance Authentication: Proposal Approval Verification
  * 
- * FIXED: Uses absolute threshold instead of subtraction
  */
 
 template GovernanceAuth() {

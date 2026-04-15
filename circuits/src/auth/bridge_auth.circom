@@ -9,7 +9,6 @@ include "../lib/constants.circom";
 /*
  * Bridge Authentication: Cross-Chain Attestation with Finality
  * 
- * FIXED: Verifies block order to prevent underflow
  */
 
 template BridgeAuth(ATTESTATION_DEPTH, MAX_VALIDATORS) {
