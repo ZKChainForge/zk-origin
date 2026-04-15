@@ -10,27 +10,27 @@ const path = require("path");
 
 async function main() {
     console.log(`\n${'═'.repeat(60)}`);
-    console.log("🚀 ZK-ORIGIN E2E PROOF PIPELINE");
+    console.log(" ZK-ORIGIN E2E PROOF PIPELINE");
     console.log(`${'═'.repeat(60)}\n`);
     
     const steps = [
         {
-            name: "1️⃣  Generate Witness",
+            name: "1️ Generate Witness",
             cmd: "cargo run --release --manifest-path=../prover/Cargo.toml --bin witness_gen",
             output: "../prover/witness.json",
         },
         {
-            name: "2️⃣  Generate Proof",
+            name: "2️ Generate Proof",
             cmd: "cd circuits && snarkjs groth16 prove build/main_final.zkey build/witness.wtns proof.json public.json",
             output: "circuits/proof.json",
         },
         {
-            name: "3️⃣  Submit to Contract",
+            name: "3  Submit to Contract",
             cmd: "node scripts/submit_proof.js",
             output: "proof_submission_result.json",
         },
         {
-            name: "4️⃣  Verify State",
+            name: "4️ Verify State",
             cmd: "node scripts/verify_state.js",
             output: "state_verification.json",
         },
@@ -43,16 +43,16 @@ async function main() {
         console.log(`${'─'.repeat(40)}`);
         
         try {
-            console.log(`⏳ Running: ${step.cmd}\n`);
+            console.log(` Running: ${step.cmd}\n`);
             const output = execSync(step.cmd, { encoding: "utf8", stdio: "inherit" });
             
             if (fs.existsSync(step.output)) {
-                console.log(`✅ Completed - Output: ${step.output}`);
+                console.log(` Completed - Output: ${step.output}`);
             } else {
-                console.warn(`⚠️  Output file not found: ${step.output}`);
+                console.warn(` Output file not found: ${step.output}`);
             }
         } catch (error) {
-            console.error(`❌ Failed with error:`, error.message);
+            console.error(` Failed with error:`, error.message);
             success = false;
             break;
         }
@@ -60,9 +60,9 @@ async function main() {
     
     console.log(`\n${'═'.repeat(60)}`);
     if (success) {
-        console.log("✅ E2E PIPELINE COMPLETED SUCCESSFULLY");
+        console.log(" E2E PIPELINE COMPLETED SUCCESSFULLY");
     } else {
-        console.log("❌ E2E PIPELINE FAILED");
+        console.log(" E2E PIPELINE FAILED");
     }
     console.log(`${'═'.repeat(60)}\n`);
 }
