@@ -6,7 +6,7 @@ const { ethers } = require("hardhat");
 
 async function main() {
     console.log(`\n${'═'.repeat(60)}`);
-    console.log("🔍 STATE VERIFICATION");
+    console.log(" STATE VERIFICATION");
     console.log(`${'═'.repeat(60)}\n`);
     
     // Get contract
@@ -16,10 +16,10 @@ async function main() {
     );
     
     // Get latest verified state
-    console.log("📍 Querying verified states...\n");
+    console.log(" Querying verified states...\n");
     
     const stats = await lineageVerifier.getStats();
-    console.log(`📊 Contract Statistics:`);
+    console.log(` Contract Statistics:`);
     console.log(`   Total transitions verified: ${stats.transitions}`);
     console.log(`   Max depth reached: ${stats.maxDepth}`);
     console.log(`   Genesis initialized: ${stats.initialized}`);
@@ -31,14 +31,14 @@ async function main() {
         const genesisHash = await lineageVerifier.genesisStateHash();
         const genesisLineage = await lineageVerifier.getLineage(genesisHash);
         
-        console.log(`\n🔗 Genesis State:`);
+        console.log(`\n Genesis State:`);
         console.log(`   Hash: ${genesisHash.slice(0, 10)}...`);
         console.log(`   Lineage: ${genesisLineage.slice(0, 10)}...`);
         console.log(`   Verified: ${await lineageVerifier.hasVerifiedLineage(genesisHash)}`);
     }
     
     console.log(`\n${'═'.repeat(60)}`);
-    console.log("✅ VERIFICATION COMPLETE");
+    console.log(" VERIFICATION COMPLETE");
     console.log(`${'═'.repeat(60)}\n`);
 }
 

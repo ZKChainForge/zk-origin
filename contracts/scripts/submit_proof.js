@@ -21,11 +21,11 @@ async function main() {
     }
     
     console.log(`\n${'═'.repeat(60)}`);
-    console.log("🔐 ZK-ORIGIN PROOF SUBMISSION");
+    console.log(" ZK-ORIGIN PROOF SUBMISSION");
     console.log(`${'═'.repeat(60)}\n`);
     
     // Load proof
-    console.log("📂 Loading proof files...");
+    console.log(" Loading proof files...");
     if (!fs.existsSync(proofPath)) {
         throw new Error(`Proof file not found: ${proofPath}`);
     }
@@ -36,27 +36,27 @@ async function main() {
     const proof = JSON.parse(fs.readFileSync(proofPath, "utf8"));
     const signals = JSON.parse(fs.readFileSync(signalsPath, "utf8"));
     
-    console.log(`✅ Proof loaded`);
-    console.log(`✅ Signals loaded (${signals.length} inputs)`);
+    console.log(` Proof loaded`);
+    console.log(`Signals loaded (${signals.length} inputs)`);
     
     // Get contract
-    console.log("\n📍 Connecting to LineageVerifier...");
+    console.log("\n Connecting to LineageVerifier...");
     const lineageVerifier = await ethers.getContractAt(
         "LineageVerifier",
         process.env.LINEAGE_VERIFIER || "0xDc64a140Aa3E981100a9becA4E685f962f0cF6C9"
     );
-    console.log(`✅ Connected to: ${lineageVerifier.address}`);
+    console.log(` Connected to: ${lineageVerifier.address}`);
     
     // Format proof
-    console.log("\n🔄 Formatting proof...");
+    console.log("\n Formatting proof...");
     const formattedProof = formatProof(proof, signals);
-    console.log(`✅ Proof formatted`);
+    console.log(` Proof formatted`);
     console.log(`   pA: [${formattedProof.pA.map(n => n.toString().slice(0, 10)).join(", ")}...]`);
     console.log(`   pB: [[...], [...]]`);
     console.log(`   pC: [${formattedProof.pC.map(n => n.toString().slice(0, 10)).join(", ")}...]`);
     
     // Submit proof
-    console.log("\n⏳ Submitting proof to contract...");
+    console.log("\n Submitting proof to contract...");
     const tx = await lineageVerifier.verifyLineage(
         formattedProof.pA,
         formattedProof.pB,
@@ -64,20 +64,20 @@ async function main() {
         formattedProof.publicInputs
     );
     
-    console.log(`📤 Transaction hash: ${tx.hash}`);
-    console.log(`⏳ Waiting for confirmation...`);
+    console.log(` Transaction hash: ${tx.hash}`);
+    console.log(` Waiting for confirmation...`);
     
     const receipt = await tx.wait();
     
-    console.log(`\n${'═'.repeat(60)}`);
-    if (receipt.status === 1) {
-        console.log("✅ PROOF VERIFIED SUCCESSFULLY!");
-    } else {
-        console.log("❌ PROOF VERIFICATION FAILED");
-    }
-    console.log(`${'═'.repeat(60)}`);
     
-    console.log(`\n📊 Transaction Details:`);
+    if (receipt.status === 1) {
+        console.log(" PROOF VERIFIED SUCCESSFULLY!");
+    } else {
+        console.log(" PROOF VERIFICATION FAILED");
+    }
+ 
+    
+    console.log(`\n Transaction Details:`);
     console.log(`   Status: ${receipt.status === 1 ? "Success" : "Failed"}`);
     console.log(`   Gas used: ${receipt.gasUsed.toString()}`);
     console.log(`   Block: ${receipt.blockNumber}`);
@@ -85,7 +85,7 @@ async function main() {
     
     // Parse and display events
     if (receipt.logs.length > 0) {
-        console.log(`\n📋 Events:`);
+        console.log(`\n Events:`);
         for (const log of receipt.logs) {
             try {
                 const parsed = lineageVerifier.interface.parseLog(log);
@@ -120,7 +120,7 @@ async function main() {
     };
     
     fs.writeFileSync("proof_submission_result.json", JSON.stringify(results, null, 2));
-    console.log(`\n💾 Results saved to proof_submission_result.json`);
+    console.log(`\n Results saved to proof_submission_result.json`);
 }
 
 /**
