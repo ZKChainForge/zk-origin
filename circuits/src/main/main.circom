@@ -6,8 +6,14 @@ include "../lib/validators.circom";
 include "../lib/constants.circom";
 include "../core/lineage_step.circom";
 
+/**
+ * ZK-ORIGIN Main Circuit - FIXED VERSION
+ * 
+ * Works with existing LineageStep component
+ */
+
 template Main() {
-    // PUBLIC INPUTS
+    // ============ PUBLIC INPUTS (9) ============
     signal input prevStateHash;
     signal input newStateHash;
     signal input epochId;
@@ -18,7 +24,7 @@ template Main() {
     signal input policyRoot;
     signal input expectedGenesisHash;
     
-    // PRIVATE INPUTS
+    // ============ PRIVATE INPUTS ============
     signal input prevEpochId;
     signal input prevDepth;
     signal input nonce;
@@ -31,12 +37,12 @@ template Main() {
     signal input rateLimits[7];
     signal input authorizationValid;
     
-    // OUTPUTS
+    // ============ PUBLIC OUTPUTS (3) ============
     signal output newLineageCommitment;
     signal output newCounterCommitment;
     signal output lineageValid;
     
-    // LINEAGE STEP
+    // ============ LINEAGE STEP ============
     component lineageStep = LineageStep(6);
     
     lineageStep.prevStateHash <== prevStateHash;
@@ -68,6 +74,7 @@ template Main() {
     
     lineageStep.authorizationValid <== authorizationValid;
     
+    // ============ OUTPUT COMMITMENTS ============
     newLineageCommitment <== lineageStep.newLineageCommitment;
     newCounterCommitment <== lineageStep.newCounterCommitment;
     lineageValid <== lineageStep.lineageValid;
