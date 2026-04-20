@@ -1,36 +1,54 @@
+# prover/Cargo.toml
+
 [package]
 name = "zk-origin-prover"
 version.workspace = true
 edition.workspace = true
 authors.workspace = true
 license.workspace = true
+repository.workspace = true
+description = "Proof generation for ZK-ORIGIN"
 
 [dependencies]
-bellman.workspace = true
-ff.workspace = true
-ff_ce.workspace = true
-group.workspace = true
-pairing.workspace = true
-poseidon-rs.workspace = true
-serde.workspace = true
-serde_json.workspace = true
-hex.workspace = true
-rand.workspace = true
-sha2.workspace = true
-thiserror.workspace = true
-anyhow.workspace = true
+serde = { workspace = true }
+serde_json = { workspace = true }
+tokio = { workspace = true }
+async-trait = { workspace = true }
+sha3 = { workspace = true }
+sha2 = { workspace = true }
+hex = { workspace = true }
+num-bigint = { workspace = true }
+num-traits = { workspace = true }
+anyhow = { workspace = true }
+thiserror = { workspace = true }
+log = { workspace = true }
+env_logger = { workspace = true }
+chrono = { workspace = true }
+uuid = { workspace = true }
+
+# For interop with core
+zk-origin-core = { path = "../core" }
 
 [dev-dependencies]
-criterion.workspace = true
+tempfile = { workspace = true }
+criterion = { workspace = true }
+
+[[bench]]
+name = "prover_bench"
+harness = false
+
+[[bin]]
+name = "prover-cli"
+path = "src/bin/cli.rs"
+
+[[bin]]
+name = "witness-gen"
+path = "src/bin/witness_gen.rs"
+
+[[bin]]
+name = "prove"
+path = "src/bin/prove.rs"
 
 [lib]
 name = "zk_origin_prover"
 path = "src/lib.rs"
-
-[profile.release]
-opt-level = 3
-lto = true
-codegen-units = 1
-
-[profile.dev]
-opt-level = 0
