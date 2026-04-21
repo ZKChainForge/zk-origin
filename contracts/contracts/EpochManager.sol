@@ -2,13 +2,26 @@
 pragma solidity ^0.8.19;
 
 /**
- * @title EpochManager
+ * @title EpochManager (PRODUCTION)
  * @notice Manages epochs for state reset and counter management
+ * 
+ * SECURITY:
+ *  Epoch duration fixed (24 hours)
+ *  Epoch cannot go backwards
+ *  Monotonic increasing only
+ *  Timestamp validation
+ * 
+ * EPOCHS:
+ * - Duration: 24 hours = 86400 seconds
+ * - Used for rate limit resets
+ * - Prevents counter overflow
+ * - Enables temporal security properties
  */
+
 contract EpochManager {
     
     // ============ Constants ============
-    uint256 public constant EPOCH_DURATION = 86400; // 24 hours
+    uint256 public constant EPOCH_DURATION = 86400;  // 24 hours
     
     // ============ State ============
     uint256 public genesisTime;
@@ -26,6 +39,7 @@ contract EpochManager {
     // ============ Errors ============
     error NotAdmin();
     error NoTimeTravel();
+    error ZeroAddress();
     
     // ============ Modifiers ============
     modifier onlyAdmin() {
@@ -113,7 +127,7 @@ contract EpochManager {
      * @notice Transfer admin role
      */
     function transferAdmin(address newAdmin) external onlyAdmin {
-        if (newAdmin == address(0)) revert();
+        if (newAdmin == address(0)) revert ZeroAddress();
         admin = newAdmin;
         emit AdminTransferred(newAdmin);
     }

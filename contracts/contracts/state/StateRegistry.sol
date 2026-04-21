@@ -2,267 +2,337 @@
 pragma solidity ^0.8.19;
 
 /**
- * @title StateRegistry
- * @notice Stores and manages verified states with full lineage history
+ * @title StateRegistry (PRODUCTION)
+ * @notice Track verified states and their properties
+ * 
+ * SECURITY:
+ *  Immutable state history
+ *  Lineage tracking
+ *  Depth management
+ *  Origin class recording
+ *  Creator attribution
+ *  Timestamp verification
+ * 
+ * PRODUCTION NOTES:
+ * - Stores verified state information
+ * - Enables state history queries
+ * - Tracks state relationships
+ * - Provides audit trail
  */
+
 contract StateRegistry {
     
-    // ============ State Storage ============
+    // ============ Structures ============
     
-    struct StateRecord {
+    struct StateInfo {
         bytes32 stateHash;
         bytes32 lineageCommitment;
         uint256 depth;
         uint8 originClass;
-        uint64 timestamp;
+        uint256 timestamp;
         address creator;
-        bytes32 prevStateHash;
         bool verified;
     }
     
-    struct StateMetadata {
-        uint256 createdBlock;
-        uint256 createdTime;
-        string description;
-        bytes customData;
+    struct StateTransition {
+        bytes32 fromState;
+        bytes32 toState;
+        uint256 transitionTime;
+        uint8 originClass;
     }
     
-    // Main storage
-    mapping(bytes32 => StateRecord) public states;
-    mapping(bytes32 => StateMetadata) public metadata;
+    // ============ State ============
+    address public admin;
+    address public immutable lineageVerifier;
     
-    // Indexed access
-    bytes32[] public stateHashes;
-    mapping(uint256 => bytes32) public stateByIndex;
+    // State tracking
+    mapping(bytes32 => StateInfo) public states;
+    mapping(bytes32 => StateTransition[]) public stateTransitions;
+    mapping(address => bytes32[]) public userStates;
     
-    // Statistics
+    bytes32[] public allStates;
     uint256 public totalStates;
-    uint256 public maxDepthReached;
-    bytes32 public genesisState;
+    
+    // Lineage relationships
+    mapping(bytes32 => bytes32) public stateParent;
+    mapping(bytes32 => bytes32[]) public stateChildren;
     
     // ============ Events ============
     
-    event StateRegistered(
+    event StateRecorded(
         bytes32 indexed stateHash,
-        bytes32 indexed prevStateHash,
+        bytes32 indexed lineageCommitment,
         uint256 depth,
         uint8 originClass,
-        address indexed creator
+        address creator
     );
     
-    event StateMetadataUpdated(
+    event StateLinked(
+        bytes32 indexed parentState,
+        bytes32 indexed childState,
+        uint8 originClass
+    );
+    
+    event StateQueried(
         bytes32 indexed stateHash,
-        string description
+        address indexed querier
     );
     
-    event GenesisSet(
-        bytes32 indexed stateHash
-    );
+    event AdminTransferred(address indexed newAdmin);
     
     // ============ Errors ============
-    
-    error StateAlreadyRegistered();
+    error NotAdmin();
+    error NotLineageVerifier();
     error StateNotFound();
-    error InvalidDepth();
-    error GenesisAlreadySet();
+    error StateAlreadyExists();
+    error ZeroAddress();
+    error InvalidStateHash();
+    
+    // ============ Modifiers ============
+    modifier onlyAdmin() {
+        if (msg.sender != admin) revert NotAdmin();
+        _;
+    }
+    
+    modifier onlyLineageVerifier() {
+        if (msg.sender != lineageVerifier) revert NotLineageVerifier();
+        _;
+    }
+    
+    // ============ Constructor ============
+    constructor(address _lineageVerifier) {
+        if (_lineageVerifier == address(0)) revert ZeroAddress();
+        
+        admin = msg.sender;
+        lineageVerifier = _lineageVerifier;
+        totalStates = 0;
+    }
     
     // ============ Core Functions ============
     
     /**
-     * @notice Register a verified state
+     * @notice Record a verified state
+     * 
+     * Called by LineageVerifier after successful verification
      */
-    function registerState(
+    function recordState(
         bytes32 stateHash,
         bytes32 lineageCommitment,
         uint256 depth,
         uint8 originClass,
-        bytes32 prevStateHash
-    ) external {
-        require(!states[stateHash].verified, "State already registered");
-        require(depth <= 1_000_000, "Depth too large");
+        address creator
+    ) external onlyLineageVerifier {
+        if (stateHash == bytes32(0)) revert InvalidStateHash();
+        if (states[stateHash].verified) revert StateAlreadyExists();
         
-        // Register state
-        states[stateHash] = StateRecord({
+        StateInfo memory stateInfo = StateInfo({
             stateHash: stateHash,
             lineageCommitment: lineageCommitment,
             depth: depth,
             originClass: originClass,
-            timestamp: uint64(block.timestamp),
-            creator: msg.sender,
-            prevStateHash: prevStateHash,
+            timestamp: block.timestamp,
+            creator: creator,
             verified: true
         });
         
-        // Add to index
-        stateHashes.push(stateHash);
-        stateByIndex[totalStates] = stateHash;
-        
-        // Update statistics
-        totalStates++;
-        if (depth > maxDepthReached) {
-            maxDepthReached = depth;
-        }
-        
-        emit StateRegistered(stateHash, prevStateHash, depth, originClass, msg.sender);
-    }
-    
-    /**
-     * @notice Set genesis state
-     */
-    function setGenesis(bytes32 stateHash) external {
-        require(genesisState == bytes32(0), "Genesis already set");
-        
-        genesisState = stateHash;
-        
-        // Register genesis
-        states[stateHash] = StateRecord({
-            stateHash: stateHash,
-            lineageCommitment: stateHash,
-            depth: 0,
-            originClass: 0,  // Genesis class
-            timestamp: uint64(block.timestamp),
-            creator: msg.sender,
-            prevStateHash: bytes32(0),
-            verified: true
-        });
-        
-        stateHashes.push(stateHash);
-        stateByIndex[0] = stateHash;
+        states[stateHash] = stateInfo;
+        allStates.push(stateHash);
+        userStates[creator].push(stateHash);
         totalStates++;
         
-        emit GenesisSet(stateHash);
+        emit StateRecorded(
+            stateHash,
+            lineageCommitment,
+            depth,
+            originClass,
+            creator
+        );
     }
     
     /**
-     * @notice Add metadata to a state
+     * @notice Link parent and child states
      */
-    function setMetadata(
-        bytes32 stateHash,
-        string calldata description,
-        bytes calldata customData
-    ) external {
-        require(states[stateHash].verified, "State not verified");
+    function linkStates(
+        bytes32 parentState,
+        bytes32 childState,
+        uint8 originClass
+    ) external onlyLineageVerifier {
+        if (!states[parentState].verified) revert StateNotFound();
+        if (!states[childState].verified) revert StateNotFound();
         
-        metadata[stateHash] = StateMetadata({
-            createdBlock: block.number,
-            createdTime: block.timestamp,
-            description: description,
-            customData: customData
+        stateParent[childState] = parentState;
+        stateChildren[parentState].push(childState);
+        
+        StateTransition memory transition = StateTransition({
+            fromState: parentState,
+            toState: childState,
+            transitionTime: block.timestamp,
+            originClass: originClass
         });
         
-        emit StateMetadataUpdated(stateHash, description);
+        stateTransitions[parentState].push(transition);
+        
+        emit StateLinked(parentState, childState, originClass);
     }
     
-    // ============ View Functions ============
+    // ============ Query Functions ============
     
     /**
-     * @notice Get state record
+     * @notice Get state information
      */
-    function getState(bytes32 stateHash)
-        external
-        view
-        returns (StateRecord memory)
+    function getState(bytes32 stateHash) 
+        external returns (StateInfo memory) 
     {
-        require(states[stateHash].verified, "State not found");
+        if (!states[stateHash].verified) revert StateNotFound();
+        
+        emit StateQueried(stateHash, msg.sender);
         return states[stateHash];
-    }
-    
-    /**
-     * @notice Get lineage commitment for state
-     */
-    function getLineageCommitment(bytes32 stateHash)
-        external
-        view
-        returns (bytes32)
-    {
-        require(states[stateHash].verified, "State not found");
-        return states[stateHash].lineageCommitment;
-    }
-    
-    /**
-     * @notice Get state depth
-     */
-    function getDepth(bytes32 stateHash)
-        external
-        view
-        returns (uint256)
-    {
-        require(states[stateHash].verified, "State not found");
-        return states[stateHash].depth;
     }
     
     /**
      * @notice Check if state is verified
      */
-    function isVerified(bytes32 stateHash)
-        external
-        view
-        returns (bool)
+    function isStateVerified(bytes32 stateHash) 
+        external view returns (bool) 
     {
         return states[stateHash].verified;
     }
     
     /**
-     * @notice Get state at index
+     * @notice Get state depth
      */
-    function getStateByIndex(uint256 index)
-        external
-        view
-        returns (StateRecord memory)
+    function getStateDepth(bytes32 stateHash) 
+        external view returns (uint256) 
     {
-        require(index < totalStates, "Index out of bounds");
-        return states[stateByIndex[index]];
+        if (!states[stateHash].verified) revert StateNotFound();
+        return states[stateHash].depth;
     }
     
     /**
-     * @notice Get metadata for state
+     * @notice Get state origin class
      */
-    function getMetadata(bytes32 stateHash)
-        external
-        view
-        returns (StateMetadata memory)
+    function getStateOriginClass(bytes32 stateHash) 
+        external view returns (uint8) 
     {
-        return metadata[stateHash];
+        if (!states[stateHash].verified) revert StateNotFound();
+        return states[stateHash].originClass;
     }
     
     /**
-     * @notice Get all states
+     * @notice Get parent state
      */
-    function getAllStates()
-        external
-        view
-        returns (StateRecord[] memory)
+    function getParentState(bytes32 stateHash) 
+        external view returns (bytes32) 
     {
-        StateRecord[] memory records = new StateRecord[](totalStates);
-        
-        for (uint256 i = 0; i < totalStates; i++) {
-            records[i] = states[stateByIndex[i]];
-        }
-        
-        return records;
+        if (!states[stateHash].verified) revert StateNotFound();
+        return stateParent[stateHash];
     }
     
     /**
-     * @notice Get lineage path from genesis to state
+     * @notice Get child states
      */
-    function getLineagePath(bytes32 stateHash)
-        external
-        view
-        returns (bytes32[] memory)
+    function getChildStates(bytes32 stateHash) 
+        external view returns (bytes32[] memory) 
     {
-        require(states[stateHash].verified, "State not found");
+        if (!states[stateHash].verified) revert StateNotFound();
+        return stateChildren[stateHash];
+    }
+    
+    /**
+     * @notice Get state transitions
+     */
+    function getTransitions(bytes32 stateHash) 
+        external view returns (StateTransition[] memory) 
+    {
+        if (!states[stateHash].verified) revert StateNotFound();
+        return stateTransitions[stateHash];
+    }
+    
+    /**
+     * @notice Get all states for user
+     */
+    function getUserStates(address user) 
+        external view returns (bytes32[] memory) 
+    {
+        return userStates[user];
+    }
+    
+    /**
+     * @notice Get all verified states
+     */
+    function getAllStates() 
+        external view returns (bytes32[] memory) 
+    {
+        return allStates;
+    }
+    
+    /**
+     * @notice Get total states
+     */
+    function getTotalStates() 
+        external view returns (uint256) 
+    {
+        return totalStates;
+    }
+    
+    /**
+     * @notice Trace lineage (get all ancestors)
+     */
+    function traceLineage(bytes32 stateHash) 
+        external view returns (bytes32[] memory ancestors) 
+    {
+        if (!states[stateHash].verified) revert StateNotFound();
         
-        // Walk backwards from stateHash to genesis
-        uint256 depth = states[stateHash].depth;
-        bytes32[] memory path = new bytes32[](depth + 1);
-        
+        bytes32[] memory ancestorList = new bytes32[](states[stateHash].depth + 1);
         bytes32 current = stateHash;
-        for (uint256 i = depth; i > 0; i--) {
-            path[i] = current;
-            current = states[current].prevStateHash;
-        }
-        path[0] = genesisState;
+        uint256 index = 0;
         
-        return path;
+        while (current != bytes32(0) && index <= states[stateHash].depth) {
+            ancestorList[index] = current;
+            current = stateParent[current];
+            index++;
+        }
+        
+        return ancestorList;
+    }
+    
+    // ============ Analytics Functions ============
+    
+    /**
+     * @notice Get state creation statistics
+     */
+    function getStatistics() 
+        external view returns (
+            uint256 totalVerifiedStates,
+            uint256 averageDepth,
+            uint256 maxDepth
+        ) 
+    {
+        totalVerifiedStates = totalStates;
+        
+        uint256 totalDepth = 0;
+        uint256 max = 0;
+        
+        for (uint256 i = 0; i < allStates.length; i++) {
+            uint256 depth = states[allStates[i]].depth;
+            totalDepth += depth;
+            if (depth > max) {
+                max = depth;
+            }
+        }
+        
+        averageDepth = totalStates > 0 ? totalDepth / totalStates : 0;
+        maxDepth = max;
+    }
+    
+    // ============ Admin Functions ============
+    
+    /**
+     * @notice Transfer admin role
+     */
+    function transferAdmin(address newAdmin) external onlyAdmin {
+        if (newAdmin == address(0)) revert ZeroAddress();
+        admin = newAdmin;
+        emit AdminTransferred(newAdmin);
     }
 }

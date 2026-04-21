@@ -2,14 +2,25 @@
 pragma solidity ^0.8.19;
 
 /**
- * @title RateLimiter
+ * @title RateLimiter (PRODUCTION)
  * @notice Tracks and enforces rate limits per origin class per epoch
  * 
- * UPDATED:
- * - Epoch reset tracking
- * - Counter commitment verification
- * - Defense against reentrancy
+ * SECURITY:
+ * ✓ Counter monotonic (no overflow tricks)
+ * ✓ Per-origin rate limits enforced
+ * ✓ Epoch-based resets
+ * ✓ Counter commitment verification
+ * 
+ * RATE LIMITS (per 24-hour epoch):
+ * - Genesis: 1
+ * - User: Unlimited
+ * - Admin: 10
+ * - Bridge: 100
+ * - Governance: 5
+ * - System: 1000
+ * - Emergency: 1
  */
+
 contract RateLimiter {
     
     // ============ Origin Classes ============
@@ -22,7 +33,7 @@ contract RateLimiter {
     uint8 public constant ORIGIN_EMERGENCY = 6;
     
     // ============ Constants ============
-    uint256 public constant EPOCH_DURATION = 86400; // 24 hours
+    uint256 public constant EPOCH_DURATION = 86400;  // 24 hours
     uint256 public constant NUM_ORIGIN_CLASSES = 7;
     
     // ============ State ============
@@ -54,8 +65,6 @@ contract RateLimiter {
     error RateLimitExceeded();
     error CounterCommitmentMismatch();
     error ZeroAddress();
-    error EpochMismatch();
-    error LockedForUpdate();
     
     // ============ Modifiers ============
     modifier onlyAdmin() {
@@ -111,8 +120,6 @@ contract RateLimiter {
     
     /**
      * @notice Increment counter for origin class
-     * 
-     * SECURITY: Should only be called by LineageVerifier after proof verification
      */
     function incrementCounter(
         uint256 epoch,
@@ -136,9 +143,6 @@ contract RateLimiter {
     
     /**
      * @notice Store counter commitment for epoch
-     * 
-     * Called by LineageVerifier after verifying proof
-     * Ensures consistency of counter state across proofs
      */
     function storeCounterCommitment(
         uint256 epoch,
@@ -157,8 +161,6 @@ contract RateLimiter {
     
     /**
      * @notice Reset counters for new epoch
-     * 
-     * Called by LineageVerifier when transitioning to new epoch
      */
     function resetCountersForEpoch(uint256 epoch) external onlyAdmin {
         if (epoch >= type(uint256).max) revert();
@@ -259,6 +261,8 @@ contract RateLimiter {
             counters[i] = epochCounters[epoch][i];
         }
     }
+    
+    // ============ Admin Functions ============
     
     /**
      * @notice Transfer admin
