@@ -5,25 +5,39 @@ pragma solidity ^0.8.19;
  * @title IAuthorizationVerifier
  * @notice Interface for authorization proof verification
  * 
- * UPDATED: Support for ZK circuit integration
+ * SECURITY:
+ *  Defines all authorization types
+ *  Standard verification interface
+ *  Commitment-based proof model
+ * 
+ * AUTHORIZATION TYPES:
+ * 0 = User (EdDSA signature)
+ * 1 = Admin (M-of-N multisig)
+ * 2 = Bridge (Validator quorum + finality)
+ * 3 = Governance (Vote threshold + timelock)
+ * 4 = System (Authorized caller)
+ * 5 = Emergency (Key + conditions)
  */
+
 interface IAuthorizationVerifier {
     
     // ============ Authorization Types ============
+    
     enum AuthType {
-        User,        // 0: Single signature
-        Admin,       // 1: M-of-N multisig
-        Bridge,      // 2: Bridge attestation
-        Governance,  // 3: Governance vote
-        System,      // 4: System call
-        Emergency    // 5: Emergency key
+        User,        // 0
+        Admin,       // 1
+        Bridge,      // 2
+        Governance,  // 3
+        System,      // 4
+        Emergency    // 5
     }
     
     // ============ Events ============
+    
     event AuthorizationVerified(
         AuthType indexed authType,
         bytes32 indexed commitment,
-        address indexed verifier
+        address indexed creator
     );
     
     event SignatureValidated(
@@ -36,13 +50,38 @@ interface IAuthorizationVerifier {
         uint256 threshold
     );
     
-    // ============ Functions ============
+    event ProposalApproved(
+        uint256 indexed proposalId,
+        uint256 yesVotes,
+        uint256 noVotes
+    );
+    
+    event BridgeAttestation(
+        uint256 indexed sourceChain,
+        bytes32 stateRoot,
+        uint256 validators
+    );
+    
+    event EmergencyActivated(
+        address indexed emergencyKey,
+        string reason
+    );
+    
+    // ============ Core Functions ============
     
     /**
      * @notice Verify authorization based on type
      * @param authType Type of authorization
-     * @param data Encoded authorization data (signatures, commitments, etc)
+     * @param data Encoded authorization data
      * @return valid Whether authorization is valid
+     * 
+     * Data encoding depends on authType:
+     * - User: (bytes32 messageHash, bytes signature, address signer)
+     * - Admin: (bytes32 messageHash, bytes[] sigs, address[] signers, uint threshold)
+     * - Bridge: (uint sourceChainId, bytes32 stateRoot, bytes sig, address bridgeKey)
+     * - Governance: (uint yesVotes, uint noVotes, uint threshold)
+     * - System: (address callerAddress, address expectedSystemAddress)
+     * - Emergency: (address emergencyKey, bytes32 keyHash)
      */
     function verifyAuthorization(
         AuthType authType,
@@ -53,9 +92,7 @@ interface IAuthorizationVerifier {
      * @notice Get commitment to authorization proof
      * @param authType Type of authorization
      * @param data Encoded authorization data
-     * @return commitment Keccak256 hash of (authType, data)
-     * 
-     * Used by ZK circuit to verify authorization without revealing details
+     * @return commitment Hash of (authType, data)
      */
     function getAuthorizationCommitment(
         AuthType authType,

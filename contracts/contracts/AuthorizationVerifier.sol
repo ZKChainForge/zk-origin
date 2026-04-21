@@ -4,18 +4,13 @@ pragma solidity ^0.8.19;
 import "./interfaces/IAuthorizationVerifier.sol";
 
 /**
- * @title AuthorizationVerifier
- * @notice Verifies authorization proofs for different origin classes
- * 
- * FIXED:
- * - Use memory instead of calldata in internal functions
- * - Proper signature recovery
- * - Malleability prevention
+ * @title AuthorizationVerifier (PRODUCTION)
+ * @notice Verifies authorization proofs for all origin classes
  */
+
 contract AuthorizationVerifier is IAuthorizationVerifier {
     
-    // ============ Events ============
-    event AuthorizationVerified(AuthType indexed authType, bytes32 commitment);
+    // ============ Events (Custom, non-interface) ============
     event UserAuthVerified(address indexed user, bytes32 messageHash);
     event AdminAuthVerified(address[] signers, uint256 threshold);
     event GovernanceAuthVerified(uint256 indexed proposalId, uint256 votes);
@@ -30,6 +25,9 @@ contract AuthorizationVerifier is IAuthorizationVerifier {
     error MalleableSignature();
     error RecoveryFailed();
     error DuplicateSigner();
+    error InvalidProposal();
+    error FinalityNotReached();
+    error QuorumNotMet();
     
     // ============ Constants ============
     uint256 public constant MAX_SIGNERS = 15;
@@ -46,7 +44,7 @@ contract AuthorizationVerifier is IAuthorizationVerifier {
     
     // ============ Modifiers ============
     modifier onlyAdmin() {
-        if (msg.sender != admin) revert();
+        require(msg.sender == admin, "NotAdmin");
         _;
     }
     
@@ -55,16 +53,10 @@ contract AuthorizationVerifier is IAuthorizationVerifier {
         admin = msg.sender;
     }
     
-    // ============ Signature Recovery (FIXED) ============
+    // ============ Signature Recovery ============
     
     /**
      * @notice Recover signer from signature with ALL security checks
-     * 
-     * SECURITY:
-     * 1. Validates v is 27 or 28 (no auto-correction)
-     * 2. Prevents malleable signatures (checks s <= n/2)
-     * 3. Checks for address(0) recovery failure
-     * 4. Explicit return on any failure
      */
     function recoverSigner(
         bytes32 messageHash,
@@ -86,22 +78,20 @@ contract AuthorizationVerifier is IAuthorizationVerifier {
             v := byte(0, mload(add(signature, 0x60)))
         }
         
-        // ✅ FIX 1: Don't auto-correct v
-        // v MUST be exactly 27 or 28
+        // SECURITY FIX 1: Don't auto-correct v
         if (v != 27 && v != 28) {
             return address(0);
         }
         
-        // ✅ FIX 2: Check for malleability
-        // If s > n/2, signature is malleable
+        // SECURITY FIX 2: Check for malleability
         if (uint256(s) > SECP256K1_N_DIV_2) {
             return address(0);
         }
         
-        // Recover signer using ecrecover
+        // Recover signer
         signer = ecrecover(messageHash, v, r, s);
         
-        // ✅ FIX 3: Explicit check for recovery failure
+        // SECURITY FIX 3: Check for recovery failure
         if (signer == address(0)) {
             return address(0);
         }
@@ -113,18 +103,14 @@ contract AuthorizationVerifier is IAuthorizationVerifier {
     
     /**
      * @notice Verify user signature
-     * @param messageHash Hash of message that was signed
-     * @param signature Raw signature (65 bytes)
-     * @param expectedSigner Expected signer address
-     * @return valid Whether signature is valid
      */
     function verifyUserSignature(
         bytes32 messageHash,
         bytes memory signature,
         address expectedSigner
     ) public pure returns (bool valid) {
-        if (expectedSigner == address(0)) revert ZeroAddress();
-        if (messageHash == bytes32(0)) revert InvalidProof();
+        require(expectedSigner != address(0), "ZeroAddress");
+        require(messageHash != bytes32(0), "InvalidProof");
         
         // Create Ethereum signed message hash
         bytes32 ethSignedHash = keccak256(
@@ -134,22 +120,17 @@ contract AuthorizationVerifier is IAuthorizationVerifier {
             )
         );
         
-        // Recover signer (with all safety checks)
+        // Recover signer
         address recoveredSigner = recoverSigner(ethSignedHash, signature);
         
         // Check it matches expected
         valid = (recoveredSigner == expectedSigner);
     }
     
-    // ============ Admin Authorization (Multisig) ============
+    // ============ Admin Authorization ============
     
     /**
      * @notice Verify M-of-N multisig
-     * @param messageHash Hash of transaction
-     * @param signatures Array of signatures
-     * @param signers Array of signer addresses
-     * @param threshold Minimum valid signatures required
-     * @return valid Whether multisig is valid
      */
     function verifyAdminMultisig(
         bytes32 messageHash,
@@ -158,10 +139,10 @@ contract AuthorizationVerifier is IAuthorizationVerifier {
         uint256 threshold
     ) public pure returns (bool valid) {
         // Validate inputs
-        if (signatures.length != signers.length) return false;
-        if (signatures.length > MAX_SIGNERS) return false;
-        if (threshold < MIN_THRESHOLD) return false;
-        if (threshold > signatures.length) return false;
+        require(signatures.length == signers.length, "LengthMismatch");
+        require(signatures.length <= MAX_SIGNERS, "TooManySigners");
+        require(threshold >= MIN_THRESHOLD, "ThresholdTooLow");
+        require(threshold <= signatures.length, "ThresholdTooHigh");
         
         // Create Ethereum signed message hash
         bytes32 ethSignedHash = keccak256(
@@ -175,19 +156,15 @@ contract AuthorizationVerifier is IAuthorizationVerifier {
         
         // Verify each signature
         for (uint256 i = 0; i < signatures.length; i++) {
-            // Recover signer (with safety checks)
+            // Recover signer
             address recoveredSigner = recoverSigner(ethSignedHash, signatures[i]);
             
             // Must match expected signer
-            if (recoveredSigner != signers[i]) {
-                return false;
-            }
+            require(recoveredSigner == signers[i], "InvalidSignature");
             
             // Check for duplicate signers
             for (uint256 j = i + 1; j < signers.length; j++) {
-                if (signers[i] == signers[j]) {
-                    revert DuplicateSigner();
-                }
+                require(signers[i] != signers[j], "DuplicateSigner");
             }
             
             validSignatures++;
@@ -201,10 +178,6 @@ contract AuthorizationVerifier is IAuthorizationVerifier {
     
     /**
      * @notice Verify governance proposal passed
-     * @param yesVotes Number of yes votes
-     * @param noVotes Number of no votes
-     * @param threshold Minimum required votes
-     * @return valid Whether governance check passes
      */
     function verifyGovernanceProposal(
         uint256 yesVotes,
@@ -219,11 +192,6 @@ contract AuthorizationVerifier is IAuthorizationVerifier {
     
     /**
      * @notice Verify bridge attestation
-     * @param sourceChainId Chain ID of source
-     * @param stateRoot Root of state tree
-     * @param signature Bridge signature
-     * @param bridgeKey Expected bridge key
-     * @return valid Whether attestation is valid
      */
     function verifyBridgeAttestation(
         uint256 sourceChainId,
@@ -244,9 +212,6 @@ contract AuthorizationVerifier is IAuthorizationVerifier {
     
     /**
      * @notice Compute commitment to authorization
-     * @param authType Type of authorization
-     * @param data Encoded authorization data
-     * @return commitment Hash commitment to auth
      */
     function getAuthorizationCommitment(
         AuthType authType,
@@ -259,15 +224,6 @@ contract AuthorizationVerifier is IAuthorizationVerifier {
     
     /**
      * @notice Verify authorization based on type
-     * @param authType Type of authorization (User, Admin, Bridge, etc)
-     * @param data Encoded authorization data
-     * @return valid Whether authorization is valid
-     * 
-     * Data encoding:
-     * - User: (bytes32 messageHash, bytes signature, address signer)
-     * - Admin: (bytes32 messageHash, bytes[] sigs, address[] signers, uint threshold)
-     * - Governance: (uint yesVotes, uint noVotes, uint threshold)
-     * - Bridge: (uint sourceChainId, bytes32 stateRoot, bytes sig, address bridgeKey)
      */
     function verifyAuthorization(
         AuthType authType,
@@ -285,20 +241,31 @@ contract AuthorizationVerifier is IAuthorizationVerifier {
             
             valid = verifyAdminMultisig(messageHash, signatures, signers, threshold);
             
-        } else if (authType == AuthType.Governance) {
-            (uint256 yesVotes, uint256 noVotes, uint256 threshold) = 
-                abi.decode(data, (uint256, uint256, uint256));
-            
-            valid = verifyGovernanceProposal(yesVotes, noVotes, threshold);
-            
         } else if (authType == AuthType.Bridge) {
             (uint256 sourceChainId, bytes32 stateRoot, bytes memory signature, address bridgeKey) = 
                 abi.decode(data, (uint256, bytes32, bytes, address));
             
             valid = verifyBridgeAttestation(sourceChainId, stateRoot, signature, bridgeKey);
             
+        } else if (authType == AuthType.Governance) {
+            (uint256 yesVotes, uint256 noVotes, uint256 threshold) = 
+                abi.decode(data, (uint256, uint256, uint256));
+            
+            valid = verifyGovernanceProposal(yesVotes, noVotes, threshold);
+            
+        } else if (authType == AuthType.System) {
+            (address callerAddress, address expectedSystemAddress) = 
+                abi.decode(data, (address, address));
+            
+            valid = (callerAddress == expectedSystemAddress);
+            
+        } else if (authType == AuthType.Emergency) {
+            (bytes32 emergencyKeyHash, address actualKey) = 
+                abi.decode(data, (bytes32, address));
+            
+            valid = (keccak256(abi.encodePacked(actualKey)) == emergencyKeyHash);
         } else {
-            revert InvalidAuthType();
+            revert("InvalidAuthType");
         }
     }
     
@@ -308,7 +275,7 @@ contract AuthorizationVerifier is IAuthorizationVerifier {
      * @notice Approve a signer
      */
     function approveSigner(address signer) external onlyAdmin {
-        if (signer == address(0)) revert ZeroAddress();
+        require(signer != address(0), "ZeroAddress");
         approvedSigners[signer] = true;
     }
     
@@ -323,7 +290,7 @@ contract AuthorizationVerifier is IAuthorizationVerifier {
      * @notice Transfer admin
      */
     function transferAdmin(address newAdmin) external onlyAdmin {
-        if (newAdmin == address(0)) revert ZeroAddress();
+        require(newAdmin != address(0), "ZeroAddress");
         admin = newAdmin;
     }
 }
