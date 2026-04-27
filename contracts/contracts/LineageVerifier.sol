@@ -77,7 +77,7 @@ contract LineageVerifier is ILineageVerifier {
     uint256 public maxDepthReached;
     uint256 public lastEpochProcessed;
     
-    // ============ Events (No duplicates - inherit from interface) ============
+    // ============ Events (Inherited from interface) ============
     
     event AuthorizationVerified(
         uint8 indexed originClass,
@@ -473,6 +473,30 @@ contract LineageVerifier is ILineageVerifier {
         }
     }
     
+    // ============ Helper: Compute Proof Hash ============
+    
+    /**
+     * @notice Compute proof hash for replay protection
+     * FIX: Split encoding to avoid stack depth issues with viaIR
+     */
+    function _computeProofHash(
+        uint256[2] calldata pA,
+        uint256[2][2] calldata pB,
+        uint256[2] calldata pC,
+        uint256[19] calldata publicSignals,
+        uint8 authType,
+        bytes calldata authData
+    ) internal pure returns (bytes32) {
+        // Part 1: Encode proof components
+        bytes32 proofPart1 = keccak256(abi.encode(pA, pB, pC));
+        
+        // Part 2: Encode signals and auth data
+        bytes32 proofPart2 = keccak256(abi.encode(publicSignals, authType, authData));
+        
+        // Combine both parts
+        return keccak256(abi.encode(proofPart1, proofPart2));
+    }
+    
     // ============ Main Verification Function ============
     
     /**
@@ -516,10 +540,16 @@ contract LineageVerifier is ILineageVerifier {
             uint256[7] memory newCounterValues
         ) = _extractSignals(signals);
         
-        // Compute proof hash for replay protection
-        bytes32 proofHash = keccak256(
-            abi.encode(pA, pB, pC, publicSignals, authType, authData)
+        // Compute proof hash for replay protection (FIX: split encoding)
+        bytes32 proofHash = _computeProofHash(
+            pA,
+            pB,
+            pC,
+            publicSignals,
+            authType,
+            authData
         );
+        
         if (usedProofs[proofHash]) {
             revert ProofAlreadyUsed();
         }

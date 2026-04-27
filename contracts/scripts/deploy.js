@@ -21,7 +21,7 @@ const fs = require("fs");
 const path = require("path");
 
 async function main() {
-    console.log("🚀 ZK-ORIGIN Deployment Starting...\n");
+    console.log(" ZK-ORIGIN Deployment Starting...\n");
     
     const [deployer] = await ethers.getSigners();
     console.log("Deployer Address:", deployer.address);
@@ -29,35 +29,35 @@ async function main() {
     console.log();
     
     // ============ STEP 1: Deploy Groth16Verifier ============
-    console.log("1️⃣  Deploying Groth16Verifier...");
+    console.log("1 Deploying Groth16Verifier...");
     const Groth16Verifier = await ethers.getContractFactory("Groth16Verifier");
     const groth16Verifier = await Groth16Verifier.deploy();
     await groth16Verifier.deployed();
-    console.log("✅ Groth16Verifier:", groth16Verifier.address);
+    console.log(" Groth16Verifier:", groth16Verifier.address);
     
     // ============ STEP 2: Deploy EpochManager ============
-    console.log("\n2️⃣  Deploying EpochManager...");
+    console.log("\n2  Deploying EpochManager...");
     const EpochManager = await ethers.getContractFactory("EpochManager");
     const epochManager = await EpochManager.deploy();
     await epochManager.deployed();
-    console.log("✅ EpochManager:", epochManager.address);
+    console.log(" EpochManager:", epochManager.address);
     
     // ============ STEP 3: Deploy RateLimiter ============
-    console.log("\n3️⃣  Deploying RateLimiter...");
+    console.log("\n3  Deploying RateLimiter...");
     const RateLimiter = await ethers.getContractFactory("RateLimiter");
     const rateLimiter = await RateLimiter.deploy();
     await rateLimiter.deployed();
-    console.log("✅ RateLimiter:", rateLimiter.address);
+    console.log(" RateLimiter:", rateLimiter.address);
     
     // ============ STEP 4: Deploy AuthorizationVerifier ============
-    console.log("\n4️⃣  Deploying AuthorizationVerifier...");
+    console.log("\n4 Deploying AuthorizationVerifier...");
     const AuthorizationVerifier = await ethers.getContractFactory("AuthorizationVerifier");
     const authVerifier = await AuthorizationVerifier.deploy();
     await authVerifier.deployed();
-    console.log("✅ AuthorizationVerifier:", authVerifier.address);
+    console.log(" AuthorizationVerifier:", authVerifier.address);
     
     // ============ STEP 5: Deploy LineageVerifier ============
-    console.log("\n5️⃣  Deploying LineageVerifier...");
+    console.log("\n5 Deploying LineageVerifier...");
     
     // Read genesis commitment and policy root from config
     const genesisLineageCommitment = process.env.GENESIS_LINEAGE_COMMITMENT ||
@@ -75,34 +75,34 @@ async function main() {
         policyRoot
     );
     await lineageVerifier.deployed();
-    console.log("✅ LineageVerifier:", lineageVerifier.address);
+    console.log(" LineageVerifier:", lineageVerifier.address);
     
     // ============ STEP 6: Deploy PolicyRegistry ============
-    console.log("\n6️⃣  Deploying PolicyRegistry...");
+    console.log("\n6 Deploying PolicyRegistry...");
     const PolicyRegistry = await ethers.getContractFactory("PolicyRegistry");
     const policyRegistry = await PolicyRegistry.deploy();
     await policyRegistry.deployed();
-    console.log("✅ PolicyRegistry:", policyRegistry.address);
+    console.log(" PolicyRegistry:", policyRegistry.address);
     
     // ============ STEP 7: Deploy StateRegistry ============
-    console.log("\n7️⃣  Deploying StateRegistry...");
+    console.log("\n7  Deploying StateRegistry...");
     const StateRegistry = await ethers.getContractFactory("StateRegistry");
     const stateRegistry = await StateRegistry.deploy(lineageVerifier.address);
     await stateRegistry.deployed();
-    console.log("✅ StateRegistry:", stateRegistry.address);
+    console.log(" StateRegistry:", stateRegistry.address);
     
     // ============ STEP 8: Deploy BatchVerifier ============
-    console.log("\n8️⃣  Deploying BatchVerifier...");
+    console.log("\n8 Deploying BatchVerifier...");
     const BatchVerifier = await ethers.getContractFactory("BatchVerifier");
     const batchVerifier = await BatchVerifier.deploy(
         lineageVerifier.address,
         authVerifier.address
     );
     await batchVerifier.deployed();
-    console.log("✅ BatchVerifier:", batchVerifier.address);
+    console.log(" BatchVerifier:", batchVerifier.address);
     
     // ============ STEP 9: Deploy NovaLineageVerifier ============
-    console.log("\n9️⃣  Deploying NovaLineageVerifier...");
+    console.log("\n9️ Deploying NovaLineageVerifier...");
     const NovaLineageVerifier = await ethers.getContractFactory("NovaLineageVerifier");
     const novaVerifier = await NovaLineageVerifier.deploy(
         groth16Verifier.address,
@@ -111,10 +111,10 @@ async function main() {
         policyRoot
     );
     await novaVerifier.deployed();
-    console.log("✅ NovaLineageVerifier:", novaVerifier.address);
+    console.log(" NovaLineageVerifier:", novaVerifier.address);
     
     // ============ STEP 10: Record Deployment ============
-    console.log("\n📝 Recording deployment addresses...");
+    console.log("\n Recording deployment addresses...");
     
     const deployment = {
         network: hre.network.name,
@@ -142,10 +142,10 @@ async function main() {
         `../deployment-${hre.network.name}.json`
     );
     fs.writeFileSync(deploymentPath, JSON.stringify(deployment, null, 2));
-    console.log("✅ Deployment saved to:", deploymentPath);
+    console.log(" Deployment saved to:", deploymentPath);
     
     // ============ STEP 11: Verify Contracts ============
-    console.log("\n🔍 Verifying contracts...");
+    console.log("\n Verifying contracts...");
     
     if (hre.network.name !== "hardhat" && hre.network.name !== "localhost") {
         console.log("Waiting 30 seconds before verification...");
@@ -194,16 +194,16 @@ async function main() {
                     address: contract.address,
                     constructorArguments: contract.args,
                 });
-                console.log(`✅ ${contract.name} verified`);
+                console.log(` ${contract.name} verified`);
             } catch (error) {
-                console.log(`⚠️  ${contract.name} verification failed:`, error.message);
+                console.log(`  ${contract.name} verification failed:`, error.message);
             }
         }
     }
     
     // ============ STEP 12: Print Summary ============
     console.log("\n" + "=".repeat(60));
-    console.log("✅ DEPLOYMENT COMPLETE");
+    console.log(" DEPLOYMENT COMPLETE");
     console.log("=".repeat(60));
     console.log("\nContract Addresses:");
     console.log("-".repeat(60));
@@ -226,6 +226,6 @@ async function main() {
 main()
     .then(() => process.exit(0))
     .catch((error) => {
-        console.error("❌ Deployment failed:", error);
+        console.error(" Deployment failed:", error);
         process.exit(1);
     });
