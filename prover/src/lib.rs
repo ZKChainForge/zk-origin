@@ -1,13 +1,18 @@
+#![warn(missing_docs)]
+
 //! ZK-ORIGIN Prover
 //!
 //! Witness generation and proof creation
 
-#![warn(missing_docs)]
-
+/// Witness generation
 pub mod witness;
+/// Hashing utilities
 pub mod hash;
+/// Groth16 proof system
 pub mod groth16;
+/// Error types
 pub mod error;
+/// Utility functions
 pub mod utils;
 
 pub use witness::WitnessGenerator;

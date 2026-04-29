@@ -5,7 +5,6 @@
 
 use crate::hash::poseidon::PoseidonHash;
 use serde::{Deserialize, Serialize};
-use std::collections::HashMap;
 
 /// Witness for a single transition
 #[derive(Clone, Debug, Serialize, Deserialize)]
@@ -21,19 +20,31 @@ pub struct TransitionWitness {
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct PublicInputs {
     // Outputs (indices 0-2)
+    /// New lineage commitment
     pub new_lineage_commitment: String,
+    /// New counter commitment
     pub new_counter_commitment: String,
+    /// Whether lineage is valid
     pub lineage_valid: u32,
     
     // Inputs (indices 3-11)
+    /// Previous state hash
     pub prev_state_hash: String,
+    /// New state hash
     pub new_state_hash: String,
+    /// Epoch ID
     pub epoch_id: u32,
+    /// Previous origin class
     pub prev_origin_class: u8,
+    /// New origin class
     pub new_origin_class: u8,
+    /// Previous lineage commitment
     pub prev_lineage_commitment: String,
+    /// Previous counter commitment
     pub prev_counter_commitment: String,
+    /// Policy merkle root
     pub policy_root: String,
+    /// Expected genesis hash
     pub expected_genesis_hash: String,
 }
 
@@ -41,28 +52,43 @@ pub struct PublicInputs {
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct PrivateInputs {
     // Epoch & depth
+    /// Previous epoch ID
     pub prev_epoch_id: u32,
+    /// Previous depth
     pub prev_depth: u32,
     
     // Nonce & timestamp
+    /// Nonce
     pub nonce: u64,
+    /// Previous nonce
     pub prev_nonce: u64,
+    /// Timestamp
     pub timestamp: u64,
+    /// Previous timestamp
     pub prev_timestamp: u64,
     
     // Policy
+    /// Policy merkle proof
     pub policy_proof: Vec<String>,
+    /// Policy indices
     pub policy_indices: Vec<u8>,
     
     // Counters
+    /// Previous counters
     pub prev_counters: Vec<u32>,
+    /// Rate limits
     pub rate_limits: Vec<u32>,
     
     // Authorization
+    /// Public key X coordinate
     pub public_key_x: Option<String>,
+    /// Public key Y coordinate
     pub public_key_y: Option<String>,
+    /// Signature R component
     pub signature_r: Option<String>,
+    /// Signature S component
     pub signature_s: Option<String>,
+    /// Whether authorization is valid
     pub authorization_valid: u32,
 }
 
@@ -74,6 +100,7 @@ pub struct WitnessGenerator {
 }
 
 impl WitnessGenerator {
+    /// Create a new witness generator
     pub fn new(policy_root: [u8; 32], genesis_hash: [u8; 32]) -> Self {
         WitnessGenerator {
             policy_root,
@@ -144,18 +171,18 @@ impl WitnessGenerator {
         
         // Create public inputs
         let public = PublicInputs {
-            new_lineage_commitment: format!("{}", field_element_to_string(new_lineage_commitment)),
-            new_counter_commitment: format!("{}", field_element_to_string(new_counter_commitment)),
+            new_lineage_commitment: field_element_to_string(new_lineage_commitment),
+            new_counter_commitment: field_element_to_string(new_counter_commitment),
             lineage_valid: 1,
-            prev_state_hash: format!("{}", field_element_to_string(prev_state_hash)),
-            new_state_hash: format!("{}", field_element_to_string(new_state_hash)),
+            prev_state_hash: field_element_to_string(prev_state_hash),
+            new_state_hash: field_element_to_string(new_state_hash),
             epoch_id,
             prev_origin_class,
             new_origin_class,
-            prev_lineage_commitment: format!("{}", field_element_to_string(prev_lineage_commitment)),
-            prev_counter_commitment: format!("{}", field_element_to_string(prev_counter_commitment)),
-            policy_root: format!("{}", field_element_to_string(self.policy_root)),
-            expected_genesis_hash: format!("{}", field_element_to_string(self.genesis_hash)),
+            prev_lineage_commitment: field_element_to_string(prev_lineage_commitment),
+            prev_counter_commitment: field_element_to_string(prev_counter_commitment),
+            policy_root: field_element_to_string(self.policy_root),
+            expected_genesis_hash: field_element_to_string(self.genesis_hash),
         };
         
         // Create private inputs
@@ -168,7 +195,7 @@ impl WitnessGenerator {
             prev_timestamp,
             policy_proof: policy_merkle_proof
                 .iter()
-                .map(|h| format!("{}", field_element_to_string(*h)))
+                .map(|h| field_element_to_string(*h))
                 .collect(),
             policy_indices,
             prev_counters,
@@ -185,7 +212,7 @@ impl WitnessGenerator {
     
     fn compute_new_counters(
         &self,
-        epoch_id: u32,
+        _epoch_id: u32,
         origin_class: usize,
         prev_counters: &[u32],
     ) -> Vec<u32> {
@@ -253,7 +280,6 @@ impl WitnessGenerator {
 fn field_element_to_string(hash: [u8; 32]) -> String {
     // Convert hash to decimal string (Bn254 field element)
     use num_bigint::BigInt;
-    use std::str::FromStr;
     
     let mut bytes = hash.to_vec();
     bytes.reverse();
