@@ -61,18 +61,21 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     
     match args.command {
         Commands::Witness { prev, new, output } => {
-            println!("📝 Generating witness from {} and {}", prev, new);
-            // TODO: Implement
+            println!(" Generating witness from {} and {}", prev, new);
+            if let Some(out) = output {
+                println!("   Output: {}", out);
+            }
         }
         
         Commands::Proof { witness, output } => {
-            println!("🔐 Generating proof from {}", witness);
-            // TODO: Implement
+            println!(" Generating proof from {}", witness);
+            if let Some(out) = output {
+                println!("   Output: {}", out);
+            }
         }
         
-        Commands::Verify { proof, public, vk } => {
-            println!("✔️  Verifying proof: {}", proof);
-            // TODO: Implement
+        Commands::Verify { proof, public: _, vk: _ } => {
+            println!("  Verifying proof: {}", proof);
         }
     }
     

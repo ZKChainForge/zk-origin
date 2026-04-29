@@ -1,8 +1,9 @@
 //! Serialize witness to JSON for circuit
 
-use super::generator::{TransitionWitness, PublicInputs, PrivateInputs};
+use super::generator::TransitionWitness;
 use serde_json::json;
 
+/// Witness serializer
 pub struct WitnessSerializer;
 
 impl WitnessSerializer {

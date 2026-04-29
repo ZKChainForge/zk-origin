@@ -8,10 +8,10 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     let mut input = String::new();
     io::stdin().read_to_string(&mut input)?;
     
-    let json: serde_json::Value = serde_json::from_str(&input)?;
+    let _json: serde_json::Value = serde_json::from_str(&input)?;
     
     // Generate witness
-    let generator = WitnessGenerator::new([0u8; 32], [0u8; 32]);
+    let _generator = WitnessGenerator::new([0u8; 32], [0u8; 32]);
     
     // Output as JSON
     println!("{{\"status\": \"ok\"}}");

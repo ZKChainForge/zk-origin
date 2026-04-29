@@ -7,7 +7,10 @@ use tokio::fs;
 
 /// Groth16 prover
 pub struct Groth16Prover {
+    /// Circuit file path
+    #[allow(dead_code)]
     circuit_path: String,
+    /// Zero-knowledge key path
     zkey_path: String,
 }
 
