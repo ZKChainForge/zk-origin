@@ -1,6 +1,10 @@
-// core/src/state/mod.rs
+//! State management module
+//!
+//! Provides state representation and state machine implementation
 
+/// State machine implementation
 pub mod machine;
+/// State hashing utilities
 pub mod hash;
 
 pub use machine::{State, StateData, AccountState, StateMachine, Lineage};

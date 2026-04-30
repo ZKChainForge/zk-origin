@@ -15,20 +15,29 @@ use std::str::FromStr;
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, Serialize, Deserialize)]
 #[repr(u8)]
 pub enum OriginClass {
+    /// Genesis origin - initial state
     Genesis = 0,
+    /// User origin - normal user transaction
     User = 1,
+    /// Admin origin - multisig approval
     Admin = 2,
+    /// Bridge origin - cross-chain import
     Bridge = 3,
+    /// Governance origin - proposal execution
     Governance = 4,
+    /// System origin - system call
     System = 5,
+    /// Emergency origin - emergency intervention
     Emergency = 6,
 }
 
 impl OriginClass {
+    /// Convert OriginClass to u8
     pub fn as_u8(&self) -> u8 {
         *self as u8
     }
     
+    /// Convert u8 to OriginClass
     pub fn from_u8(val: u8) -> Option<Self> {
         match val {
             0 => Some(OriginClass::Genesis),
@@ -77,11 +86,17 @@ impl std::fmt::Display for OriginClass {
 /// Origin detection context
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct OriginContext {
+    /// Address of the initiator
     pub initiator_address: String,
+    /// Optional key of the initiator
     pub initiator_key: Option<String>,
+    /// Optional source chain for bridge origins
     pub source_chain: Option<String>,
+    /// Optional proposal ID for governance origins
     pub proposal_id: Option<u64>,
+    /// Timestamp when the origin was created
     pub timestamp: u64,
+    /// Additional metadata
     pub metadata: std::collections::HashMap<String, String>,
 }
 
@@ -96,6 +111,7 @@ pub struct OriginDetector {
 }
 
 impl OriginDetector {
+    /// Create a new origin detector
     pub fn new(
         genesis_address: String,
         admin_addresses: Vec<String>,

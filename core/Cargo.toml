@@ -1,5 +1,3 @@
-# core/Cargo.toml
-
 [package]
 name = "zk-origin-core"
 version.workspace = true
@@ -22,6 +20,8 @@ thiserror = { workspace = true }
 log = { workspace = true }
 chrono = { workspace = true }
 lazy_static = { workspace = true }
+clap = { workspace = true }  # Add this
+env_logger = { workspace = true }  # Add this
 
 [dev-dependencies]
 tokio = { workspace = true }
