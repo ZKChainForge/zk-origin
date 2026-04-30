@@ -1,7 +1,7 @@
 //! Core CLI for state machine operations
 
 use clap::{Parser, Subcommand};
-use zk_origin_core::{State, StateData, Transition, StateMachine, OriginPolicy};
+use zk_origin_core::{State, StateData, Transition, OriginPolicy};
 
 #[derive(Parser)]
 #[command(name = "zk-origin-core")]
@@ -67,7 +67,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             
             if let Some(path) = output {
                 std::fs::write(&path, json)?;
-                println!("✅ Genesis state saved to {}", path);
+                println!(" Genesis state saved to {}", path);
             } else {
                 println!("{}", json);
             }
@@ -80,7 +80,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             
             if let Some(path) = output {
                 std::fs::write(&path, json)?;
-                println!("✅ State saved to {}", path);
+                println!(" State saved to {}", path);
             } else {
                 println!("{}", json);
             }
@@ -97,9 +97,9 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             let policy = OriginPolicy::default();
             
             if transition.is_valid(&policy) {
-                println!("✅ Transition is valid");
+                println!(" Transition is valid");
             } else {
-                println!("❌ Transition is invalid");
+                println!(" Transition is invalid");
             }
         }
         
