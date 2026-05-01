@@ -1,0 +1,53 @@
+# sdk/Cargo.toml
+
+[package]
+name = "zk-origin-sdk"
+version.workspace = true
+edition.workspace = true
+authors.workspace = true
+license.workspace = true
+repository.workspace = true
+description = "TypeScript/Rust SDK for ZK-ORIGIN state provenance system"
+
+[dependencies]
+# Core
+serde = { workspace = true }
+serde_json = { workspace = true }
+tokio = { workspace = true }
+async-trait = { workspace = true }
+
+# Cryptography
+sha3 = { workspace = true }
+hex = { workspace = true }
+num-bigint = { workspace = true }
+
+# HTTP/RPC
+reqwest = { workspace = true }
+ethers = { workspace = true }
+
+# Utilities
+clap = { workspace = true }
+env_logger = { workspace = true }
+log = { workspace = true }
+dotenv = { workspace = true }
+anyhow = { workspace = true }
+thiserror = { workspace = true }
+chrono = { workspace = true }
+uuid = { workspace = true }
+lazy_static = { workspace = true }
+
+[dev-dependencies]
+criterion = { workspace = true }
+tempfile = { workspace = true }
+
+[[bench]]
+name = "sdk_benchmarks"
+harness = false
+
+[[bin]]
+name = "zk-origin-cli"
+path = "src/bin/cli.rs"
+
+[lib]
+name = "zk_origin_sdk"
+path = "src/lib.rs"
