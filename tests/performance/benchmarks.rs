@@ -73,7 +73,7 @@ mod benchmarks {
         let elapsed = start.elapsed();
         let avg_time = elapsed.as_nanos() / iterations as u128;
         
-        println!("\n📊 TRANSITION VALIDATION BENCHMARK");
+        println!("\n TRANSITION VALIDATION BENCHMARK");
         println!("   Iterations: {}", iterations);
         println!("   Total time: {:.2}ms", elapsed.as_millis());
         println!("   Avg time: {:.2}ns", avg_time);
@@ -110,7 +110,7 @@ mod benchmarks {
         
         let elapsed = start.elapsed();
         
-        println!("\n📊 LINEAGE COMMITMENT BENCHMARK");
+        println!("\nLINEAGE COMMITMENT BENCHMARK");
         println!("   Iterations: {}", iterations);
         println!("   Total time: {:.2}ms", elapsed.as_millis());
         println!("   Avg time: {:.2}µs", elapsed.as_micros() / iterations as u128);
