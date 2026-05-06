@@ -1,7 +1,7 @@
 //! CLI for ZK-ORIGIN SDK
 
 use clap::Parser;
-use zk_origin_sdk::{ZKOrigin, Config};
+use zk_origin_sdk::Config;
 
 #[derive(Parser)]
 #[command(name = "zk-origin")]

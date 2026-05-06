@@ -1,6 +1,6 @@
 //! RPC client
 
-use crate::error::{Error, Result};
+use crate::error::Result;
 
 /// Ethereum RPC client
 pub struct EthereumRPC {

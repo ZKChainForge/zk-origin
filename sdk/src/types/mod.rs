@@ -1,7 +1,6 @@
 //! Type definitions
 
 use serde::{Deserialize, Serialize};
-use std::collections::HashMap;
 
 /// Transition data
 #[derive(Clone, Debug, Serialize, Deserialize)]
