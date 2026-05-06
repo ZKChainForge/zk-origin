@@ -54,7 +54,7 @@ pub struct ProofFormatter;
 
 impl ProofFormatter {
     /// Format proof for contract
-    pub fn to_solidity_call(proof: &Proof, public_inputs: &[String]) -> Result<String> {
+    pub fn to_solidity_call(_proof: &Proof, _public_inputs: &[String]) -> Result<String> {
         // TODO: Format as contract call
         Ok(String::new())
     }

@@ -26,13 +26,13 @@ impl StateClient {
     }
     
     /// Check if state is verified
-    pub async fn is_verified(&self, state_hash: &[u8; 32]) -> Result<bool> {
+    pub async fn is_verified(&self, _state_hash: &[u8; 32]) -> Result<bool> {
         // TODO: Query contract
         Ok(false)
     }
     
     /// Get lineage
-    pub async fn get_lineage(&self, state_hash: &[u8; 32]) -> Result<Lineage> {
+    pub async fn get_lineage(&self, _state_hash: &[u8; 32]) -> Result<Lineage> {
         // TODO: Query contract
         Ok(Lineage {
             genesis: [0u8; 32],

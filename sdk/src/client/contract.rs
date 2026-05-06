@@ -106,7 +106,7 @@ impl ContractClient {
         })
     }
     
-    fn format_proof(&self, proof: &Proof) -> Result<String> {
+    fn format_proof(&self, _proof: &Proof) -> Result<String> {
         // TODO: Format proof as contract function call
         Ok(String::new())
     }
