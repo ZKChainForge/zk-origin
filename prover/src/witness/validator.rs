@@ -1,34 +1,61 @@
 //! Witness validation
 
-use crate::{error::Result, witness::generator::TransitionWitness};
+use crate::error::{ProverError, Result};
+use crate::witness::generator::TransitionWitness;
 
 /// Witness validator
 pub struct WitnessValidator;
 
 impl WitnessValidator {
-    /// Validate witness
+    /// Validate witness completely
     pub fn validate(witness: &TransitionWitness) -> Result<()> {
-        // Validate nonce
-        if witness.private.nonce <= witness.private.prev_nonce {
-            return Err(crate::Error::InvalidWitness(
-                "Nonce must increase".to_string()
-            ));
+        // Use witness's own validation
+        witness.validate()
+    }
+
+    /// Validate batch of witnesses
+    pub fn validate_batch(witnesses: &[TransitionWitness]) -> Result<()> {
+        for (idx, witness) in witnesses.iter().enumerate() {
+            Self::validate(witness).map_err(|e| {
+                ProverError::batch_operation_failed(format!(
+                    "Witness {} validation failed: {}",
+                    idx, e
+                ))
+            })?;
         }
-        
-        // Validate timestamp
-        if witness.private.timestamp < witness.private.prev_timestamp {
-            return Err(crate::Error::InvalidWitness(
-                "Timestamp must increase".to_string()
-            ));
+        Ok(())
+    }
+
+    /// Check witness consistency with previous
+    pub fn validate_sequence(witnesses: &[TransitionWitness]) -> Result<()> {
+        for i in 1..witnesses.len() {
+            let prev = &witnesses[i - 1];
+            let curr = &witnesses[i];
+
+            // Check lineage continuity
+            if prev.public.new_state_hash != curr.public.prev_state_hash {
+                return Err(ProverError::invalid_state(format!(
+                    "State mismatch at position {}: {} != {}",
+                    i, prev.public.new_state_hash, curr.public.prev_state_hash
+                )));
+            }
+
+            // Check nonce continuity
+            if curr.private.prev_nonce != prev.private.nonce {
+                return Err(ProverError::invalid_nonce(format!(
+                    "Nonce mismatch at position {}",
+                    i
+                )));
+            }
+
+            // Check timestamp progression
+            if curr.private.prev_timestamp != prev.private.timestamp {
+                return Err(ProverError::invalid_timestamp(format!(
+                    "Timestamp mismatch at position {}",
+                    i
+                )));
+            }
         }
-        
-        // Validate public inputs are non-zero
-        if witness.public.prev_state_hash == "0" {
-            return Err(crate::Error::InvalidWitness(
-                "Previous state hash cannot be zero".to_string()
-            ));
-        }
-        
         Ok(())
     }
 }
@@ -36,12 +63,12 @@ impl WitnessValidator {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::witness::generator::{TransitionWitness, PublicInputs, PrivateInputs};
-    
+    use crate::witness::generator::{PrivateWitness, PublicWitness};
+
     #[test]
-    fn test_valid_witness() {
-        let witness = TransitionWitness {
-            public: PublicInputs {
+    fn test_batch_validation() {
+        let witnesses = vec![TransitionWitness {
+            public: PublicWitness {
                 new_lineage_commitment: "1".to_string(),
                 new_counter_commitment: "1".to_string(),
                 lineage_valid: 1,
@@ -55,7 +82,7 @@ mod tests {
                 policy_root: "0".to_string(),
                 expected_genesis_hash: "0".to_string(),
             },
-            private: PrivateInputs {
+            private: PrivateWitness {
                 prev_epoch_id: 0,
                 prev_depth: 0,
                 nonce: 1,
@@ -72,8 +99,8 @@ mod tests {
                 signature_s: None,
                 authorization_valid: 1,
             },
-        };
-        
-        assert!(WitnessValidator::validate(&witness).is_ok());
+        }];
+
+        assert!(WitnessValidator::validate_batch(&witnesses).is_ok());
     }
 }

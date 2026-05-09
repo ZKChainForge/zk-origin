@@ -1,51 +1,130 @@
-//! Serialize witness to JSON for circuit
+//! Witness serialization for circuits
 
-use super::generator::TransitionWitness;
-use serde_json::json;
+use crate::error::Result;
+use crate::witness::generator::TransitionWitness;
 
 /// Witness serializer
 pub struct WitnessSerializer;
 
 impl WitnessSerializer {
-    /// Serialize witness to JSON (Circom format)
-    pub fn to_json(witness: &TransitionWitness) -> serde_json::Value {
-        json!({
-            // Public inputs (in order)
-            "newLineageCommitment": witness.public.new_lineage_commitment,
-            "newCounterCommitment": witness.public.new_counter_commitment,
-            "lineageValid": witness.public.lineage_valid,
-            "prevStateHash": witness.public.prev_state_hash,
-            "newStateHash": witness.public.new_state_hash,
-            "epochId": witness.public.epoch_id,
-            "prevOriginClass": witness.public.prev_origin_class,
-            "newOriginClass": witness.public.new_origin_class,
-            "prevLineageCommitment": witness.public.prev_lineage_commitment,
-            "prevCounterCommitment": witness.public.prev_counter_commitment,
-            "policyRoot": witness.public.policy_root,
-            "expectedGenesisHash": witness.public.expected_genesis_hash,
-            
-            // Private inputs
-            "prevEpochId": witness.private.prev_epoch_id,
-            "prevDepth": witness.private.prev_depth,
-            "nonce": witness.private.nonce,
-            "prevNonce": witness.private.prev_nonce,
-            "timestamp": witness.private.timestamp,
-            "prevTimestamp": witness.private.prev_timestamp,
-            "policyProof": witness.private.policy_proof,
-            "policyIndices": witness.private.policy_indices,
-            "prevCounters": witness.private.prev_counters,
-            "rateLimits": witness.private.rate_limits,
-            "publicKeyX": witness.private.public_key_x.as_ref().map(|s| s.as_str()).unwrap_or("0"),
-            "publicKeyY": witness.private.public_key_y.as_ref().map(|s| s.as_str()).unwrap_or("0"),
-            "signatureR": witness.private.signature_r.as_ref().map(|s| s.as_str()).unwrap_or("0"),
-            "signatureS": witness.private.signature_s.as_ref().map(|s| s.as_str()).unwrap_or("0"),
-            "authorizationValid": witness.private.authorization_valid,
-        })
+    /// Serialize witness to Circom-compatible JSON
+    pub fn to_circom_json(witness: &TransitionWitness) -> Result<serde_json::Value> {
+        witness.to_json()
     }
-    
-    /// Serialize as Circom input file format
-    pub fn to_circom_input(witness: &TransitionWitness) -> String {
-        let json = Self::to_json(witness);
-        serde_json::to_string_pretty(&json).expect("Failed to serialize")
+
+    /// Serialize to file
+    pub async fn to_file(witness: &TransitionWitness, path: &str) -> Result<()> {
+        let json = Self::to_circom_json(witness)?;
+        let content = serde_json::to_string_pretty(&json)?;
+        tokio::fs::write(path, content).await?;
+        Ok(())
+    }
+
+    /// Deserialize from file
+    pub async fn from_file(path: &str) -> Result<TransitionWitness> {
+        let content = tokio::fs::read_to_string(path).await?;
+        let json: serde_json::Value = serde_json::from_str(&content)?;
+
+        // Reconstruct witness from JSON
+        let witness: TransitionWitness = serde_json::from_value(json)?;
+        witness.validate()?;
+        Ok(witness)
+    }
+
+    /// Get witness summary (for logging)
+    pub fn summary(witness: &TransitionWitness) -> String {
+        format!(
+            "Witness(nonce: {}, epoch: {}, from_class: {}, to_class: {})",
+            witness.private.nonce,
+            witness.private.prev_epoch_id,
+            witness.public.prev_origin_class,
+            witness.public.new_origin_class,
+        )
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::witness::generator::{PrivateWitness, PublicWitness};
+
+    #[test]
+    fn test_json_serialization() {
+        let witness = TransitionWitness {
+            public: PublicWitness {
+                new_lineage_commitment: "1".to_string(),
+                new_counter_commitment: "1".to_string(),
+                lineage_valid: 1,
+                prev_state_hash: "1".to_string(),
+                new_state_hash: "2".to_string(),
+                epoch_id: 0,
+                prev_origin_class: 0,
+                new_origin_class: 1,
+                prev_lineage_commitment: "0".to_string(),
+                prev_counter_commitment: "0".to_string(),
+                policy_root: "0".to_string(),
+                expected_genesis_hash: "0".to_string(),
+            },
+            private: PrivateWitness {
+                prev_epoch_id: 0,
+                prev_depth: 0,
+                nonce: 1,
+                prev_nonce: 0,
+                timestamp: 1000,
+                prev_timestamp: 999,
+                policy_proof: vec![],
+                policy_indices: vec![],
+                prev_counters: vec![0, 0, 0, 0, 0, 0, 0],
+                rate_limits: vec![1, u32::MAX, 10, 100, 5, 1000, 1],
+                public_key_x: None,
+                public_key_y: None,
+                signature_r: None,
+                signature_s: None,
+                authorization_valid: 1,
+            },
+        };
+
+        let json = WitnessSerializer::to_circom_json(&witness);
+        assert!(json.is_ok());
+    }
+
+    #[test]
+    fn test_summary() {
+        let witness = TransitionWitness {
+            public: PublicWitness {
+                new_lineage_commitment: "1".to_string(),
+                new_counter_commitment: "1".to_string(),
+                lineage_valid: 1,
+                prev_state_hash: "1".to_string(),
+                new_state_hash: "2".to_string(),
+                epoch_id: 0,
+                prev_origin_class: 0,
+                new_origin_class: 1,
+                prev_lineage_commitment: "0".to_string(),
+                prev_counter_commitment: "0".to_string(),
+                policy_root: "0".to_string(),
+                expected_genesis_hash: "0".to_string(),
+            },
+            private: PrivateWitness {
+                prev_epoch_id: 0,
+                prev_depth: 0,
+                nonce: 1,
+                prev_nonce: 0,
+                timestamp: 1000,
+                prev_timestamp: 999,
+                policy_proof: vec![],
+                policy_indices: vec![],
+                prev_counters: vec![0, 0, 0, 0, 0, 0, 0],
+                rate_limits: vec![1, u32::MAX, 10, 100, 5, 1000, 1],
+                public_key_x: None,
+                public_key_y: None,
+                signature_r: None,
+                signature_s: None,
+                authorization_valid: 1,
+            },
+        };
+
+        let summary = WitnessSerializer::summary(&witness);
+        assert!(summary.contains("nonce: 1"));
     }
 }
