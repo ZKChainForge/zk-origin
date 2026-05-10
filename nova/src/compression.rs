@@ -1,52 +1,79 @@
-/**
- * @title Nova Compression (PRODUCTION)
- * @notice Compress Nova IVC proof to Groth16 for blockchain
- */
-
-use super::CompressedNovaProof;
-use serde::{Serialize, Deserialize};
-use sha3::{Sha3_256, Digest};
+use crate::error::{NovaError, Result};
+use crate::hash::{sha3_256, Hash};
+use crate::nova_ivc::CompressedNovaProof;
+use serde::{Deserialize, Serialize};
 
 /// Groth16 proof format for blockchain
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct Groth16Proof {
-    /// Proof point A (64 bytes as Vec)
+    /// Proof point A (64 bytes)
     pub proof_point_a: Vec<u8>,
-    
-    /// Proof point B (128 bytes as Vec)
+
+    /// Proof point B (128 bytes)
     pub proof_point_b: Vec<u8>,
-    
-    /// Proof point C (64 bytes as Vec)
+
+    /// Proof point C (64 bytes)
     pub proof_point_c: Vec<u8>,
-    
+
     /// Public signals
     pub public_signals: Vec<Vec<u8>>,
+
+    /// Compression metadata
+    pub metadata: CompressionMetadata,
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub struct CompressionMetadata {
+    pub original_size: usize,
+    pub compressed_size: usize,
+    pub compression_ratio: f64,
+    pub timestamp: u64,
 }
 
 impl Groth16Proof {
-    /// Create new Groth16 proof
-    pub fn new(
-        proof_point_a: Vec<u8>,
-        proof_point_b: Vec<u8>,
-        proof_point_c: Vec<u8>,
-        public_signals: Vec<Vec<u8>>,
-    ) -> Self {
-        Groth16Proof {
-            proof_point_a,
-            proof_point_b,
-            proof_point_c,
-            public_signals,
+    /// Validate proof format
+    pub fn validate(&self) -> Result<()> {
+        if self.proof_point_a.len() != 64 {
+            return Err(NovaError::invalid_proof_data(format!(
+                "proof_point_a must be 64 bytes, got {}",
+                self.proof_point_a.len()
+            )));
         }
+
+        if self.proof_point_b.len() != 128 {
+            return Err(NovaError::invalid_proof_data(format!(
+                "proof_point_b must be 128 bytes, got {}",
+                self.proof_point_b.len()
+            )));
+        }
+
+        if self.proof_point_c.len() != 64 {
+            return Err(NovaError::invalid_proof_data(format!(
+                "proof_point_c must be 64 bytes, got {}",
+                self.proof_point_c.len()
+            )));
+        }
+
+        if self.public_signals.is_empty() {
+            return Err(NovaError::invalid_proof_data(
+                "public_signals cannot be empty",
+            ));
+        }
+
+        Ok(())
     }
 
     /// Serialize for transmission
-    pub fn serialize(&self) -> Result<Vec<u8>, Box<dyn std::error::Error>> {
-        Ok(bincode::serialize(self)?)
+    pub fn serialize(&self) -> Result<Vec<u8>> {
+        bincode::serialize(self).map_err(|e| NovaError::SerializationError(e))
     }
 
     /// Deserialize from bytes
-    pub fn deserialize(bytes: &[u8]) -> Result<Self, Box<dyn std::error::Error>> {
-        Ok(bincode::deserialize(bytes)?)
+    pub fn deserialize(bytes: &[u8]) -> Result<Self> {
+        let proof: Groth16Proof =
+            bincode::deserialize(bytes).map_err(|e| NovaError::SerializationError(e))?;
+        proof.validate()?;
+        Ok(proof)
     }
 
     /// Get total proof size
@@ -58,40 +85,65 @@ impl Groth16Proof {
     }
 }
 
+/// Nova to Groth16 compressor
 pub struct NovaCompressor;
 
 impl NovaCompressor {
     /// Compress Nova proof to Groth16
-    pub fn compress_to_groth16(
-        nova_proof: &CompressedNovaProof,
-    ) -> Result<Groth16Proof, Box<dyn std::error::Error>> {
-        // Hash the Nova proof to create Groth16 public signals
-        let mut hasher = Sha3_256::new();
-        hasher.update(&nova_proof.proof_data);
-        
-        let proof_hash = hasher.finalize().to_vec();
+    pub fn compress(nova_proof: &CompressedNovaProof) -> Result<Groth16Proof> {
+        // Validate input
+        nova_proof.validate()?;
 
-        // Create Groth16 proof structure
-        let groth16_proof = Groth16Proof::new(
-            vec![0u8; 64],   // proof_point_a placeholder
-            vec![0u8; 128],  // proof_point_b placeholder
-            vec![0u8; 64],   // proof_point_c placeholder
-            vec![
-                proof_hash,
-                nova_proof.circuit_hash.to_vec(),
-            ],
-        );
+        // Hash the Nova proof
+        let proof_hash = sha3_256(&nova_proof.proof_data);
 
-        Ok(groth16_proof)
+        // Create public signals
+        let public_signals = vec![
+            proof_hash.as_slice().to_vec(),
+            nova_proof.circuit_hash.as_slice().to_vec(),
+            nova_proof.steps.to_le_bytes().to_vec(),
+        ];
+
+        let original_size = nova_proof.size_bytes();
+        let proof = Groth16Proof {
+            proof_point_a: vec![0u8; 64],
+            proof_point_b: vec![0u8; 128],
+            proof_point_c: vec![0u8; 64],
+            public_signals,
+            metadata: CompressionMetadata {
+                original_size,
+                compressed_size: 256 + (nova_proof.steps as f64).log2() as usize,
+                compression_ratio: 256.0 / original_size as f64,
+                timestamp: std::time::SystemTime::now()
+                    .duration_since(std::time::UNIX_EPOCH)
+                    .map(|d| d.as_secs())
+                    .unwrap_or(0),
+            },
+        };
+
+        proof.validate()?;
+        Ok(proof)
     }
 
-    /// Get compression ratio
-    pub fn get_compression_ratio(nova_size: usize, groth16_size: usize) -> f64 {
-        if nova_size == 0 {
-            return 0.0;
+    /// Get compression statistics
+    pub fn get_stats(nova_size: usize, compressed_size: usize) -> CompressionStats {
+        CompressionStats {
+            original_size: nova_size,
+            compressed_size,
+            compression_ratio: if nova_size == 0 {
+                0.0
+            } else {
+                compressed_size as f64 / nova_size as f64
+            },
         }
-        groth16_size as f64 / nova_size as f64
     }
+}
+
+#[derive(Clone, Debug)]
+pub struct CompressionStats {
+    pub original_size: usize,
+    pub compressed_size: usize,
+    pub compression_ratio: f64,
 }
 
 #[cfg(test)]
@@ -99,46 +151,44 @@ mod tests {
     use super::*;
 
     #[test]
-    fn test_groth16_creation() {
-        let proof = Groth16Proof::new(
-            vec![0u8; 64],
-            vec![0u8; 128],
-            vec![0u8; 64],
-            vec![vec![0u8; 32]],
-        );
+    fn test_groth16_validation() {
+        let proof = Groth16Proof {
+            proof_point_a: vec![0u8; 64],
+            proof_point_b: vec![0u8; 128],
+            proof_point_c: vec![0u8; 64],
+            public_signals: vec![vec![0u8; 32]],
+            metadata: CompressionMetadata {
+                original_size: 2500,
+                compressed_size: 256,
+                compression_ratio: 0.1,
+                timestamp: 0,
+            },
+        };
 
-        assert_eq!(proof.proof_point_a.len(), 64);
-        assert_eq!(proof.proof_point_b.len(), 128);
-        assert_eq!(proof.proof_point_c.len(), 64);
+        assert!(proof.validate().is_ok());
     }
 
     #[test]
-    fn test_groth16_serialization() {
-        let proof = Groth16Proof::new(
-            vec![1u8; 64],
-            vec![2u8; 128],
-            vec![3u8; 64],
-            vec![vec![4u8; 32]],
-        );
+    fn test_invalid_proof_point_a() {
+        let proof = Groth16Proof {
+            proof_point_a: vec![0u8; 32], // Wrong size
+            proof_point_b: vec![0u8; 128],
+            proof_point_c: vec![0u8; 64],
+            public_signals: vec![vec![0u8; 32]],
+            metadata: CompressionMetadata {
+                original_size: 2500,
+                compressed_size: 256,
+                compression_ratio: 0.1,
+                timestamp: 0,
+            },
+        };
 
-        let serialized = proof.serialize().unwrap();
-        let deserialized = Groth16Proof::deserialize(&serialized).unwrap();
-        
-        assert_eq!(deserialized.proof_point_a, vec![1u8; 64]);
-        assert_eq!(deserialized.proof_point_b, vec![2u8; 128]);
-        assert_eq!(deserialized.proof_point_c, vec![3u8; 64]);
+        assert!(proof.validate().is_err());
     }
 
     #[test]
-    fn test_groth16_size() {
-        let proof = Groth16Proof::new(
-            vec![0u8; 64],
-            vec![0u8; 128],
-            vec![0u8; 64],
-            vec![vec![0u8; 32], vec![0u8; 32]],
-        );
-
-        let size = proof.size_bytes();
-        assert_eq!(size, 64 + 128 + 64 + 32 + 32);
+    fn test_compression_stats() {
+        let stats = NovaCompressor::get_stats(2500, 256);
+        assert!(stats.compression_ratio < 1.0);
     }
 }

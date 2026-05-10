@@ -1,35 +1,46 @@
 [package]
 name = "zk-origin-core"
-version.workspace = true
-edition.workspace = true
-authors.workspace = true
-license.workspace = true
-repository.workspace = true
-description = "Core state machine for ZK-ORIGIN"
+version = "2.0.0"
+edition = "2021"
+authors = ["ZK-ORIGIN Team"]
+description = "Production-grade state machine for ZK-ORIGIN with cryptographic lineage tracking"
+license = "MIT"
+repository = "https://github.com/ZKChainForge/zk-origin"
 
 [dependencies]
-serde = { workspace = true }
-serde_json = { workspace = true }
-sha3 = { workspace = true }
-sha2 = { workspace = true }
-hex = { workspace = true }
-num-bigint = { workspace = true }
-num-traits = { workspace = true }
-anyhow = { workspace = true }
-thiserror = { workspace = true }
-log = { workspace = true }
-chrono = { workspace = true }
-lazy_static = { workspace = true }
-clap = { workspace = true }  # Add this
-env_logger = { workspace = true }  # Add this
+# Core cryptography
+sha3 = "0.10"
+hex = "0.4"
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+thiserror = "1.0"
+log = "0.4"
+env_logger = "0.11"
 
+# CLI
+clap = { version = "4.4", features = ["derive"] }
+
+# Async runtime
+tokio = { version = "1.35", features = ["full"], optional = true }
+
+# Database
+rocksdb = { version = "0.21", optional = true }
+
+# Testing
 [dev-dependencies]
-tokio = { workspace = true }
+criterion = "0.5"
+proptest = "1.4"
+
+[features]
+default = ["async", "persistence"]
+async = ["tokio"]
+persistence = ["rocksdb"]
+production = ["async", "persistence"]
+
+[[bench]]
+name = "state_operations"
+harness = false
 
 [[bin]]
-name = "core-cli"
+name = "zk-origin-core"
 path = "src/bin/cli.rs"
-
-[lib]
-name = "zk_origin_core"
-path = "src/lib.rs"

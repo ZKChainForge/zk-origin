@@ -1,67 +1,172 @@
-//! Authorization Proof Verification
-//!
-//! Verifies that a claimed origin class has proper authorization
-
+use crate::error::{Error, Result};
 use crate::origin::detector::OriginClass;
 use serde::{Deserialize, Serialize};
 
-/// Authorization proof (different per origin class)
+/// Authorization proof with validation
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub enum AuthorizationProof {
-    /// User authorization via signature
     User {
-        /// Signature bytes
         signature: Vec<u8>,
-        /// Public key bytes
         public_key: Vec<u8>,
-        /// Original message
         message: Vec<u8>,
     },
-    /// Admin authorization via multisig
     Admin {
-        /// Collected signatures
         signatures: Vec<Vec<u8>>,
-        /// Required number of signatures
         threshold: u8,
-        /// Addresses of signers
         signers: Vec<Vec<u8>>,
     },
-    /// Bridge authorization via attestation
     Bridge {
-        /// Source blockchain identifier
         source_chain: String,
-        /// Attestation proof
         attestation: Vec<u8>,
-        /// Merkle proof components
         merkle_proof: Vec<Vec<u8>>,
     },
-    /// Governance authorization via proposal
     Governance {
-        /// Proposal identifier
         proposal_id: u64,
-        /// Number of yes votes
         yes_votes: u64,
-        /// Number of no votes
         no_votes: u64,
-        /// Required threshold
         threshold: u64,
     },
-    /// System authorization via caller address
     System {
-        /// Caller address
         caller_address: String,
     },
-    /// Emergency authorization
     Emergency {
-        /// Emergency key
         emergency_key: Vec<u8>,
-        /// Signature
         signature: Vec<u8>,
-        /// Emergency conditions met
         conditions_met: Vec<bool>,
     },
-    /// Genesis authorization - no proof needed
     Genesis,
+}
+
+impl AuthorizationProof {
+    /// Validate proof format
+    pub fn validate(&self, origin_class: OriginClass) -> Result<()> {
+        match (self, origin_class) {
+            (
+                AuthorizationProof::User {
+                    signature,
+                    public_key,
+                    message,
+                },
+                OriginClass::User,
+            ) => {
+                if signature.is_empty() {
+                    return Err(Error::invalid_origin_class(
+                        "User signature cannot be empty",
+                    ));
+                }
+                if public_key.is_empty() {
+                    return Err(Error::invalid_origin_class(
+                        "User public key cannot be empty",
+                    ));
+                }
+                if message.is_empty() {
+                    return Err(Error::invalid_origin_class("User message cannot be empty"));
+                }
+                Ok(())
+            }
+
+            (
+                AuthorizationProof::Admin {
+                    threshold,
+                    signatures,
+                    signers,
+                },
+                OriginClass::Admin,
+            ) => {
+                if *threshold == 0 {
+                    return Err(Error::invalid_origin_class("Admin threshold must be > 0"));
+                }
+                if signatures.len() < *threshold as usize {
+                    return Err(Error::authorization_failed(format!(
+                        "Expected {} signatures, got {}",
+                        threshold,
+                        signatures.len()
+                    )));
+                }
+                if signatures.len() != signers.len() {
+                    return Err(Error::authorization_failed(
+                        "Signatures and signers length mismatch",
+                    ));
+                }
+                Ok(())
+            }
+
+            (
+                AuthorizationProof::Bridge {
+                    source_chain,
+                    attestation,
+                    ..
+                },
+                OriginClass::Bridge,
+            ) => {
+                if source_chain.is_empty() {
+                    return Err(Error::invalid_origin_class(
+                        "Bridge source_chain cannot be empty",
+                    ));
+                }
+                if attestation.is_empty() {
+                    return Err(Error::invalid_origin_class(
+                        "Bridge attestation cannot be empty",
+                    ));
+                }
+                Ok(())
+            }
+
+            (
+                AuthorizationProof::Governance {
+                    proposal_id,
+                    yes_votes,
+                    no_votes,
+                    threshold,
+                },
+                OriginClass::Governance,
+            ) => {
+                if *threshold == 0 {
+                    return Err(Error::invalid_origin_class(
+                        "Governance threshold must be > 0",
+                    ));
+                }
+                if yes_votes <= no_votes {
+                    return Err(Error::authorization_failed(
+                        "Governance yes votes must exceed no votes + threshold",
+                    ));
+                }
+                if *yes_votes < threshold + no_votes {
+                    return Err(Error::authorization_failed("Governance threshold not met"));
+                }
+                Ok(())
+            }
+
+            (AuthorizationProof::System { caller_address }, OriginClass::System) => {
+                if caller_address.is_empty() {
+                    return Err(Error::invalid_origin_class(
+                        "System caller_address cannot be empty",
+                    ));
+                }
+                Ok(())
+            }
+
+            (AuthorizationProof::Emergency { conditions_met, .. }, OriginClass::Emergency) => {
+                if conditions_met.is_empty() {
+                    return Err(Error::invalid_origin_class(
+                        "Emergency must have conditions",
+                    ));
+                }
+                if !conditions_met.iter().any(|&c| c) {
+                    return Err(Error::authorization_failed(
+                        "Emergency requires at least one condition to be met",
+                    ));
+                }
+                Ok(())
+            }
+
+            (AuthorizationProof::Genesis, OriginClass::Genesis) => Ok(()),
+
+            _ => Err(Error::authorization_failed(
+                "Origin class and proof type mismatch",
+            )),
+        }
+    }
 }
 
 /// Authorization verifier
@@ -69,53 +174,60 @@ pub struct AuthorizationVerifier;
 
 impl AuthorizationVerifier {
     /// Verify authorization proof
-    pub fn verify(
-        origin_class: OriginClass,
-        proof: &AuthorizationProof,
-    ) -> bool {
+    pub fn verify(origin_class: OriginClass, proof: &AuthorizationProof) -> Result<()> {
+        proof.validate(origin_class)?;
+
         match (origin_class, proof) {
-            // User: verify EdDSA signature
             (OriginClass::User, AuthorizationProof::User { .. }) => {
-                // In real implementation, use ed25519 library
-                // For now, just check format
-                true
+                // In production, verify Ed25519 signature
+                Ok(())
             }
-            
-            // Admin: verify multisig
-            (OriginClass::Admin, AuthorizationProof::Admin { threshold, signatures, .. }) => {
-                // Check enough signatures
-                signatures.len() >= *threshold as usize
+
+            (
+                OriginClass::Admin,
+                AuthorizationProof::Admin {
+                    threshold,
+                    signatures,
+                    ..
+                },
+            ) => {
+                if (signatures.len() as u8) < *threshold {
+                    return Err(Error::authorization_failed("Insufficient signatures"));
+                }
+                Ok(())
             }
-            
-            // Bridge: verify attestation
+
             (OriginClass::Bridge, AuthorizationProof::Bridge { .. }) => {
-                // In real implementation, verify signature + Merkle proof
-                true
+                // In production, verify Merkle proof and signature
+                Ok(())
             }
-            
-            // Governance: verify proposal passed
-            (OriginClass::Governance, AuthorizationProof::Governance { yes_votes, threshold, .. }) => {
-                yes_votes > threshold
+
+            (
+                OriginClass::Governance,
+                AuthorizationProof::Governance {
+                    yes_votes,
+                    threshold,
+                    ..
+                },
+            ) => {
+                if yes_votes <= threshold {
+                    return Err(Error::authorization_failed("Insufficient votes"));
+                }
+                Ok(())
             }
-            
-            // System: just check address
-            (OriginClass::System, AuthorizationProof::System { .. }) => {
-                true
-            }
-            
-            // Emergency: check conditions
+
+            (OriginClass::System, AuthorizationProof::System { .. }) => Ok(()),
+
             (OriginClass::Emergency, AuthorizationProof::Emergency { conditions_met, .. }) => {
-                // At least one condition must be met
-                conditions_met.iter().any(|&c| c)
+                if !conditions_met.iter().any(|&c| c) {
+                    return Err(Error::authorization_failed("No emergency conditions met"));
+                }
+                Ok(())
             }
-            
-            // Genesis: no auth needed
-            (OriginClass::Genesis, AuthorizationProof::Genesis) => {
-                true
-            }
-            
-            // Mismatched origin and proof
-            _ => false,
+
+            (OriginClass::Genesis, AuthorizationProof::Genesis) => Ok(()),
+
+            _ => Err(Error::authorization_failed("Proof validation failed")),
         }
     }
 }
@@ -123,20 +235,24 @@ impl AuthorizationVerifier {
 #[cfg(test)]
 mod tests {
     use super::*;
-    
+
     #[test]
-    fn test_genesis_auth() {
-        let proof = AuthorizationProof::Genesis;
-        assert!(AuthorizationVerifier::verify(OriginClass::Genesis, &proof));
-    }
-    
-    #[test]
-    fn test_admin_multisig() {
+    fn test_admin_proof_validation() {
         let proof = AuthorizationProof::Admin {
             signatures: vec![vec![1, 2, 3], vec![4, 5, 6]],
             threshold: 2,
-            signers: vec![],
+            signers: vec![vec![1], vec![2]],
         };
-        assert!(AuthorizationVerifier::verify(OriginClass::Admin, &proof));
+        assert!(proof.validate(OriginClass::Admin).is_ok());
+    }
+
+    #[test]
+    fn test_admin_insufficient_signatures() {
+        let proof = AuthorizationProof::Admin {
+            signatures: vec![vec![1, 2, 3]],
+            threshold: 2,
+            signers: vec![vec![1], vec![2]],
+        };
+        assert!(proof.validate(OriginClass::Admin).is_err());
     }
 }

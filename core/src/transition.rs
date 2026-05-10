@@ -1,99 +1,117 @@
-// core/src/transition.rs
-
-use crate::{State, OriginPolicy, error::{Error, Result}};
+use crate::{
+    error::{Error, Result},
+    OriginClass, State,
+};
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 
-/// A state transition
+/// Production state transition with full validation
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct Transition {
-    /// Previous state
     pub prev_state: State,
-    
-    /// New state
     pub new_state: State,
-    
-    /// Timestamp
+    pub prev_origin: OriginClass,
+    pub new_origin: OriginClass,
     pub timestamp: u64,
-    
-    /// Nonce (monotonically increasing)
     pub nonce: u64,
-    
-    /// Who initiated
     pub initiator: String,
-    
-    /// Additional metadata
     pub metadata: HashMap<String, String>,
 }
 
 impl Transition {
-    /// Create a new transition
+    /// Create new transition with complete validation
     pub fn new(
         prev_state: State,
         new_state: State,
+        prev_origin: OriginClass,
+        new_origin: OriginClass,
         initiator: String,
         nonce: u64,
     ) -> Result<Self> {
+        // Validate states
+        prev_state.validate()?;
+        new_state.validate()?;
+
         // Validate nonce increases
         if nonce <= prev_state.nonce {
-            return Err(Error::InvalidNonce(
-                format!("Nonce {} must be greater than {}", nonce, prev_state.nonce)
-            ));
+            return Err(Error::invalid_nonce(format!(
+                "Nonce {} must be > {}",
+                nonce, prev_state.nonce
+            )));
         }
-        
-        // Validate states are different
+
+        if nonce == u64::MAX {
+            return Err(Error::invalid_nonce("Nonce overflow"));
+        }
+
+        // States must be different
         if prev_state.hash == new_state.hash {
-            return Err(Error::InvalidState(
-                "States must be different".to_string()
-            ));
+            return Err(Error::StateDifferenceFailed);
         }
-        
-        // Validate timestamps increase
+
+        // Time must move forward
         if new_state.timestamp < prev_state.timestamp {
-            return Err(Error::InvalidTimestamp(
-                format!("Time must flow forward: {} < {}", 
-                    new_state.timestamp, prev_state.timestamp)
-            ));
+            return Err(Error::invalid_timestamp(format!(
+                "Time regression: {} < {}",
+                new_state.timestamp, prev_state.timestamp
+            )));
         }
-        
+
+        // Initiator cannot be empty
+        if initiator.is_empty() {
+            return Err(Error::authorization_failed("Initiator cannot be empty"));
+        }
+
         Ok(Transition {
             prev_state,
-            new_state: new_state.clone(),
+            new_state,
+            prev_origin,
+            new_origin,
             timestamp: new_state.timestamp,
             nonce,
             initiator,
             metadata: HashMap::new(),
         })
     }
-    
-    /// Validate transition against policy
-    pub fn is_valid(&self, _policy: &OriginPolicy) -> bool {
-        // Check states
-        if !self.prev_state.is_valid() || !self.new_state.is_valid() {
-            return false;
-        }
-        
+
+    /// Validate transition completely
+    pub fn validate(&self) -> Result<()> {
+        // Validate states
+        self.prev_state.validate()?;
+        self.new_state.validate()?;
+
         // Check nonce
         if self.nonce <= self.prev_state.nonce {
-            return false;
+            return Err(Error::invalid_nonce("Nonce not increasing"));
         }
-        
-        // Check states are different
+
+        // Check states different
         if self.prev_state.hash == self.new_state.hash {
-            return false;
+            return Err(Error::StateDifferenceFailed);
         }
-        
+
         // Check time
         if self.new_state.timestamp < self.prev_state.timestamp {
-            return false;
+            return Err(Error::invalid_timestamp("Time not moving forward"));
         }
-        
-        true
+
+        // Check initiator
+        if self.initiator.is_empty() {
+            return Err(Error::authorization_failed("Initiator cannot be empty"));
+        }
+
+        Ok(())
     }
-    
-    /// Get transition size
-    pub fn size_bytes(&self) -> usize {
-        std::mem::size_of::<Self>()
+
+    /// Get transition hash
+    pub fn hash(&self) -> crate::hash::Hash {
+        crate::hash::hash_transition(
+            self.prev_state.hash,
+            self.new_state.hash,
+            self.new_origin.as_u8(),
+            self.timestamp,
+            self.nonce,
+        )
     }
 }
 
@@ -101,37 +119,38 @@ impl Transition {
 mod tests {
     use super::*;
     use crate::StateData;
-    
-    fn create_test_state(nonce: u64, timestamp: u64) -> State {
-        State::new(
-            StateData::default(),
-            timestamp,
-            nonce,
-        )
-    }
-    
+
     #[test]
-    fn test_valid_transition() {
-        let prev = create_test_state(0, 1000);
-        let new = create_test_state(1, 2000);
-        
-        let result = Transition::new(prev, new, "user".to_string(), 1);
+    fn test_transition_creation() {
+        let prev = State::new(StateData::default(), 1000, 0).unwrap();
+        let new = State::new(StateData::default(), 2000, 1).unwrap();
+
+        let result = Transition::new(
+            prev,
+            new,
+            OriginClass::User,
+            OriginClass::User,
+            "user".to_string(),
+            1,
+        );
+
         assert!(result.is_ok());
     }
-    
+
     #[test]
-    fn test_invalid_nonce() {
-        let prev = create_test_state(0, 1000);
-        let new = create_test_state(1, 2000);
-        
-        let result = Transition::new(prev, new, "user".to_string(), 0);
-        assert!(result.is_err());
-    }
-    
-    #[test]
-    fn test_same_state() {
-        let state = create_test_state(0, 1000);
-        let result = Transition::new(state.clone(), state, "user".to_string(), 1);
+    fn test_nonce_must_increase() {
+        let prev = State::new(StateData::default(), 1000, 5).unwrap();
+        let new = State::new(StateData::default(), 2000, 6).unwrap();
+
+        let result = Transition::new(
+            prev,
+            new,
+            OriginClass::User,
+            OriginClass::User,
+            "user".to_string(),
+            4, // Less than prev nonce
+        );
+
         assert!(result.is_err());
     }
 }

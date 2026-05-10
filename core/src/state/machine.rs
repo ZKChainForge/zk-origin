@@ -1,209 +1,232 @@
-// core/src/state/machine.rs
-
-use crate::{OriginPolicy, error::Result};
+use crate::{error::Result, hash::Hash};
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 
-/// State data
+/// State data structure
 #[derive(Clone, Debug, Serialize, Deserialize, Default, PartialEq, Eq)]
 pub struct StateData {
-    /// Account states
     pub accounts: HashMap<String, AccountState>,
-    
-    /// Balances
     pub balances: HashMap<String, u128>,
-    
-    /// Metadata
     pub metadata: HashMap<String, String>,
+}
+
+impl StateData {
+    /// Validate state data consistency
+    pub fn validate(&self) -> Result<()> {
+        // Check no negative balances (stored as u128)
+        if self.balances.values().any(|&b| b > i128::MAX as u128) {
+            return Err(crate::error::Error::invalid_state("Balance overflow"));
+        }
+
+        Ok(())
+    }
 }
 
 /// Account state
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq, Hash)]
 pub struct AccountState {
-    /// Nonce
     pub nonce: u64,
-    
-    /// Balance
     pub balance: u128,
-    
-    /// Code hash
-    pub code_hash: [u8; 32],
+    pub code_hash: Hash,
 }
 
-/// Represents a blockchain state
+/// Production-grade state
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct State {
-    /// Unique identifier for this state
     pub id: Vec<u8>,
-    
-    /// State data (application-specific)
     pub data: StateData,
-    
-    /// Hash of this state (Keccak256)
-    pub hash: [u8; 32],
-    
-    /// Timestamp when state was created
+    pub hash: Hash,
     pub timestamp: u64,
-    
-    /// Nonce (monotonically increasing)
     pub nonce: u64,
 }
 
 impl State {
-    /// Create a new genesis state
-    pub fn genesis(data: StateData) -> Self {
-        let serialized = serde_json::to_vec(&data).expect("Failed to serialize state");
+    /// Create genesis state with validation
+    pub fn genesis(data: StateData) -> Result<Self> {
+        data.validate()?;
+
+        let serialized = serde_json::to_vec(&data)?;
         let hash = crate::hash::keccak256(&serialized);
-        
-        State {
-            id: hash.to_vec(),
+
+        Ok(State {
+            id: hash.as_slice().to_vec(),
             data,
             hash,
             timestamp: 0,
             nonce: 0,
-        }
+        })
     }
-    
-    /// Create a new state
-    pub fn new(
-        data: StateData,
-        timestamp: u64,
-        nonce: u64,
-    ) -> Self {
-        let serialized = serde_json::to_vec(&data).expect("Failed to serialize state");
+
+    /// Create new state with validation
+    pub fn new(data: StateData, timestamp: u64, nonce: u64) -> Result<Self> {
+        data.validate()?;
+
+        if nonce == u64::MAX {
+            return Err(crate::error::Error::invalid_nonce("Nonce overflow"));
+        }
+
+        let serialized = serde_json::to_vec(&data)?;
         let hash = crate::hash::keccak256(&serialized);
-        
-        State {
-            id: hash.to_vec(),
+
+        Ok(State {
+            id: hash.as_slice().to_vec(),
             data,
             hash,
             timestamp,
             nonce,
-        }
+        })
     }
-    
-    /// Get state hash
-    pub fn get_hash(&self) -> [u8; 32] {
-        self.hash
-    }
-    
-    /// Verify state is valid
-    pub fn is_valid(&self) -> bool {
-        let serialized = serde_json::to_vec(&self.data).expect("Failed to serialize");
+
+    /// Validate state consistency
+    pub fn validate(&self) -> Result<()> {
+        self.data.validate()?;
+
+        // Verify hash matches data
+        let serialized = serde_json::to_vec(&self.data)?;
         let expected_hash = crate::hash::keccak256(&serialized);
-        
-        self.hash == expected_hash && self.nonce < u64::MAX
+
+        if self.hash != expected_hash {
+            return Err(crate::error::Error::StateHashMismatch {
+                expected: expected_hash.to_hex(),
+                actual: self.hash.to_hex(),
+            });
+        }
+
+        // Verify nonce not overflowed
+        if self.nonce == u64::MAX {
+            return Err(crate::error::Error::invalid_nonce("Nonce at maximum"));
+        }
+
+        Ok(())
     }
 }
 
-/// Lineage: full ancestry of a state
+/// Lineage representation
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct Lineage {
-    /// Lineage depth
     pub depth: u32,
-    
-    /// Genesis state hash
-    pub genesis_hash: [u8; 32],
-    
-    /// All transitions
+    pub genesis_hash: Hash,
+    pub lineage_commitment: Hash,
     pub transitions: Vec<(State, State)>,
 }
 
-/// State machine: manages state transitions
+/// Production state machine
 pub struct StateMachine {
-    /// Current state
     current_state: State,
-    
-    /// History of transitions
     history: Vec<crate::Transition>,
-    
-    /// Policy for validating transitions
-    policy: OriginPolicy,
+    policy: crate::OriginPolicy,
 }
 
 impl StateMachine {
-    /// Create new state machine with genesis state
-    pub fn new(genesis: State, policy: OriginPolicy) -> Self {
-        StateMachine {
+    /// Create new machine with genesis
+    pub fn new(genesis: State, policy: crate::OriginPolicy) -> Result<Self> {
+        genesis.validate()?;
+
+        Ok(StateMachine {
             current_state: genesis,
             history: Vec::new(),
             policy,
-        }
+        })
     }
-    
-    /// Apply a transition
+
+    /// Apply transition
     pub fn apply_transition(&mut self, transition: crate::Transition) -> Result<()> {
         // Validate transition
-        if !transition.is_valid(&self.policy) {
-            return Err(crate::error::Error::InvalidTransition(
-                "Transition validation failed".to_string()
-            ));
-        }
-        
-        // Verify previous state matches current
+        transition.validate()?;
+
+        // Verify previous state matches
         if transition.prev_state.hash != self.current_state.hash {
-            return Err(crate::error::Error::InvalidState(
-                "Previous state mismatch".to_string()
-            ));
+            return Err(crate::error::Error::InvalidState {
+                context: format!(
+                    "Previous state mismatch: expected {}, got {}",
+                    self.current_state.hash, transition.prev_state.hash
+                ),
+            });
         }
-        
-        // Record transition
+
+        // Check policy
+        if !self
+            .policy
+            .is_allowed(transition.prev_origin, transition.new_origin)
+        {
+            return Err(crate::error::Error::policy_violation(format!(
+                "Transition from {} to {} not allowed",
+                transition.prev_origin, transition.new_origin
+            )));
+        }
+
+        // Record and update
         self.history.push(transition.clone());
         self.current_state = transition.new_state.clone();
-        
+
         Ok(())
     }
-    
+
     /// Get current state
     pub fn get_current_state(&self) -> &State {
         &self.current_state
     }
-    
-    /// Get transition history
+
+    /// Get history
     pub fn get_history(&self) -> &[crate::Transition] {
         &self.history
     }
-    
+
     /// Get lineage
-    pub fn get_lineage(&self) -> Lineage {
-        let mut transitions = Vec::new();
-        
-        // Add genesis
-        let genesis = State::genesis(StateData::default());
-        
-        // Add all transitions
+    pub fn get_lineage(&self) -> Result<Lineage> {
+        let genesis = State::genesis(StateData::default())?;
+
+        let mut lineage_hash = genesis.hash;
+
         for transition in &self.history {
-            transitions.push((transition.prev_state.clone(), transition.new_state.clone()));
+            lineage_hash = crate::hash::hash_lineage(
+                lineage_hash,
+                crate::hash::hash_transition(
+                    transition.prev_state.hash,
+                    transition.new_state.hash,
+                    transition.prev_origin.as_u8(),
+                    transition.new_state.timestamp,
+                    transition.new_state.nonce,
+                ),
+                self.history.len() as u32,
+            );
         }
-        
-        Lineage {
+
+        Ok(Lineage {
             depth: self.history.len() as u32,
             genesis_hash: genesis.hash,
-            transitions,
-        }
+            lineage_commitment: lineage_hash,
+            transitions: self
+                .history
+                .iter()
+                .map(|t| (t.prev_state.clone(), t.new_state.clone()))
+                .collect(),
+        })
     }
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
-    
-    fn create_test_state(nonce: u64, timestamp: u64) -> State {
-        State::new(StateData::default(), timestamp, nonce)
-    }
-    
+
     #[test]
     fn test_state_creation() {
-        let state = create_test_state(0, 1000);
-        assert!(state.is_valid());
-        assert_eq!(state.nonce, 0);
+        let state = State::new(StateData::default(), 1000, 0);
+        assert!(state.is_ok());
     }
-    
+
+    #[test]
+    fn test_state_validation() {
+        let state = State::new(StateData::default(), 1000, 0).unwrap();
+        assert!(state.validate().is_ok());
+    }
+
     #[test]
     fn test_genesis_creation() {
         let genesis = State::genesis(StateData::default());
-        assert!(genesis.is_valid());
-        assert_eq!(genesis.nonce, 0);
-        assert_eq!(genesis.timestamp, 0);
+        assert!(genesis.is_ok());
+        let state = genesis.unwrap();
+        assert_eq!(state.nonce, 0);
+        assert_eq!(state.timestamp, 0);
     }
 }

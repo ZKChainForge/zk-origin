@@ -2,10 +2,10 @@
 //!
 //! Provides state representation and state machine implementation
 
-/// State machine implementation
-pub mod machine;
 /// State hashing utilities
 pub mod hash;
+/// State machine implementation
+pub mod machine;
 
-pub use machine::{State, StateData, AccountState, StateMachine, Lineage};
-pub use hash::{keccak256, hash_state, hash_transition};
+pub use hash::{hash_state, hash_transition, keccak256};
+pub use machine::{AccountState, Lineage, State, StateData, StateMachine};

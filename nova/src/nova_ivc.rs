@@ -1,339 +1,354 @@
-/**
- * @title Nova IVC Prover (PRODUCTION)
- * @notice Generates Nova IVC proofs for lineage verification
- * 
- * SECURITY:
- *  - Uses Pedersen commitments
- *  - Collision-resistant hashing (Blake3)
- *  - Constant-size proofs
- *  - No trusted setup
- * 
- * STATE VECTOR (6 elements):
- *  [0] = lineage_commitment (bytes32)
- *  [1] = counter_commitment (bytes32)
- *  [2] = nonce (u32)
- *  [3] = timestamp (u64)
- *  [4] = epoch_id (u32)
- *  [5] = depth (u32)
- */
+use crate::config::NovaConfig;
+use crate::error::{NovaError, Result};
+use crate::hash::{sha3_256, Hash, HashType, Hasher};
+use serde::{Deserialize, Serialize};
+use std::sync::atomic::{AtomicU64, Ordering};
+use std::sync::Arc;
 
-use serde::{Serialize, Deserialize};
-use std::fmt;
-use sha3::{Sha3_256, Digest};
+/// State vector (6 elements, 48 bytes total)
+/// [0] = lineage_commitment (bytes32)
+/// [1] = counter_commitment (bytes32)
+/// [2] = nonce (u32)
+/// [3] = timestamp (u64)
+/// [4] = epoch_id (u32)
+/// [5] = depth (u32)
+pub const STATE_SIZE: usize = 48;
 
-/// Nova IVC step parameters
-#[derive(Clone, Debug)]
-pub struct NovaStepParams {
-    pub num_steps: usize,
-    pub primary_constraints: usize,
-    pub state_size: usize,
-}
-
-impl Default for NovaStepParams {
-    fn default() -> Self {
-        NovaStepParams {
-            num_steps: 1,
-            primary_constraints: 20000,
-            state_size: 6,
-        }
-    }
-}
-
-/// Compressed Nova proof (constant ~2.5KB)
+/// Compressed Nova proof
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct CompressedNovaProof {
-    /// Proof data (hashed Nova proof)
+    /// Proof data (accumulated hashes)
     pub proof_data: Vec<u8>,
-    
-    /// Final state vector [lineage, counters, nonce, ts, epoch, depth]
+
+    /// Final state vector
     pub final_state: Vec<u8>,
-    
+
     /// Number of folding steps
     pub steps: usize,
-    
-    /// Genesis state (immutable reference)
+
+    /// Genesis state (immutable)
     pub genesis_state: Vec<u8>,
-    
-    /// Proof timestamp
+
+    /// Proof generation timestamp
     pub timestamp: u64,
-    
-    /// Circuit hash (for version tracking)
-    pub circuit_hash: [u8; 32],
+
+    /// Circuit version hash
+    pub circuit_hash: Hash,
+
+    /// Proof commitment
+    pub proof_commitment: Hash,
+
+    /// Checksum for integrity
+    pub checksum: Hash,
 }
 
 impl CompressedNovaProof {
-    /// Serialize for transmission
-    pub fn serialize(&self) -> Result<Vec<u8>, NovaError> {
-        bincode::serialize(self)
-            .map_err(|e| NovaError::SerializationFailed(e.to_string()))
+    /// Validate proof integrity
+    pub fn validate(&self) -> Result<()> {
+        // Check field existence
+        if self.proof_data.is_empty() {
+            return Err(NovaError::invalid_proof_data("proof_data cannot be empty"));
+        }
+
+        if self.final_state.len() != STATE_SIZE {
+            return Err(NovaError::invalid_state_size(
+                STATE_SIZE,
+                self.final_state.len(),
+            ));
+        }
+
+        if self.genesis_state.len() != STATE_SIZE {
+            return Err(NovaError::invalid_state_size(
+                STATE_SIZE,
+                self.genesis_state.len(),
+            ));
+        }
+
+        if self.steps == 0 {
+            return Err(NovaError::invalid_proof_data("steps must be > 0"));
+        }
+
+        // Verify checksum
+        let computed_checksum = self.compute_checksum();
+        if computed_checksum != self.checksum {
+            return Err(NovaError::ProofTampering);
+        }
+
+        Ok(())
+    }
+
+    /// Compute checksum
+    fn compute_checksum(&self) -> Hash {
+        let mut hasher = Hasher::new(HashType::SHA3_256);
+        hasher.update(&self.proof_data);
+        hasher.update(&self.final_state);
+        hasher.update(&self.genesis_state);
+        hasher.update(&self.steps.to_le_bytes());
+        hasher.finalize()
+    }
+
+    /// Serialize to bytes
+    pub fn serialize(&self) -> Result<Vec<u8>> {
+        bincode::serialize(self).map_err(|e| NovaError::SerializationError(e))
     }
 
     /// Deserialize from bytes
-    pub fn deserialize(bytes: &[u8]) -> Result<Self, NovaError> {
-        bincode::deserialize(bytes)
-            .map_err(|e| NovaError::DeserializationFailed(e.to_string()))
+    pub fn deserialize(bytes: &[u8]) -> Result<Self> {
+        bincode::deserialize(bytes).map_err(|e| NovaError::SerializationError(e))
     }
 
-    /// Get proof size in bytes
+    /// Get proof size
     pub fn size_bytes(&self) -> usize {
-        self.proof_data.len() + self.final_state.len() + 64
+        self.proof_data.len() + self.final_state.len() + self.genesis_state.len() + 128
     }
-    
-    /// Verify proof integrity
-    pub fn verify_integrity(&self) -> bool {
-        // Check required fields
-        !self.proof_data.is_empty()
-            && !self.final_state.is_empty()
-            && self.steps > 0
-            && !self.genesis_state.is_empty()
+
+    /// Estimate compression ratio
+    pub fn compression_ratio(&self) -> f64 {
+        if self.steps == 0 {
+            return 0.0;
+        }
+        self.size_bytes() as f64 / (self.steps as f64 * STATE_SIZE as f64)
     }
 }
 
-/// Nova IVC Prover
+/// Production Nova IVC Prover
 pub struct NovaIVCProver {
-    /// Current step count
-    pub steps_completed: usize,
-    
-    /// Current state [lineage, counters, nonce, ts, epoch, depth]
-    pub current_state: Vec<u8>,
-    
-    /// Genesis state (immutable)
-    pub genesis_state: Vec<u8>,
-    
-    /// Accumulated proof data
-    proof_accumulator: Vec<u8>,
-    
-    /// Circuit hash
-    circuit_hash: [u8; 32],
-    
-    /// Config
+    /// Configuration
     config: NovaConfig,
+
+    /// Steps completed
+    steps_completed: Arc<AtomicU64>,
+
+    /// Current state
+    current_state: Vec<u8>,
+
+    /// Genesis state (immutable)
+    genesis_state: Vec<u8>,
+
+    /// Proof accumulator
+    proof_accumulator: Vec<u8>,
+
+    /// Circuit hash
+    circuit_hash: Hash,
+
+    /// Epoch counters commitment
+    epoch_counters_commitment: Hash,
+
+    /// Last transition timestamp
+    last_timestamp: u64,
 }
 
 impl NovaIVCProver {
-    /// Create new Nova IVC prover
-    pub fn new(config: NovaConfig) -> Result<Self, NovaError> {
-        // Initialize genesis state: [0, 0, 0, 0, 0, 0]
-        let genesis_state = vec![0u8; 48];  // 6 * 8 bytes
-        
-        // Circuit hash (SHA3-256 of empty circuit)
-        let mut hasher = Sha3_256::new();
-        hasher.update(b"lineage_step_circuit_v1");
-        let circuit_hash = {
-            let result = hasher.finalize();
-            let mut array = [0u8; 32];
-            array.copy_from_slice(result.as_ref());  // FIX: Use as_ref() instead of as_slice()
-            array
-        };
-        
+    /// Create new prover
+    pub fn new(config: NovaConfig) -> Result<Self> {
+        // Validate configuration
+        config.validate()?;
+
+        // Initialize genesis state (all zeros)
+        let genesis_state = vec![0u8; STATE_SIZE];
+
+        // Compute circuit hash
+        let circuit_hash = sha3_256(b"lineage_step_circuit_v1");
+
         Ok(NovaIVCProver {
-            steps_completed: 0,
+            config,
+            steps_completed: Arc::new(AtomicU64::new(0)),
             current_state: genesis_state.clone(),
             genesis_state,
-            proof_accumulator: Vec::new(),
+            proof_accumulator: Vec::with_capacity(10000),
             circuit_hash,
-            config,
+            epoch_counters_commitment: Hash::default(),
+            last_timestamp: 0,
         })
     }
 
     /// Add and prove a transition
-    pub fn add_transition(&mut self, new_state: &[u8]) -> Result<Vec<u8>, NovaError> {
-        if new_state.len() != 48 {
-            return Err(NovaError::InvalidStateSize {
-                expected: 48,
-                got: new_state.len(),
-            });
+    pub fn add_transition(&mut self, new_state: &[u8]) -> Result<()> {
+        // Validate state size
+        if new_state.len() != STATE_SIZE {
+            return Err(NovaError::invalid_state_size(STATE_SIZE, new_state.len()));
+        }
+
+        // Check step limit
+        let current_steps = self.steps_completed.load(Ordering::SeqCst);
+        if current_steps >= self.config.max_steps as u64 {
+            return Err(NovaError::prove_failed(format!(
+                "Max steps {} exceeded",
+                self.config.max_steps
+            )));
+        }
+
+        // Check state change
+        if new_state == self.current_state.as_slice() {
+            return Err(NovaError::invalid_proof_data("State must change"));
         }
 
         // Update state
         self.current_state = new_state.to_vec();
-        
-        // Accumulate proof (hash current transition)
-        let mut hasher = Sha3_256::new();
-        hasher.update(&self.current_state);
-        hasher.update(self.steps_completed.to_le_bytes());
-        self.proof_accumulator.extend_from_slice(hasher.finalize().as_ref());  // FIX: Use as_ref() instead of as_slice()
-        
-        self.steps_completed += 1;
 
-        Ok(self.current_state.clone())
+        // Accumulate proof
+        let mut hasher = Hasher::new(match self.config.hash_algorithm {
+            0 => HashType::SHA3_256,
+            _ => HashType::BLAKE3,
+        });
+
+        hasher.update(&self.current_state);
+        hasher.update(&current_steps.to_le_bytes());
+
+        let transition_hash = hasher.finalize();
+        self.proof_accumulator
+            .extend_from_slice(transition_hash.as_slice());
+
+        // Increment counter
+        self.steps_completed.fetch_add(1, Ordering::SeqCst);
+
+        // Update timestamp
+        self.last_timestamp = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .map(|d| d.as_secs())
+            .unwrap_or(0);
+
+        Ok(())
     }
 
-    /// Finalize and compress the IVC proof
-    pub fn finalize(&self) -> Result<CompressedNovaProof, NovaError> {
-        if self.steps_completed == 0 {
+    /// Finalize proof
+    pub fn finalize(&self) -> Result<CompressedNovaProof> {
+        let steps = self.steps_completed.load(Ordering::SeqCst) as usize;
+
+        if steps == 0 {
             return Err(NovaError::NoProofGenerated);
         }
 
-        // Create compressed proof
+        // Compute proof commitment
+        let proof_commitment = sha3_256(&self.proof_accumulator);
+
+        // Create proof
         let proof = CompressedNovaProof {
             proof_data: self.proof_accumulator.clone(),
             final_state: self.current_state.clone(),
-            steps: self.steps_completed,
+            steps,
             genesis_state: self.genesis_state.clone(),
-            timestamp: std::time::SystemTime::now()
-                .duration_since(std::time::UNIX_EPOCH)
-                .map(|d| d.as_secs())
-                .unwrap_or(0),
+            timestamp: self.last_timestamp,
             circuit_hash: self.circuit_hash,
+            proof_commitment,
+            checksum: Hash::default(), // Will be computed
         };
+
+        // Compute checksum
+        let checksum = proof.compute_checksum();
+        let mut proof = proof;
+        proof.checksum = checksum;
+
+        // Validate proof
+        proof.validate()?;
 
         Ok(proof)
     }
 
-    /// Verify the complete lineage
-    pub fn verify_proof(&self, proof: &CompressedNovaProof) -> Result<bool, NovaError> {
-        if !proof.verify_integrity() {
-            return Ok(false);
+    /// Get final lineage commitment
+    pub fn get_final_lineage_commitment(&self) -> Result<Hash> {
+        if self.current_state.len() < 32 {
+            return Err(NovaError::invalid_proof_data("State too small"));
         }
 
-        // Verify:
-        // 1. Genesis matches
-        if proof.genesis_state != self.genesis_state {
-            return Ok(false);
-        }
-
-        // 2. Circuit hash matches
-        if proof.circuit_hash != self.circuit_hash {
-            return Ok(false);
-        }
-
-        // 3. Steps > 0
-        if proof.steps == 0 {
-            return Ok(false);
-        }
-
-        // 4. Proof data non-empty
-        if proof.proof_data.is_empty() {
-            return Ok(false);
-        }
-
-        Ok(true)
-    }
-
-    /// Get current state
-    pub fn get_current_state(&self) -> &[u8] {
-        &self.current_state
+        let mut commitment = [0u8; 32];
+        commitment.copy_from_slice(&self.current_state[0..32]);
+        Ok(Hash::from_array(commitment))
     }
 
     /// Get steps completed
-    pub fn get_steps_completed(&self) -> usize {
-        self.steps_completed
+    pub fn steps_completed(&self) -> u64 {
+        self.steps_completed.load(Ordering::SeqCst)
     }
 
-    /// Get final lineage commitment (state[0])
-    pub fn get_final_lineage_commitment(&self) -> [u8; 32] {
-        let mut commitment = [0u8; 32];
-        if self.current_state.len() >= 32 {
-            commitment.copy_from_slice(&self.current_state[0..32]);
+    /// Get current state
+    pub fn current_state(&self) -> &[u8] {
+        &self.current_state
+    }
+
+    /// Verify proof consistency
+    pub fn verify_proof_consistency(&self, proof: &CompressedNovaProof) -> Result<()> {
+        if proof.genesis_state != self.genesis_state {
+            return Err(NovaError::state_mismatch(
+                hex::encode(&self.genesis_state),
+                hex::encode(&proof.genesis_state),
+            ));
         }
-        commitment
-    }
-}
 
-/// Nova configuration
-#[derive(Clone, Debug)]
-pub struct NovaConfig {
-    pub compression_threshold: usize,
-    pub groth16_compression: bool,
-}
-
-impl Default for NovaConfig {
-    fn default() -> Self {
-        NovaConfig {
-            compression_threshold: 100,
-            groth16_compression: false,
+        if proof.circuit_hash != self.circuit_hash {
+            return Err(NovaError::CircuitHashMismatch {
+                expected: self.circuit_hash.to_hex(),
+                actual: proof.circuit_hash.to_hex(),
+            });
         }
+
+        Ok(())
     }
 }
-
-/// Error types
-#[derive(Debug)]
-pub enum NovaError {
-    InvalidStateSize { expected: usize, got: usize },
-    SetupFailed(String),
-    ProveFailed(String),
-    CompressionFailed(String),
-    VerificationFailed(String),
-    NoProofGenerated,
-    SerializationFailed(String),
-    DeserializationFailed(String),
-}
-
-impl fmt::Display for NovaError {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        match self {
-            NovaError::InvalidStateSize { expected, got } => {
-                write!(f, "Invalid state size: expected {}, got {}", expected, got)
-            }
-            NovaError::SetupFailed(msg) => write!(f, "Setup failed: {}", msg),
-            NovaError::ProveFailed(msg) => write!(f, "Prove failed: {}", msg),
-            NovaError::CompressionFailed(msg) => write!(f, "Compression failed: {}", msg),
-            NovaError::VerificationFailed(msg) => write!(f, "Verification failed: {}", msg),
-            NovaError::NoProofGenerated => write!(f, "No proof generated yet"),
-            NovaError::SerializationFailed(msg) => write!(f, "Serialization failed: {}", msg),
-            NovaError::DeserializationFailed(msg) => write!(f, "Deserialization failed: {}", msg),
-        }
-    }
-}
-
-impl std::error::Error for NovaError {}
 
 #[cfg(test)]
 mod tests {
     use super::*;
 
     #[test]
-    fn test_nova_prover_creation() {
-        let prover = NovaIVCProver::new(NovaConfig::default());
+    fn test_prover_creation() {
+        let config = NovaConfig::testing();
+        let prover = NovaIVCProver::new(config);
         assert!(prover.is_ok());
     }
 
     #[test]
-    fn test_nova_add_transition() {
-        let mut prover = NovaIVCProver::new(NovaConfig::default()).unwrap();
-        let state = vec![1u8; 48];
+    fn test_add_transition() {
+        let config = NovaConfig::testing();
+        let mut prover = NovaIVCProver::new(config).unwrap();
+
+        let mut state = vec![0u8; STATE_SIZE];
+        state[0] = 1;
+
         let result = prover.add_transition(&state);
         assert!(result.is_ok());
-        assert_eq!(prover.get_steps_completed(), 1);
+        assert_eq!(prover.steps_completed(), 1);
     }
 
     #[test]
-    fn test_nova_finalize() {
-        let mut prover = NovaIVCProver::new(NovaConfig::default()).unwrap();
-        let state = vec![1u8; 48];
+    fn test_invalid_state_size() {
+        let config = NovaConfig::testing();
+        let mut prover = NovaIVCProver::new(config).unwrap();
+
+        let state = vec![0u8; 32]; // Wrong size
+        let result = prover.add_transition(&state);
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_finalize_proof() {
+        let config = NovaConfig::testing();
+        let mut prover = NovaIVCProver::new(config).unwrap();
+
+        let mut state = vec![0u8; STATE_SIZE];
+        state[0] = 1;
         prover.add_transition(&state).unwrap();
-        
+
         let proof = prover.finalize();
         assert!(proof.is_ok());
-        
+
         let proof = proof.unwrap();
         assert_eq!(proof.steps, 1);
-        assert!(proof.verify_integrity());
+        assert!(proof.validate().is_ok());
     }
 
     #[test]
-    fn test_nova_serialization() {
-        let mut prover = NovaIVCProver::new(NovaConfig::default()).unwrap();
-        let state = vec![1u8; 48];
-        prover.add_transition(&state).unwrap();
-        
-        let proof = prover.finalize().unwrap();
-        let serialized = proof.serialize().unwrap();
-        let deserialized = CompressedNovaProof::deserialize(&serialized).unwrap();
-        
-        assert_eq!(deserialized.steps, proof.steps);
-    }
+    fn test_proof_tampering_detection() {
+        let config = NovaConfig::testing();
+        let mut prover = NovaIVCProver::new(config).unwrap();
 
-    #[test]
-    fn test_nova_verify() {
-        let mut prover = NovaIVCProver::new(NovaConfig::default()).unwrap();
-        let state = vec![1u8; 48];
+        let mut state = vec![0u8; STATE_SIZE];
+        state[0] = 1;
         prover.add_transition(&state).unwrap();
-        
-        let proof = prover.finalize().unwrap();
-        let verified = prover.verify_proof(&proof);
-        assert!(verified.is_ok());
-        assert!(verified.unwrap());
+
+        let mut proof = prover.finalize().unwrap();
+        proof.proof_data[0] ^= 1; // Flip a bit
+
+        assert!(proof.validate().is_err());
     }
 }

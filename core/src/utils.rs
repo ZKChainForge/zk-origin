@@ -14,7 +14,7 @@ pub fn bytes_to_hex_short(bytes: &[u8]) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
-    
+
     #[test]
     fn test_bytes_to_hex() {
         let bytes = [1u8, 2, 3];
