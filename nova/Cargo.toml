@@ -1,35 +1,51 @@
 [package]
 name = "zk-origin-nova"
-version.workspace = true
-edition.workspace = true
-authors.workspace = true
-license.workspace = true
-repository.workspace = true
+version = "2.0.0"
+edition = "2021"
+authors = ["ZK-ORIGIN Team"]
+license = "MIT"
+repository = "https://github.com/ZKChainForge/zk-origin"
+description = "Production-grade Nova IVC implementation for ZK-ORIGIN"
 
 [lib]
 name = "zk_origin_nova"
 path = "src/lib.rs"
 
 [dependencies]
-# Remove Nova git dependency - use stub instead
-
 # Serialization
-serde.workspace = true
-serde_json.workspace = true
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
 bincode = "1.3"
 
-# Crypto hashing
+# Cryptography
 sha3 = "0.10"
 blake3 = "1.5"
+hex = "0.4"
 
-# Async
-tokio.workspace = true
+# Error handling
+thiserror = "1.0"
+anyhow = "1.0"
+log = "0.4"
+
+# Async runtime
+tokio = { version = "1.35", features = ["full"], optional = true }
+
+# Parallel processing
 rayon = "1.7"
 
-# Errors
-anyhow.workspace = true
-thiserror.workspace = true
-log.workspace = true
+# Benchmarking
+criterion = "0.5"
+
+[features]
+default = ["async", "compression"]
+async = ["tokio"]
+compression = []
+production = ["async", "compression"]
 
 [dev-dependencies]
-criterion.workspace = true
+criterion = "0.5"
+proptest = "1.4"
+
+[[bench]]
+name = "nova_benchmarks"
+harness = false

@@ -1,31 +1,34 @@
 #![warn(missing_docs)]
 
-//! ZK-ORIGIN Core State Machine
-//!
-//! This module provides the core state machine implementation with origin-based
-//! authorization and policy enforcement.
+//! Provides cryptographic state lineage verification with origin-based authorization
 
-/// State management module
-pub mod state;
-/// Origin detection and authorization module
-pub mod origin;
-/// Re-export origin policy
-pub mod policy;
-/// Error types
 pub mod error;
-/// Hashing utilities
 pub mod hash;
-/// Utility functions
-pub mod utils;
-/// State transitions
+pub mod origin;
+pub mod policy;
+pub mod state;
 pub mod transition;
+pub mod utils;
 
-pub use state::{State, StateData, StateMachine, Lineage};
-pub use origin::{OriginClass, OriginDetector, OriginContext};
-pub use origin::auth::AuthorizationVerifier;
-pub use policy::OriginPolicy;
 pub use error::{Error, Result};
+pub use hash::{hash_lineage, hash_state, hash_transition, keccak256, Hash};
+pub use origin::auth::AuthorizationVerifier;
+pub use origin::{OriginClass, OriginContext, OriginDetector};
+pub use policy::OriginPolicy;
+pub use state::{Lineage, State, StateData, StateMachine};
 pub use transition::Transition;
 
 /// Current version
 pub const VERSION: &str = env!("CARGO_PKG_VERSION");
+
+/// Production constants
+pub mod consts {
+    /// Maximum lineage depth
+    pub const MAX_LINEAGE_DEPTH: u32 = 1_000_000;
+
+    /// Epoch duration in seconds (24 hours)
+    pub const EPOCH_DURATION_SECS: u64 = 86400;
+
+    /// Number of origin classes
+    pub const NUM_ORIGIN_CLASSES: usize = 7;
+}
