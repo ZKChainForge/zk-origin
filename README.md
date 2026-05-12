@@ -1,4 +1,4 @@
-```markdown
+
 # ZK-ORIGIN: Zero-Knowledge State Lineage Verification
 
 Production-grade ZK system proving state comes from legitimate sources via cryptographic lineage.
