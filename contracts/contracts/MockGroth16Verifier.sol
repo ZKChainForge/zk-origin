@@ -1,27 +1,21 @@
 // SPDX-License-Identifier: MIT
-pragma solidity ^0.8.19;
+pragma solidity ^0.8.20;
 
 /**
- * @title MockGroth16Verifier
- * @notice Mock Groth16 verifier for testing
- * 
- * ALWAYS RETURNS TRUE - ONLY FOR TESTING!
- * DO NOT USE IN PRODUCTION!
+ * @dev Mock Groth16 verifier that always returns true
+ * USE ONLY FOR TESTING - DO NOT DEPLOY TO PRODUCTION
  */
 contract MockGroth16Verifier {
-    
-    /**
-     * @notice Verify a Groth16 proof (mock implementation)
-     * @dev This always returns true for testing purposes
-     * @return Always returns true
-     */
     function verifyProof(
-        uint[2] calldata _pA,
-        uint[2][2] calldata _pB,
-        uint[2] calldata _pC,
-        uint[12] calldata _pubSignals
-    ) external pure returns (bool) {
-        // Mock implementation: always return true
+        uint[2] memory a,
+        uint[2][2] memory b,
+        uint[2] memory c,
+        uint[20] memory input
+    ) public pure returns (bool) {
+        // Suppress unused variable warnings
+        a; b; c; input;
+        
+        // ALWAYS RETURN TRUE - for testing only
         return true;
     }
 }
