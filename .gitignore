@@ -12,6 +12,7 @@ pnpm-debug.log*
 #######################################
 # Environment & secrets
 #######################################
+.github
 .env
 .env.*
 !.env.example
