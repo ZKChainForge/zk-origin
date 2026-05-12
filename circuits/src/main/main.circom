@@ -2,115 +2,11 @@ pragma circom 2.1.0;
 
 include "../lib/constants.circom";
 include "../lib/poseidon.circom";
-include "../lib/comparators.circom";
 include "../core/lineage_step.circom";
 include "../core/auth_integration.circom";
 
-/**
- * @title ZK-ORIGIN Main Circuit (PRODUCTION)
- * @notice Complete state lineage verification with authorization
- * 
- * CRITICAL SECURITY NOTES:
- * ========================================
- * 
- * This is the TOP-LEVEL circuit for ZK-ORIGIN.
- * It combines:
- * 1. Authorization verification (AuthorizationIntegration)
- * 2. Lineage verification (LineageStep)
- * 
- * SIGNAL ORDERING (19 public signals):
- * 
- * OUTPUTS (first 3):
- * [0]  newLineageCommitment   - Proves lineage from genesis
- * [1]  newCounterCommitment   - Current epoch counters
- * [2]  lineageValid           - Always 1 if pass
- * 
- * INPUT HASHES (next 6):
- * [3]  prevStateHash          - Previous state hash
- * [4]  newStateHash           - New state hash
- * [5]  epochId                - Current epoch
- * [6]  prevOriginClass        - Previous state's origin
- * [7]  newOriginClass         - New state's origin
- * [8]  prevLineageCommitment  - Previous lineage hash
- * [9]  prevCounterCommitment  - Previous counter hash
- * 
- * POLICY & AUTH (next 3):
- * [10] policyRoot             - Merkle root of allowed transitions
- * [11] expectedGenesisHash    - Fixed genesis state
- * [12] authMessageHash        - Message being authorized
- * 
- * COUNTER VALUES (last 7):
- * [13-19] newCounterValues[7] - Updated counter values
- * 
- * TOTAL: 20 public signals
- * 
- * COMPILATION NOTES:
- * - Max constraints: ~50,000-150,000 depending on auth type
- * - User auth: ~50,000 constraints
- * - Admin auth: ~150,000 constraints
- * - Bridge auth: ~100,000 constraints
- * - Governance auth: ~50,000 constraints
- * - System auth: ~50,000 constraints
- * - Emergency auth: ~80,000 constraints
- * 
- * PROVING TIMES (estimated):
- * - User: 100-200ms
- * - Admin: 300-500ms
- * - Bridge: 200-300ms
- * - Governance: 100-200ms
- * - System: 100-200ms
- * - Emergency: 200-300ms
- * 
- * PRODUCTION CHECKLIST:
- *  Authorization verified first (before lineage)
- *  Authorization result proves correct auth type
- *  Lineage proof incorporates auth commitment
- *  No shortcuts or skipped verification
- *  All constraints enforced
- *  Deterministic output
- *  Fails entirely on any constraint failure
- *  No partial success possible
- * 
- * SECURITY FLOW:
- * 1. Verify authorization for origin class
- * 2. Get authorization commitment (proves auth checked)
- * 3. Verify lineage with authorization commitment
- * 4. Compute new lineage commitment (includes auth)
- * 5. Output commitment, counters, valid flag
- * 
- * INVARIANTS MAINTAINED:
- * - State lineage always starts from genesis
- * - Each state must have valid origin
- * - Each transition must be authorized
- * - Each transition must follow policy
- * - Rate limits enforced per epoch
- * - Nonce prevents replay
- * - Epoch transitions validated
- * - Counter state tracked
- * 
- * ATTACK PREVENTION:
- *  Genesis forgery: GenesisValidator prevents
- *  Unauthed action: AuthorizationIntegration prevents
- *  Policy violation: PolicyVerifier prevents
- *  Rate limit bypass: RateLimiter prevents
- *  Replay: Nonce prevents
- *  Fork attack: Epoch/nonce/lineage prevent
- *  Privilege escalation: Policy + auth prevent
- *  Counter manipulation: Commitment prevents
- *  State duplication: Diff check prevents
- *  Lineage forgery: All constraints prevent
- */
-
-template Main(
-    POLICY_MERKLE_DEPTH,
-    MAX_ADMIN_SIGNERS,
-    ATTESTATION_DEPTH,
-    MAX_VALIDATORS
-) {
-    // ============ PUBLIC INPUTS ============
-    // Note: Ordering must match contract expectation
+template Main(POLICY_MERKLE_DEPTH, MAX_ADMIN_SIGNERS) {
     
-    // Outputs (as public inputs from contract perspective)
     signal input prevStateHash;
     signal input newStateHash;
     signal input epochId;
@@ -120,12 +16,8 @@ template Main(
     signal input prevCounterCommitment;
     signal input policyRoot;
     signal input expectedGenesisHash;
-    
-    // Authorization
     signal input authMessageHash;
-    signal input originClass;  // Redundant with newOriginClass, but needed for auth
     
-    // Counter values (for external verification)
     signal input counterValue0;
     signal input counterValue1;
     signal input counterValue2;
@@ -134,7 +26,6 @@ template Main(
     signal input counterValue5;
     signal input counterValue6;
     
-    // ============ PRIVATE INPUTS - LINEAGE ============
     signal input prevEpochId;
     signal input prevDepth;
     signal input nonce;
@@ -146,141 +37,35 @@ template Main(
     signal input prevCounters[7];
     signal input rateLimits[7];
     
-    // ============ PRIVATE INPUTS - USER AUTH ============
     signal input userPublicKeyX;
     signal input userPublicKeyY;
-    signal input userSignatureR;
+    signal input userSignatureR8x;
+    signal input userSignatureR8y;
     signal input userSignatureS;
     
-    // ============ PRIVATE INPUTS - ADMIN AUTH ============
     signal input adminPublicKeys[MAX_ADMIN_SIGNERS][2];
-    signal input adminSignatures[MAX_ADMIN_SIGNERS][2];
+    signal input adminSignatures[MAX_ADMIN_SIGNERS][3];
     signal input adminSignerMask[MAX_ADMIN_SIGNERS];
     signal input adminThreshold;
     
-    // ============ PRIVATE INPUTS - BRIDGE AUTH ============
-    signal input bridgeSourceChainId;
-    signal input bridgeExpectedSourceChain;
-    signal input bridgeStateRoot;
-    signal input bridgeExpectedRoot;
-    signal input bridgeSourceBlockNumber;
-    signal input bridgeSourceLatestBlock;
-    signal input bridgeValidatorPublicKeys[MAX_VALIDATORS][2];
-    signal input bridgeValidatorSignatures[MAX_VALIDATORS][2];
-    signal input bridgeValidatorMask[MAX_VALIDATORS];
-    signal input bridgeSignatureR;
-    signal input bridgeSignatureS;
-    signal input bridgePublicKeyX;
-    signal input bridgePublicKeyY;
-    signal input bridgeMerkleProof[ATTESTATION_DEPTH];
-    signal input bridgeMerkleIndices[ATTESTATION_DEPTH];
-    
-    // ============ PRIVATE INPUTS - GOVERNANCE AUTH ============
-    signal input governanceProposalId;
-    signal input governanceProposalHash;
-    signal input governanceTransitionHash;
-    signal input governanceYesVotes;
-    signal input governanceNoVotes;
-    signal input governanceRequiredThreshold;
-    signal input governanceProposalTimestamp;
-    signal input governanceCurrentTimestamp;
-    
-    // ============ PRIVATE INPUTS - SYSTEM AUTH ============
-    signal input systemCallerAddress;
-    signal input systemExpectedSystemAddress;
-    
-    // ============ PRIVATE INPUTS - EMERGENCY AUTH ============
-    signal input emergencyMessageHash;
-    signal input emergencyExpectedKeyHash;
-    signal input emergencyCurrentTVL;
-    signal input emergencyNormalTVL;
-    signal input emergencyTimeSinceLastBlock;
-    signal input emergencySystemPaused;
-    signal input emergencyKeyHash;
-    signal input emergencySignatureR;
-    signal input emergencySignatureS;
-    signal input emergencyPublicKeyX;
-    signal input emergencyPublicKeyY;
-    
-    // ============ PUBLIC OUTPUTS ============
     signal output newLineageCommitment;
     signal output newCounterCommitment;
     signal output lineageValid;
     
-    // ============ STEP 1: VERIFY AUTHORIZATION ============
-    // This must happen BEFORE lineage verification
-    // Otherwise we prove lineage without proving auth
-    
-    component authIntegration = AuthorizationIntegration(
-        MAX_ADMIN_SIGNERS,
-        ATTESTATION_DEPTH,
-        MAX_VALIDATORS
-    );
-    
-    authIntegration.originClass <== originClass;
+    component authIntegration = AuthorizationIntegration(MAX_ADMIN_SIGNERS);
+    authIntegration.originClass <== newOriginClass;
     authIntegration.messageHash <== authMessageHash;
-    
-    // User auth inputs
     authIntegration.userPublicKeyX <== userPublicKeyX;
     authIntegration.userPublicKeyY <== userPublicKeyY;
-    authIntegration.userSignatureR <== userSignatureR;
+    authIntegration.userSignatureR8x <== userSignatureR8x;
+    authIntegration.userSignatureR8y <== userSignatureR8y;
     authIntegration.userSignatureS <== userSignatureS;
-    
-    // Admin auth inputs
     authIntegration.adminPublicKeys <== adminPublicKeys;
     authIntegration.adminSignatures <== adminSignatures;
     authIntegration.adminSignerMask <== adminSignerMask;
     authIntegration.adminThreshold <== adminThreshold;
     
-    // Bridge auth inputs
-    authIntegration.bridgeSourceChainId <== bridgeSourceChainId;
-    authIntegration.bridgeExpectedSourceChain <== bridgeExpectedSourceChain;
-    authIntegration.bridgeStateRoot <== bridgeStateRoot;
-    authIntegration.bridgeExpectedRoot <== bridgeExpectedRoot;
-    authIntegration.bridgeSourceBlockNumber <== bridgeSourceBlockNumber;
-    authIntegration.bridgeSourceLatestBlock <== bridgeSourceLatestBlock;
-    authIntegration.bridgeValidatorPublicKeys <== bridgeValidatorPublicKeys;
-    authIntegration.bridgeValidatorSignatures <== bridgeValidatorSignatures;
-    authIntegration.bridgeValidatorMask <== bridgeValidatorMask;
-    authIntegration.bridgeSignatureR <== bridgeSignatureR;
-    authIntegration.bridgeSignatureS <== bridgeSignatureS;
-    authIntegration.bridgePublicKeyX <== bridgePublicKeyX;
-    authIntegration.bridgePublicKeyY <== bridgePublicKeyY;
-    authIntegration.bridgeMerkleProof <== bridgeMerkleProof;
-    authIntegration.bridgeMerkleIndices <== bridgeMerkleIndices;
-    
-    // Governance auth inputs
-    authIntegration.governanceProposalId <== governanceProposalId;
-    authIntegration.governanceProposalHash <== governanceProposalHash;
-    authIntegration.governanceTransitionHash <== governanceTransitionHash;
-    authIntegration.governanceYesVotes <== governanceYesVotes;
-    authIntegration.governanceNoVotes <== governanceNoVotes;
-    authIntegration.governanceRequiredThreshold <== governanceRequiredThreshold;
-    authIntegration.governanceProposalTimestamp <== governanceProposalTimestamp;
-    authIntegration.governanceCurrentTimestamp <== governanceCurrentTimestamp;
-    
-    // System auth inputs
-    authIntegration.systemCallerAddress <== systemCallerAddress;
-    authIntegration.systemExpectedSystemAddress <== systemExpectedSystemAddress;
-    
-    // Emergency auth inputs
-    authIntegration.emergencyMessageHash <== emergencyMessageHash;
-    authIntegration.emergencyExpectedKeyHash <== emergencyExpectedKeyHash;
-    authIntegration.emergencyCurrentTVL <== emergencyCurrentTVL;
-    authIntegration.emergencyNormalTVL <== emergencyNormalTVL;
-    authIntegration.emergencyTimeSinceLastBlock <== emergencyTimeSinceLastBlock;
-    authIntegration.emergencySystemPaused <== emergencySystemPaused;
-    authIntegration.emergencyKeyHash <== emergencyKeyHash;
-    authIntegration.emergencySignatureR <== emergencySignatureR;
-    authIntegration.emergencySignatureS <== emergencySignatureS;
-    authIntegration.emergencyPublicKeyX <== emergencyPublicKeyX;
-    authIntegration.emergencyPublicKeyY <== emergencyPublicKeyY;
-    
-    // ============ STEP 2: VERIFY LINEAGE WITH AUTHORIZATION ============
-    // Lineage proof incorporates authorization commitment
-    
     component lineageStep = LineageStep(POLICY_MERKLE_DEPTH);
-    
     lineageStep.prevStateHash <== prevStateHash;
     lineageStep.newStateHash <== newStateHash;
     lineageStep.epochId <== epochId;
@@ -290,7 +75,6 @@ template Main(
     lineageStep.prevCounterCommitment <== prevCounterCommitment;
     lineageStep.policyRoot <== policyRoot;
     lineageStep.expectedGenesisHash <== expectedGenesisHash;
-    
     lineageStep.prevEpochId <== prevEpochId;
     lineageStep.prevDepth <== prevDepth;
     lineageStep.nonce <== nonce;
@@ -308,17 +92,13 @@ template Main(
         lineageStep.rateLimits[i] <== rateLimits[i];
     }
     
-    // CRITICAL: Pass authorization commitment to lineage
     lineageStep.authorizationCommitment <== authIntegration.authCommitment;
     
-    // ============ STEP 3: OUTPUT RESULTS ============
     newLineageCommitment <== lineageStep.newLineageCommitment;
     newCounterCommitment <== lineageStep.newCounterCommitment;
     lineageValid <== lineageStep.lineageValid;
 }
 
-// Main component with public signals
-// All inputs that go to Groth16 verifier are listed here
 component main {public [
     prevStateHash,
     newStateHash,
@@ -330,7 +110,6 @@ component main {public [
     policyRoot,
     expectedGenesisHash,
     authMessageHash,
-    originClass,
     counterValue0,
     counterValue1,
     counterValue2,
@@ -338,4 +117,4 @@ component main {public [
     counterValue4,
     counterValue5,
     counterValue6
-]} = Main(6, 15, 8, 21);
+]} = Main(6, 15);

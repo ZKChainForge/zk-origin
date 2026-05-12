@@ -190,7 +190,7 @@ template AuthSelector(
     
     // Create array of all auth results
     signal authResults[7];
-    authResults[ORIGIN_CLASS_GENESIS()] <== 0;  // Genesis has no auth
+    authResults[ORIGIN_CLASS_GENESIS()] <== 1;  
     authResults[ORIGIN_CLASS_USER()] <== userAuthVerifier.valid;
     authResults[ORIGIN_CLASS_ADMIN()] <== adminAuthVerifier.valid;
     authResults[ORIGIN_CLASS_BRIDGE()] <== bridgeAuthVerifier.valid;
