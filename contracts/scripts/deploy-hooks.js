@@ -159,7 +159,7 @@ async function main() {
     console.log("\nHook deployment saved to:");
     console.log(hookDeploymentPath);
 
-    console.log("\n========================================");
+    
     console.log("HOOKS DEPLOYMENT COMPLETE");
     console.log("========================================");
 

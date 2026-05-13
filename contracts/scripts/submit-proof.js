@@ -168,13 +168,7 @@ async function main() {
     process.exit(1);
   }
 
-  console.log("All pre-flight checks passed ✅");
-
-  // ─── Submit proof ──────────────────────────────────────────────────────────
-  console.log("\n─── Submitting Proof ───");
-  console.log("⚠️  Note: Mock proof will likely fail Groth16 verification.");
-  console.log("   Real proofs must be generated via snarkjs from ZK circuit.\n");
-
+ 
   try {
     const tx = await lineageVerifier.verifyLineage(
       pA,
@@ -189,7 +183,7 @@ async function main() {
     console.log("Transaction sent, waiting for confirmation...");
     const receipt = await tx.wait();
 
-    console.log("\n✅ PROOF VERIFIED SUCCESSFULLY!");
+    console.log("\n PROOF VERIFIED SUCCESSFULLY!");
     console.log("Transaction hash:", receipt.transactionHash);
     console.log("Gas used:        ", receipt.gasUsed.toString());
     console.log("Block number:    ", receipt.blockNumber);
@@ -276,22 +270,7 @@ async function main() {
       }
     }
 
-    console.error("\n─── Failure Reason ───");
-    console.error("Mock proof (1,2),(3,4,5,6),(7,8) fails Groth16 check.");
-    console.error("This is correct behavior — the verifier is working!\n");
-    console.error("─── To Generate Real Proof ───");
-    console.error("  1. Compile circuit:");
-    console.error("       cd ../circuits");
-    console.error("       circom lineage.circom --r1cs --wasm --sym");
-    console.error("  2. Trusted setup:");
-    console.error("       snarkjs groth16 setup lineage.r1cs pot12.ptau lineage_0000.zkey");
-    console.error("       snarkjs zkey contribute lineage_0000.zkey lineage_0001.zkey");
-    console.error("  3. Generate witness:");
-    console.error("       node lineage_js/generate_witness.js lineage_js/lineage.wasm input.json witness.wtns");
-    console.error("  4. Generate proof:");
-    console.error("       snarkjs groth16 prove lineage_0001.zkey witness.wtns proof.json public.json");
-    console.error("  5. Get Solidity calldata:");
-    console.error("       snarkjs generatecall public.json proof.json");
+    
   }
 
   console.log("\n========================================");
@@ -300,7 +279,7 @@ async function main() {
 main()
   .then(() => process.exit(0))
   .catch((error) => {
-    console.error("\n❌ FATAL ERROR:");
+    console.error("\n FATAL ERROR:");
     console.error(error);
     process.exit(1);
   });
