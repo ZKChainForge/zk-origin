@@ -284,8 +284,7 @@ async function main() {
   console.log("\n========================================");
   console.log("DEPLOYMENT COMPLETED SUCCESSFULLY");
   console.log("========================================");
-  console.log("\nContract Addresses:");
-  console.log("──────────────────────────────────────────────────────");
+
 
   Object.entries(deploymentInfo.contracts).forEach(([name, addr]) => {
     console.log(`  ${name.padEnd(26)} ${addr}`);
