@@ -37,10 +37,6 @@ async = ["tokio"]
 persistence = ["rocksdb"]
 production = ["async", "persistence"]
 
-[[bench]]
-name = "state_operations"
-harness = false
-
 [[bin]]
 name = "zk-origin-core"
 path = "src/bin/cli.rs"

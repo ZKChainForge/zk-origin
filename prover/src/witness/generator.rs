@@ -1,8 +1,9 @@
+//! Witness generation for state transitions
+
 use crate::error::{ProverError, Result};
 use crate::hash::{sha3_256, Hash};
 use num_bigint::BigUint;
 use serde::{Deserialize, Serialize};
-use std::ops::Add;
 
 /// Public witness inputs (visible in proof)
 #[derive(Clone, Debug, Serialize, Deserialize)]
@@ -236,7 +237,7 @@ impl WitnessGenerator {
                 prev_timestamp,
                 policy_proof: policy_merkle_proof
                     .iter()
-                    .map(|h| hash_to_field_string(*h))
+                    .map(|h| h.to_hex())
                     .collect(),
                 policy_indices,
                 prev_counters,
@@ -446,7 +447,7 @@ mod tests {
 
     #[test]
     fn test_invalid_nonce() {
-        let mut witness = TransitionWitness {
+        let witness = TransitionWitness {
             public: PublicWitness {
                 new_lineage_commitment: "1".to_string(),
                 new_counter_commitment: "1".to_string(),
