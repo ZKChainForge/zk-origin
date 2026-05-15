@@ -1,73 +1,31 @@
 [package]
 name = "zk-origin-prover"
-version = "2.0.0"
+version = "1.0.0"
 edition = "2021"
 authors = ["ZK-ORIGIN Team"]
+description = "Zero-knowledge proof generation for ZK-ORIGIN"
 license = "MIT"
 repository = "https://github.com/ZKChainForge/zk-origin"
-description = "Production-grade witness generation and proof creation for ZK-ORIGIN"
 
-[lib]
-name = "zk_origin_prover"
-path = "src/lib.rs"
+[dependencies]
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+thiserror = "1.0"
+log = "0.4"
+env_logger = "0.11"
+sha3 = "0.10"
+hex = "0.4"
+num-bigint = "0.4"
+num-traits = "0.2"
+tokio = { version = "1.35", features = ["full"], optional = true }
 
-[[bin]]
-name = "prover-cli"
-path = "src/bin/cli.rs"
+[dev-dependencies]
+criterion = "0.5"
 
-[[bin]]
-name = "prove"
-path = "src/bin/prove.rs"
+[features]
+default = []
+async = ["tokio"]
 
 [[bin]]
 name = "witness-gen"
 path = "src/bin/witness_gen.rs"
-
-[dependencies]
-# Serialization
-serde = { version = "1.0", features = ["derive"] }
-serde_json = "1.0"
-bincode = "1.3"
-hex = "0.4"
-
-# Cryptography
-sha3 = "0.10"
-blake3 = "1.5"
-num-bigint = "0.4"
-num-traits = "0.2"
-
-# Async runtime
-tokio = { version = "1.35", features = ["full"], optional = true }
-
-# Error handling
-thiserror = "1.0"
-anyhow = "1.0"
-log = "0.4"
-env_logger = "0.11"
-
-# CLI
-clap = { version = "4.4", features = ["derive"] }
-
-# UUID for batch IDs
-uuid = { version = "1.6", features = ["v4", "serde"] }
-
-# Concurrency
-rayon = "1.7"
-parking_lot = "0.12"
-
-# Performance
-criterion = "0.5"
-
-[dev-dependencies]
-criterion = "0.5"
-proptest = "1.4"
-tempfile = "3.8"
-
-[features]
-default = ["async"]
-async = ["tokio"]
-production = ["async"]
-
-[[bench]]
-name = "prover_benchmarks"
-harness = false

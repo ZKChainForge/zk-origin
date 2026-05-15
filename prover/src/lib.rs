@@ -1,17 +1,16 @@
 #![warn(missing_docs)]
-//! Complete pipeline:
-//! 1. Generate witness from state transitions
-//! 2. Create zero-knowledge proofs
-//! 3. Verify proofs on-chain
-//! 4. Batch operations for efficiency
+//! ZK-ORIGIN Prover Library
+//!
+//! Provides witness generation and proof generation capabilities for ZK-ORIGIN
 
 pub mod error;
 pub mod hash;
 pub mod witness;
 
 pub use error::{ProverError, Result};
-pub use hash::{blake3, hash_multi, sha3_256, Hash, HashType, Hasher};
-pub use witness::{TransitionWitness, WitnessGenerator, WitnessSerializer, WitnessValidator};
+pub use hash::Hash;
+pub use witness::generator::WitnessGenerator;
+pub use witness::{PrivateWitness, PublicWitness, TransitionWitness};
 
 /// Current version
 pub const VERSION: &str = env!("CARGO_PKG_VERSION");
