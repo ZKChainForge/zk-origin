@@ -636,7 +636,7 @@ MIT
 ## Contact
 
 For questions or security issues:
-- General: zkchainforge#gmail.com
+- General: zkchainforge@gmail.com
 ```
 
 
