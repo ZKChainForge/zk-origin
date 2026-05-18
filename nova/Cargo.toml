@@ -2,50 +2,26 @@
 name = "zk-origin-nova"
 version = "2.0.0"
 edition = "2021"
-authors = ["ZK-ORIGIN Team"]
+authors = ["ZK Origin Team"]
+description = "Constant-size proofs for arbitrary lineage depth through recursive composition"
 license = "MIT"
-repository = "https://github.com/ZKChainForge/zk-origin"
-description = "Production-grade Nova IVC implementation for ZK-ORIGIN"
-
-[lib]
-name = "zk_origin_nova"
-path = "src/lib.rs"
 
 [dependencies]
-# Serialization
 serde = { version = "1.0", features = ["derive"] }
-serde_json = "1.0"
 bincode = "1.3"
-
-# Cryptography
 sha3 = "0.10"
 blake3 = "1.5"
 hex = "0.4"
-
-# Error handling
 thiserror = "1.0"
-anyhow = "1.0"
-log = "0.4"
-
-# Async runtime
-tokio = { version = "1.35", features = ["full"], optional = true }
-
-# Parallel processing
-rayon = "1.7"
-
-# Benchmarking
-criterion = "0.5"
-
-[features]
-default = ["async", "compression"]
-async = ["tokio"]
-compression = []
-production = ["async", "compression"]
-
-[dev-dependencies]
-criterion = "0.5"
-proptest = "1.4"
+criterion = { version = "0.5", features = ["html_reports"] }
 
 [[bench]]
 name = "nova_benchmarks"
 harness = false
+
+[profile.test]
+opt-level = 2
+
+[profile.bench]
+opt-level = 3
+lto = true

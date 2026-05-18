@@ -1,3 +1,5 @@
+//! Configuration module for Nova IVC
+
 use crate::error::Result;
 use serde::{Deserialize, Serialize};
 
@@ -68,7 +70,7 @@ impl NovaConfig {
             max_steps: 1_000_000,
             circuit_version: 1,
             enable_caching: true,
-            hash_algorithm: 0,       // SHA3
+            hash_algorithm: 0, // SHA3
             proof_timeout_secs: 300, // 5 minutes
         }
     }

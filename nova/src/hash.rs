@@ -1,35 +1,45 @@
+//! Cryptographic hashing utilities for Nova proofs
+
 use crate::error::{NovaError, Result};
 use blake3::Hasher as Blake3Hasher;
 use sha3::{Digest, Sha3_256};
+use serde::{Deserialize, Serialize};
 
-/// Hash types
+/// Hash algorithm types
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
 pub enum HashType {
+    /// SHA3-256 algorithm
     SHA3_256,
+    /// BLAKE3 algorithm
     BLAKE3,
 }
 
-/// Hash output (256 bits)
-#[derive(Clone, Copy, PartialEq, Eq, Debug)]
+/// Hash output (256 bits / 32 bytes)
+#[derive(Clone, Copy, PartialEq, Eq, Debug, Serialize, Deserialize)]
 pub struct Hash([u8; 32]);
 
 impl Hash {
+    /// Create a hash from a 32-byte array
     pub fn from_array(arr: [u8; 32]) -> Self {
         Hash(arr)
     }
 
+    /// Get the hash as a 32-byte array reference
     pub fn as_array(&self) -> &[u8; 32] {
         &self.0
     }
 
+    /// Get the hash as a byte slice
     pub fn as_slice(&self) -> &[u8] {
         &self.0
     }
 
+    /// Convert hash to hexadecimal string
     pub fn to_hex(&self) -> String {
         hex::encode(self.0)
     }
 
+    /// Create hash from hexadecimal string
     pub fn from_hex(hex_str: &str) -> Result<Self> {
         let bytes = hex::decode(hex_str).map_err(|e| NovaError::Other(e.to_string()))?;
 
@@ -44,6 +54,7 @@ impl Hash {
         Ok(Hash(arr))
     }
 
+    /// Check if hash is all zeros
     pub fn is_zero(&self) -> bool {
         self.0 == [0u8; 32]
     }
@@ -61,7 +72,7 @@ impl Default for Hash {
     }
 }
 
-/// Cryptographic hasher
+/// Cryptographic hasher for incremental hashing
 pub struct Hasher {
     hash_type: HashType,
     sha3_hasher: Option<Sha3_256>,
@@ -69,6 +80,7 @@ pub struct Hasher {
 }
 
 impl Hasher {
+    /// Create a new hasher with the specified hash type
     pub fn new(hash_type: HashType) -> Self {
         match hash_type {
             HashType::SHA3_256 => Hasher {
@@ -84,6 +96,7 @@ impl Hasher {
         }
     }
 
+    /// Update the hasher with additional data
     pub fn update(&mut self, data: &[u8]) {
         match self.hash_type {
             HashType::SHA3_256 => {
@@ -99,6 +112,7 @@ impl Hasher {
         }
     }
 
+    /// Finalize the hash and consume the hasher
     pub fn finalize(self) -> Hash {
         match self.hash_type {
             HashType::SHA3_256 => {
@@ -135,7 +149,7 @@ pub fn blake3(data: &[u8]) -> Hash {
     hasher.finalize()
 }
 
-/// Hash multiple inputs
+/// Hash multiple inputs sequentially
 pub fn hash_multi(inputs: &[&[u8]]) -> Hash {
     let mut hasher = Hasher::new(HashType::SHA3_256);
     for input in inputs {
