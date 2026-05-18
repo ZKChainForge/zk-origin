@@ -208,6 +208,7 @@ impl StateMachine {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::time::{SystemTime, UNIX_EPOCH};
 
     #[test]
     fn test_state_creation() {
@@ -217,7 +218,11 @@ mod tests {
 
     #[test]
     fn test_state_validation() {
-        let state = State::new(StateData::default(), 1000, 0).unwrap();
+        let nonce = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .map(|d| d.as_nanos() as u64)
+            .unwrap_or(1);
+        let state = State::new(StateData::default(), 1000, nonce).unwrap();
         assert!(state.validate().is_ok());
     }
 
