@@ -1,21 +1,26 @@
+//! Proof verification module
+
 use crate::error::Result;
-use crate::hash::Hash;
 use crate::nova_ivc::CompressedNovaProof;
 
 /// Proof statistics
 #[derive(Clone, Debug)]
 pub struct ProofStats {
+    /// Total proof size in bytes
     pub size_bytes: usize,
+    /// Number of steps in proof
     pub steps: usize,
+    /// Average size per step
     pub avg_step_size: usize,
+    /// Compression ratio
     pub compression_ratio: f64,
 }
 
-/// Proof verifier
+/// Proof verifier for Nova IVC proofs
 pub struct NovaVerifier;
 
 impl NovaVerifier {
-    /// Verify proof offline
+    /// Verify a proof offline
     pub fn verify(
         proof: &CompressedNovaProof,
         genesis_state: &[u8],
@@ -64,7 +69,7 @@ impl NovaVerifier {
         }
     }
 
-    /// Batch verify proofs
+    /// Batch verify multiple proofs
     pub fn verify_batch(proofs: &[CompressedNovaProof], genesis_state: &[u8]) -> Result<Vec<bool>> {
         proofs
             .iter()

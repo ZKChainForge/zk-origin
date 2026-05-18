@@ -77,8 +77,8 @@ impl CompressedNovaProof {
         Ok(())
     }
 
-    /// Compute checksum
-    fn compute_checksum(&self) -> Hash {
+    /// Compute checksum (made public)
+    pub fn compute_checksum(&self) -> Hash {
         let mut hasher = Hasher::new(HashType::SHA3_256);
         hasher.update(&self.proof_data);
         hasher.update(&self.final_state);
@@ -132,6 +132,7 @@ pub struct NovaIVCProver {
     circuit_hash: Hash,
 
     /// Epoch counters commitment
+    #[allow(dead_code)]
     epoch_counters_commitment: Hash,
 
     /// Last transition timestamp

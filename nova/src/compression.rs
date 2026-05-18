@@ -1,5 +1,7 @@
+//! Proof compression module for Nova to Groth16 conversion
+
 use crate::error::{NovaError, Result};
-use crate::hash::{sha3_256, Hash};
+use crate::hash::sha3_256;
 use crate::nova_ivc::CompressedNovaProof;
 use serde::{Deserialize, Serialize};
 
@@ -22,11 +24,16 @@ pub struct Groth16Proof {
     pub metadata: CompressionMetadata,
 }
 
+/// Metadata for compressed proofs
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct CompressionMetadata {
+    /// Original proof size in bytes
     pub original_size: usize,
+    /// Compressed proof size in bytes
     pub compressed_size: usize,
+    /// Compression ratio
     pub compression_ratio: f64,
+    /// Timestamp of compression
     pub timestamp: u64,
 }
 
@@ -139,10 +146,14 @@ impl NovaCompressor {
     }
 }
 
+/// Compression statistics
 #[derive(Clone, Debug)]
 pub struct CompressionStats {
+    /// Original proof size
     pub original_size: usize,
+    /// Compressed proof size
     pub compressed_size: usize,
+    /// Compression ratio
     pub compression_ratio: f64,
 }
 
