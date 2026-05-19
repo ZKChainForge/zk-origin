@@ -1,7 +1,8 @@
-//! Witness serialization for circuits
+// prover/src/witness/serializer.rs
 
 use crate::error::Result;
 use crate::witness::generator::TransitionWitness;
+use std::fs;
 
 /// Witness serializer
 pub struct WitnessSerializer;
@@ -13,20 +14,17 @@ impl WitnessSerializer {
     }
 
     /// Serialize to file
-    pub async fn to_file(witness: &TransitionWitness, path: &str) -> Result<()> {
+    pub fn to_file(witness: &TransitionWitness, path: &str) -> Result<()> {
         let json = Self::to_circom_json(witness)?;
         let content = serde_json::to_string_pretty(&json)?;
-        tokio::fs::write(path, content).await?;
+        fs::write(path, content)?;
         Ok(())
     }
 
     /// Deserialize from file
-    pub async fn from_file(path: &str) -> Result<TransitionWitness> {
-        let content = tokio::fs::read_to_string(path).await?;
-        let json: serde_json::Value = serde_json::from_str(&content)?;
-
-        // Reconstruct witness from JSON
-        let witness: TransitionWitness = serde_json::from_value(json)?;
+    pub fn from_file(path: &str) -> Result<TransitionWitness> {
+        let content = fs::read_to_string(path)?;
+        let witness: TransitionWitness = serde_json::from_str(&content)?;
         witness.validate()?;
         Ok(witness)
     }

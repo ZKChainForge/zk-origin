@@ -8,44 +8,73 @@ use serde::{Deserialize, Serialize};
 /// Public witness inputs (visible in proof)
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct PublicWitness {
+    /// New lineage commitment
     pub new_lineage_commitment: String,
+    /// New counter commitment
     pub new_counter_commitment: String,
+    /// Lineage validity flag
     pub lineage_valid: u32,
+    /// Previous state hash
     pub prev_state_hash: String,
+    /// New state hash
     pub new_state_hash: String,
+    /// Epoch ID
     pub epoch_id: u32,
+    /// Previous origin class
     pub prev_origin_class: u8,
+    /// New origin class
     pub new_origin_class: u8,
+    /// Previous lineage commitment
     pub prev_lineage_commitment: String,
+    /// Previous counter commitment
     pub prev_counter_commitment: String,
+    /// Policy root hash
     pub policy_root: String,
+    /// Expected genesis hash
     pub expected_genesis_hash: String,
 }
 
 /// Private witness inputs (hidden in proof)
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct PrivateWitness {
+    /// Previous epoch ID
     pub prev_epoch_id: u32,
+    /// Previous depth
     pub prev_depth: u32,
+    /// Nonce
     pub nonce: u64,
+    /// Previous nonce
     pub prev_nonce: u64,
+    /// Timestamp
     pub timestamp: u64,
+    /// Previous timestamp
     pub prev_timestamp: u64,
+    /// Policy merkle proof
     pub policy_proof: Vec<String>,
+    /// Policy indices
     pub policy_indices: Vec<u8>,
+    /// Previous counters
     pub prev_counters: Vec<u32>,
+    /// Rate limits
     pub rate_limits: Vec<u32>,
+    /// Public key X coordinate
     pub public_key_x: Option<String>,
+    /// Public key Y coordinate
     pub public_key_y: Option<String>,
+    /// Signature R component
     pub signature_r: Option<String>,
+    /// Signature S component
     pub signature_s: Option<String>,
+    /// Authorization validity flag
     pub authorization_valid: u32,
 }
 
 /// Complete transition witness
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct TransitionWitness {
+    /// Public witness data
     pub public: PublicWitness,
+    /// Private witness data
     pub private: PrivateWitness,
 }
 
@@ -162,6 +191,7 @@ impl WitnessGenerator {
     }
 
     /// Generate witness for transition
+    #[allow(clippy::too_many_arguments)]
     pub fn generate(
         &self,
         prev_state_hash: Hash,
@@ -237,7 +267,7 @@ impl WitnessGenerator {
                 prev_timestamp,
                 policy_proof: policy_merkle_proof
                     .iter()
-                    .map(|h| h.to_hex())
+                    .map(|h: &Hash| h.to_hex())
                     .collect(),
                 policy_indices,
                 prev_counters,
@@ -256,6 +286,7 @@ impl WitnessGenerator {
         Ok(witness)
     }
 
+    #[allow(clippy::too_many_arguments)]
     fn validate_inputs(
         &self,
         prev_state_hash: Hash,
@@ -268,43 +299,33 @@ impl WitnessGenerator {
         timestamp: u64,
         prev_timestamp: u64,
     ) -> Result<()> {
-        // Check origin classes
         if prev_origin_class >= 7 {
             return Err(ProverError::invalid_state("Invalid previous origin class"));
         }
         if new_origin_class >= 7 {
             return Err(ProverError::invalid_state("Invalid new origin class"));
         }
-
-        // Check state hashes
         if prev_state_hash == new_state_hash {
             return Err(ProverError::invalid_state("States must be different"));
         }
-
-        // Check nonce
         if nonce <= prev_nonce {
             return Err(ProverError::invalid_nonce(format!(
                 "Nonce must increase: {} > {}",
                 nonce, prev_nonce
             )));
         }
-
-        // Check timestamp
         if timestamp < prev_timestamp {
             return Err(ProverError::invalid_timestamp(format!(
                 "Timestamp must increase: {} >= {}",
                 timestamp, prev_timestamp
             )));
         }
-
-        // Check counter count
         if counter_count != 7 {
             return Err(ProverError::invalid_witness(format!(
                 "Expected 7 counters, got {}",
                 counter_count
             )));
         }
-
         Ok(())
     }
 
@@ -371,7 +392,6 @@ impl WitnessGenerator {
 
 /// Convert hash to BN254 field element string
 fn hash_to_field_string(hash: Hash) -> String {
-    // Convert hash bytes to big-endian BigUint
     let bytes = hash.as_slice().to_vec();
     let big_uint = BigUint::from_bytes_be(&bytes);
     big_uint.to_string()
@@ -465,7 +485,7 @@ mod tests {
             private: PrivateWitness {
                 prev_epoch_id: 0,
                 prev_depth: 0,
-                nonce: 0, // Invalid: nonce not increasing
+                nonce: 0,
                 prev_nonce: 0,
                 timestamp: 1000,
                 prev_timestamp: 999,

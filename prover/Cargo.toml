@@ -2,30 +2,31 @@
 name = "zk-origin-prover"
 version = "1.0.0"
 edition = "2021"
-authors = ["ZK-ORIGIN Team"]
-description = "Zero-knowledge proof generation for ZK-ORIGIN"
-license = "MIT"
-repository = "https://github.com/ZKChainForge/zk-origin"
 
 [dependencies]
 serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"
-thiserror = "1.0"
-log = "0.4"
-env_logger = "0.11"
 sha3 = "0.10"
 hex = "0.4"
 num-bigint = "0.4"
-num-traits = "0.2"
-tokio = { version = "1.35", features = ["full"], optional = true }
+thiserror = "1.0"
+log = "0.4"
+env_logger = "0.11"
+uuid = { version = "1.0", features = ["v4"] }
+blake3 = "1.5"
 
 [dev-dependencies]
-criterion = "0.5"
+criterion = { version = "0.5", features = ["html_reports"] }
+tokio = { version = "1.0", features = ["full"] }
 
-[features]
-default = []
-async = ["tokio"]
+[[bench]]
+name = "prover_bench"
+harness = false
+
+[[bench]]
+name = "prover_benchmarks"
+harness = false
 
 [[bin]]
-name = "witness-gen"
+name = "witness_gen"
 path = "src/bin/witness_gen.rs"

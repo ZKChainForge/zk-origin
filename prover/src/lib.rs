@@ -3,8 +3,11 @@
 //!
 //! Provides witness generation and proof generation capabilities for ZK-ORIGIN
 
+/// Error types for the prover
 pub mod error;
+/// Cryptographic hash utilities
 pub mod hash;
+/// Witness generation and management
 pub mod witness;
 
 pub use error::{ProverError, Result};
