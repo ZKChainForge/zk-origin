@@ -1,3 +1,5 @@
+//! State transition logic and validation
+
 use crate::{
     error::{Error, Result},
     OriginClass, State,
@@ -8,13 +10,21 @@ use std::collections::HashMap;
 /// Production state transition with full validation
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct Transition {
+    /// Previous state
     pub prev_state: State,
+    /// New state
     pub new_state: State,
+    /// Previous origin class
     pub prev_origin: OriginClass,
+    /// New origin class
     pub new_origin: OriginClass,
+    /// Transition timestamp
     pub timestamp: u64,
+    /// Transition nonce
     pub nonce: u64,
+    /// Transition initiator
     pub initiator: String,
+    /// Additional metadata
     pub metadata: HashMap<String, String>,
 }
 
@@ -62,12 +72,14 @@ impl Transition {
             return Err(Error::authorization_failed("Initiator cannot be empty"));
         }
 
+        let timestamp = new_state.timestamp;
+
         Ok(Transition {
             prev_state,
             new_state,
             prev_origin,
             new_origin,
-            timestamp: new_state.timestamp,
+            timestamp,
             nonce,
             initiator,
             metadata: HashMap::new(),

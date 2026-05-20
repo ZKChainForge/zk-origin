@@ -2,12 +2,19 @@
 
 //! Provides cryptographic state lineage verification with origin-based authorization
 
+/// Error handling module
 pub mod error;
+/// Cryptographic hashing utilities
 pub mod hash;
+/// Origin detection and authorization
 pub mod origin;
+/// Origin-based policy enforcement
 pub mod policy;
+/// State management
 pub mod state;
+/// State transition logic
 pub mod transition;
+/// Utility functions
 pub mod utils;
 
 pub use error::{Error, Result};

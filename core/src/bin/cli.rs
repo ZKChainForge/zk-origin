@@ -2,7 +2,7 @@
 
 use clap::{Parser, Subcommand};
 use std::path::PathBuf;
-use zk_origin_core::{OriginClass, OriginPolicy, State, StateData, Transition};
+use zk_origin_core::{OriginClass, State, StateData, Transition};
 
 #[derive(Parser)]
 #[command(name = "zk-origin-core")]

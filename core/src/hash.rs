@@ -1,10 +1,11 @@
 //! Uses Keccak256 (same as Ethereum) for compatibility
 
 use sha3::Digest;
+use serde::{Deserialize, Serialize};
 use std::fmt;
 
 /// Represents a 256-bit hash
-#[derive(Clone, Copy, PartialEq, Eq, Hash, Debug)]
+#[derive(Clone, Copy, PartialEq, Eq, Hash, Debug, Serialize, Deserialize)]
 pub struct Hash([u8; 32]);
 
 impl Hash {

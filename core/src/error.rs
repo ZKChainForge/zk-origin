@@ -1,55 +1,95 @@
-use std::fmt;
 use thiserror::Error;
 
 /// Core error type with detailed context
 #[derive(Error, Debug)]
 pub enum Error {
-    // State errors
+    /// Invalid state error
     #[error("Invalid state: {context}")]
-    InvalidState { context: String },
+    InvalidState {
+        /// Error context
+        context: String
+    },
 
+    /// State hash mismatch error
     #[error("State hash mismatch: expected {expected}, got {actual}")]
-    StateHashMismatch { expected: String, actual: String },
+    StateHashMismatch {
+        /// Expected hash
+        expected: String,
+        /// Actual hash
+        actual: String
+    },
 
+    /// State not found error
     #[error("State not found: {state_hash}")]
-    StateNotFound { state_hash: String },
+    StateNotFound {
+        /// State hash that was not found
+        state_hash: String
+    },
 
-    // Transition errors
+    /// Invalid transition error
     #[error("Invalid transition: {context}")]
-    InvalidTransition { context: String },
+    InvalidTransition {
+        /// Error context
+        context: String
+    },
 
+    /// Invalid nonce error
     #[error("Nonce error: {context}")]
-    InvalidNonce { context: String },
+    InvalidNonce {
+        /// Error context
+        context: String
+    },
 
+    /// Invalid timestamp error
     #[error("Timestamp error: {context}")]
-    InvalidTimestamp { context: String },
+    InvalidTimestamp {
+        /// Error context
+        context: String
+    },
 
+    /// State difference check failed
     #[error("State difference check failed: states are identical")]
     StateDifferenceFailed,
 
-    // Policy and authorization
+    /// Policy violation error
     #[error("Policy violation: {context}")]
-    PolicyViolation { context: String },
+    PolicyViolation {
+        /// Error context
+        context: String
+    },
 
+    /// Authorization failed error
     #[error("Authorization failed: {context}")]
-    AuthorizationFailed { context: String },
+    AuthorizationFailed {
+        /// Error context
+        context: String
+    },
 
+    /// Rate limit exceeded error
     #[error("Rate limit exceeded: {origin_class} in epoch {epoch}")]
-    RateLimitExceeded { origin_class: String, epoch: u64 },
+    RateLimitExceeded {
+        /// Origin class that exceeded limit
+        origin_class: String,
+        /// Epoch number
+        epoch: u64
+    },
 
-    // Serialization
+    /// Serialization error
     #[error("Serialization error: {0}")]
     SerializationError(#[from] serde_json::Error),
 
-    // IO
+    /// IO error
     #[error("IO error: {0}")]
     IoError(#[from] std::io::Error),
 
-    // Origin detection
+    /// Invalid origin class error
     #[error("Invalid origin class: {context}")]
-    InvalidOriginClass { context: String },
+    InvalidOriginClass {
+        /// Error context
+        context: String
+    },
 
-    // Generic
+    /// Generic error
     #[error("{0}")]
     Other(String),
 }

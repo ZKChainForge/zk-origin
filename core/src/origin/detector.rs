@@ -6,12 +6,19 @@ use std::str::FromStr;
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, Serialize, Deserialize, PartialOrd, Ord)]
 #[repr(u8)]
 pub enum OriginClass {
+    /// Genesis state origin
     Genesis = 0,
+    /// User-initiated origin
     User = 1,
+    /// Admin-initiated origin
     Admin = 2,
+    /// Bridge cross-chain origin
     Bridge = 3,
+    /// Governance proposal origin
     Governance = 4,
+    /// System contract origin
     System = 5,
+    /// Emergency override origin
     Emergency = 6,
 }
 

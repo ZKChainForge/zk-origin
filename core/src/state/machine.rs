@@ -5,8 +5,11 @@ use std::collections::HashMap;
 /// State data structure
 #[derive(Clone, Debug, Serialize, Deserialize, Default, PartialEq, Eq)]
 pub struct StateData {
+    /// Account states by address
     pub accounts: HashMap<String, AccountState>,
+    /// Account balances by address
     pub balances: HashMap<String, u128>,
+    /// Additional metadata
     pub metadata: HashMap<String, String>,
 }
 
@@ -25,18 +28,26 @@ impl StateData {
 /// Account state
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq, Hash)]
 pub struct AccountState {
+    /// Account nonce
     pub nonce: u64,
+    /// Account balance
     pub balance: u128,
+    /// Code hash for contract accounts
     pub code_hash: Hash,
 }
 
 /// Production-grade state
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct State {
+    /// State identifier
     pub id: Vec<u8>,
+    /// State data
     pub data: StateData,
+    /// State hash
     pub hash: Hash,
+    /// State timestamp
     pub timestamp: u64,
+    /// State nonce
     pub nonce: u64,
 }
 
@@ -104,9 +115,13 @@ impl State {
 /// Lineage representation
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct Lineage {
+    /// Lineage depth (number of transitions)
     pub depth: u32,
+    /// Genesis state hash
     pub genesis_hash: Hash,
+    /// Lineage commitment hash
     pub lineage_commitment: Hash,
+    /// State transition history
     pub transitions: Vec<(State, State)>,
 }
 

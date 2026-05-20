@@ -5,35 +5,59 @@ use serde::{Deserialize, Serialize};
 /// Authorization proof with validation
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub enum AuthorizationProof {
+    /// User authorization with signature
     User {
+        /// User's signature
         signature: Vec<u8>,
+        /// User's public key
         public_key: Vec<u8>,
+        /// Signed message
         message: Vec<u8>,
     },
+    /// Admin multi-signature authorization
     Admin {
+        /// Collection of signatures
         signatures: Vec<Vec<u8>>,
+        /// Required signature threshold
         threshold: u8,
+        /// Public keys of signers
         signers: Vec<Vec<u8>>,
     },
+    /// Bridge cross-chain authorization
     Bridge {
+        /// Source chain identifier
         source_chain: String,
+        /// Bridge attestation
         attestation: Vec<u8>,
+        /// Merkle proof
         merkle_proof: Vec<Vec<u8>>,
     },
+    /// Governance proposal authorization
     Governance {
+        /// Proposal identifier
         proposal_id: u64,
+        /// Number of yes votes
         yes_votes: u64,
+        /// Number of no votes
         no_votes: u64,
+        /// Vote threshold required
         threshold: u64,
     },
+    /// System contract authorization
     System {
+        /// Caller contract address
         caller_address: String,
     },
+    /// Emergency override authorization
     Emergency {
+        /// Emergency key
         emergency_key: Vec<u8>,
+        /// Emergency signature
         signature: Vec<u8>,
+        /// Emergency conditions met
         conditions_met: Vec<bool>,
     },
+    /// Genesis state authorization
     Genesis,
 }
 
@@ -114,7 +138,7 @@ impl AuthorizationProof {
 
             (
                 AuthorizationProof::Governance {
-                    proposal_id,
+                    proposal_id: _,
                     yes_votes,
                     no_votes,
                     threshold,
