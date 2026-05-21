@@ -638,7 +638,3 @@ MIT
 For questions or security issues:
 - General: zkchainforge@gmail.com
 ```
-
-
-
-

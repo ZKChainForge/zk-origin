@@ -5164,19 +5164,13 @@ dependencies = [
 name = "zk-origin-nova"
 version = "2.0.0"
 dependencies = [
- "anyhow",
  "bincode",
  "blake3",
  "criterion",
  "hex",
- "log",
- "proptest",
- "rayon",
  "serde",
- "serde_json",
  "sha3",
  "thiserror 1.0.69",
- "tokio",
 ]
 
 [[package]]
@@ -5206,17 +5200,18 @@ dependencies = [
 name = "zk-origin-prover"
 version = "1.0.0"
 dependencies = [
+ "blake3",
  "criterion",
  "env_logger",
  "hex",
  "log",
  "num-bigint",
- "num-traits",
  "serde",
  "serde_json",
  "sha3",
  "thiserror 1.0.69",
  "tokio",
+ "uuid 1.23.0",
 ]
 
 [[package]]
