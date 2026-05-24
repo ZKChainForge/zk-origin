@@ -8,7 +8,7 @@ yarn-error.log*
 pnpm-debug.log*
 .pnpm-store/
 .npm/
-
+.env.example
 #######################################
 # Environment & secrets
 #######################################
