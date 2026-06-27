@@ -604,23 +604,6 @@ npx hardhat run scripts/deploy-local.js --network mainnet
 npx hardhat run scripts/deploy-hooks.js --network mainnet
 ```
 
-## Security Audits
-
-This code has NOT been audited. Do not use in production without professional security review.
-
-Key areas requiring audit:
-- Circuit soundness
-- Authorization verification
-- Policy enforcement
-- Rate limit implementation
-- Replay protection
-
-## Contributing
-
-1. Fork repository
-2. Create feature branch
-3. Add tests
-4. Submit PR
 
 ## License
 

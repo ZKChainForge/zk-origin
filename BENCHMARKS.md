@@ -729,23 +729,6 @@ ZK-ORIGIN hooks provide:
 - Economical gas costs (245K - 285K)
 - Viable throughput (40+ proofs/sec with parallelism)
 
-### Recommendations
-
-**For Production:**
-1. Use for high-value operations (fee donations, governance)
-2. Batch proof generation off-chain
-3. Pre-generate common proofs
-4. Cache verification keys
-
-**For Optimization:**
-1. Implement Rust witness generation (2x speedup)
-2. Use GPU for R1CS evaluation (3-5x speedup)
-3. Batch verification on-chain (amortize gas)
-
-**For Future:**
-1. Evaluate PLONK for universality
-2. Implement folding schemes for recursion
-3. Deploy to ZK coprocessors if available
 
 ### Viability Conclusion
 
